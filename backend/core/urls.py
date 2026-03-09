@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import login_view, logout_view, me_view, NotificationViewSet, LoginHistoryViewSet, AuditLogViewSet
+from .views import login_view, logout_view, me_view, NotificationViewSet, LoginHistoryViewSet, AuditLogViewSet, profile_view, AuditLogView, LoginHistoryView, enroll_face_view, verify_face_view, get_face_registration_requests_view, handle_face_registration_request_view, get_pending_frs_approvals_view, handle_frs_approval_view, clear_frs_notifications_view, request_photo_update_view, get_photo_update_requests_view, handle_photo_update_request_view
 
 app_name = 'core'
 
@@ -15,5 +15,22 @@ urlpatterns = [
     path('auth/login', login_view, name='login'),
     path('auth/logout', logout_view, name='logout'),
     path('auth/me', me_view, name='me'),
+    path('auth/profile', profile_view, name='profile'),
+    path('audit-history', AuditLogView.as_view(), name='audit-history'),
+    path('session-history', LoginHistoryView.as_view(), name='session-history'),
+    
+
+    # FRS Endpoints
+    path('frs/enroll', enroll_face_view, name='frs-enroll'),
+    path('frs/verify', verify_face_view, name='frs-verify'),
+    path('frs/face-requests', get_face_registration_requests_view, name='get-face-requests'),
+    path('frs/handle-face-request', handle_face_registration_request_view, name='handle-face-request'),
+    path('frs/approvals', get_pending_frs_approvals_view, name='frs-approvals'),
+    path('frs/handle-approval', handle_frs_approval_view, name='handle-approval'),
+    path('frs/clear-notifications', clear_frs_notifications_view, name='frs-clear-notifications'),
+    path('frs/request-update', request_photo_update_view, name='request-photo-update'),
+    path('frs/update-requests', get_photo_update_requests_view, name='get-photo-update-requests'),
+    path('frs/handle-request', handle_photo_update_request_view, name='handle-photo-update-request'),
+    
     path('', include(router.urls)),
 ]

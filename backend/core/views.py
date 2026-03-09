@@ -266,3 +266,392 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
              return AuditLog.objects.exclude(action='PAGE_ACCESS').select_related('user')
         return AuditLog.objects.filter(user=user).exclude(action='PAGE_ACCESS').select_related('user')
 
+@api_view(['POST'])
+@permission_classes([IsCustomAuthenticated])
+def enroll_face_view(request):
+    user = request.custom_user
+    
+    # Check if user has a reporting manager
+    if not user.reporting_manager:
+        return Response({'error': 'No reporting manager assigned. Please contact HR or your manager.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check for existing pending request
+    existing_request = FaceRegistrationRequest.objects.filter(user=user, status='Pending').first()
+    if existing_request:
+        return Response({'error': 'You already have a pending registration request. Please wait for manager approval.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    face_image_base64 = request.data.get('face_image')
+    if not face_image_base64:
+        return Response({'error': 'No face image provided'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Convert base64 to file
+    image_file = base64_to_file(face_image_base64, f"pending_face_{user.employee_id}.jpg")
+    
+    # Get encoding (validate that face exists)
+    encoding_json = get_face_encoding_from_image(image_file)
+    if not encoding_json:
+        return Response({'error': 'No face detected in the image. Please try again with a clear photo.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Reset file pointer for DB save
+    if hasattr(image_file, 'seek'):
+        image_file.seek(0)
+        
+    # Create request instead of updating user directly
+    FaceRegistrationRequest.objects.create(
+        user=user,
+        reporting_manager=user.reporting_manager,
+        face_encoding=encoding_json,
+        face_photo=image_file,
+        status='Pending'
+    )
+    
+    # Create notification for manager
+    Notification.objects.create(
+        user=user.reporting_manager,
+        title="Face Registration Request",
+        message=f"{user.name} (ID: {user.employee_id}) has submitted a face registration request for your approval.",
+        type="info"
+    )
+    
+    return Response({'message': 'Face registration submitted for approval to your reporting manager.'})
+
+@api_view(['POST'])
+@permission_classes([IsCustomAuthenticated])
+def verify_face_view(request):
+    user = request.custom_user
+    if not user.is_face_enrolled:
+        # Check if they have a pending request
+        pending = FaceRegistrationRequest.objects.filter(user=user, status='Pending').first()
+        if pending:
+            return Response({'error': 'Your face registration is pending manager approval.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Face not enrolled. Please register your face from Profile page.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    face_image_base64 = request.data.get('face_image')
+    lat = request.data.get('latitude')
+    lng = request.data.get('longitude')
+    address = request.data.get('address')
+    
+    if not face_image_base64:
+        return Response({'error': 'No face image provided'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Convert base64 to file
+    image_file = base64_to_file(face_image_base64, f"attendance_{user.employee_id}_{timezone.now().timestamp()}.jpg")
+    if not image_file:
+        return Response({'error': 'Failed to process image data'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Compare faces
+    try:
+        is_match, distance, frs_error = compare_faces(user.face_encoding, image_file)
+        if frs_error:
+             return Response({'error': frs_error, 'match': False}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': 'Error during face comparison'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    # Reset file pointer for DB save
+    if hasattr(image_file, 'seek'):
+        image_file.seek(0)
+    
+    # Create attendance record
+    attendance = AttendanceFRS.objects.create(
+        user=user,
+        photo_captured=image_file,
+        is_matched=is_match,
+        match_score=1.0 - distance,
+        latitude=lat,
+        longitude=lng,
+        location_address=address,
+        status='Recorded'
+    )
+    
+    # Notify Reporting Manager
+    if user.reporting_manager:
+        Notification.objects.create(
+            user=user.reporting_manager,
+            title="FRS Attendance Capture",
+            message=f"{user.name} (ID: {user.employee_id}) captured attendance via FRS at {address or 'captured location'}.",
+            type="info"
+        )
+        
+    # Notify HR
+    hr_users = User.objects.filter(role__name__icontains='hr')
+    for hr in hr_users:
+        if hr != user.reporting_manager: # Avoid duplicate notify if RM is also HR
+            Notification.objects.create(
+                user=hr,
+                title="FRS Attendance Log",
+                message=f"Attendance captured for {user.name} (ID: {user.employee_id}) via Biometric FRS.",
+                type="info"
+            )
+    
+    if is_match:
+        return Response({'match': True, 'message': 'Face verification successful'})
+    else:
+        return Response({'match': False, 'message': 'Face Mismatch. Access Denied.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+@api_view(['POST'])
+@permission_classes([IsCustomAuthenticated])
+def request_photo_update_view(request):
+    user = request.custom_user
+    reason = request.data.get('reason', '')
+    
+    if not reason:
+         return Response({'error': 'Please provide a reason for update.'}, status=status.HTTP_400_BAD_REQUEST)
+         
+    PhotoUpdateRequest.objects.create(user=user, reason=reason)
+    
+    # Notify IT Admin or Senior Manager? For now just create request
+    return Response({'message': 'Success! Your request has been sent for approval.'})
+
+@api_view(['GET'])
+@permission_classes([IsCustomAuthenticated])
+def get_photo_update_requests_view(request):
+    # Only Admin or reporting authorities can see
+    user = request.custom_user
+    role_name = (user.role.name if user.role else '').lower()
+    
+    if role_name not in ['it-admin', 'admin', 'reporting_authority']:
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        
+    requests = PhotoUpdateRequest.objects.filter(status='Pending').order_by('-created_at')
+    
+    data = []
+    for r in requests:
+        data.append({
+            'id': r.id,
+            'employee_name': r.user.name,
+            'employee_id': r.user.employee_id,
+            'reason': r.reason,
+            'created_at': r.created_at
+        })
+    return Response(data)
+
+@api_view(['POST'])
+@permission_classes([IsCustomAuthenticated])
+def handle_photo_update_request_view(request):
+    manager = request.custom_user
+    request_id = request.data.get('id')
+    status_choice = request.data.get('status') # 'Approved' or 'Rejected'
+    remarks = request.data.get('remarks', '')
+    
+    if not request_id or not status_choice:
+         return Response({'error': 'Invalid data'}, status=status.HTTP_400_BAD_REQUEST)
+         
+    update_req = PhotoUpdateRequest.objects.filter(id=request_id).first()
+    if update_req:
+        update_req.status = status_choice
+        update_req.approved_by = manager
+        update_req.remarks = remarks
+        update_req.save()
+        
+        if status_choice == 'Approved':
+             user = update_req.user
+             user.allow_photo_reset = True
+             user.save()
+             
+             Notification.objects.create(
+                 user=user,
+                 title="Photo Update Approved",
+                 message="Your request to update your FRS enrollment has been approved. You can now re-enroll.",
+                 type="success"
+             )
+        
+        return Response({'message': 'Request handled successfully'})
+
+    return Response({'error': 'Request not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['GET'])
+@permission_classes([IsCustomAuthenticated])
+def profile_view(request):
+    user = request.custom_user
+    
+    # 1. Start with local user record
+    serializer = UserSerializer(user)
+    data = serializer.data
+    
+    # 2. Add manager names from local relationships
+    data['reporting_manager'] = user.reporting_manager.name if user.reporting_manager else None
+    data['senior_manager'] = user.senior_manager.name if user.senior_manager else None
+    data['hod_director'] = user.hod_director.name if user.hod_director else None
+    
+    # 3. Fetch detailed info from External API (filtered by ID for speed)
+    from api_management.services import fetch_employee_data
+    try:
+        # We only need the specific employee, so it's super fast
+        ext_data = fetch_employee_data(employee_id_filter=user.employee_id)
+        if ext_data.get('results') and len(ext_data['results']) > 0:
+            details = ext_data['results'][0]
+            # Merge external details into response
+            data['external_profile'] = details
+            # Flatten common fields for easier UI access
+            data['phone'] = details['employee'].get('phone')
+            data['email'] = details['employee'].get('email') or data['email']
+    except Exception as e:
+        print(f"Failed to fetch external profile data: {e}")
+        data['external_profile'] = None
+        
+    return Response(data)
+
+@api_view(['GET'])
+@permission_classes([IsCustomAuthenticated])
+def get_face_registration_requests_view(request):
+    manager = request.custom_user
+    
+    # Check if user is HR
+    is_hr = 'hr' in manager.role.name.lower() or manager.role.name.lower() == 'hr' or manager.employee_id.lower().startswith('hr')
+    
+    if is_hr:
+        # HR sees all pending registration requests
+        requests = FaceRegistrationRequest.objects.filter(status='Pending')
+    else:
+        # Manager sees pending requests for their subordinates
+        requests = FaceRegistrationRequest.objects.filter(reporting_manager=manager, status='Pending')
+    
+    data = []
+    for r in requests:
+        photo_url = None
+        if r.face_photo:
+            photo_url = request.build_absolute_uri(r.face_photo.url)
+            
+        data.append({
+            'id': r.id,
+            'employee_name': r.user.name,
+            'employee_id': r.user.employee_id,
+            'photo_url': photo_url,
+            'created_at': r.created_at.isoformat(),
+        })
+    return Response(data)
+
+@api_view(['POST'])
+@permission_classes([IsCustomAuthenticated])
+def handle_face_registration_request_view(request):
+    manager = request.custom_user
+    request_id = request.data.get('request_id')
+    action = request.data.get('action') # 'approve' or 'reject'
+    remarks = request.data.get('remarks', '')
+    
+    # Check if user is HR
+    is_hr = 'hr' in manager.role.name.lower() or manager.role.name.lower() == 'hr' or manager.employee_id.lower().startswith('hr')
+    
+    if is_hr:
+        reg_request = FaceRegistrationRequest.objects.filter(id=request_id, status='Pending').first()
+    else:
+        reg_request = FaceRegistrationRequest.objects.filter(id=request_id, reporting_manager=manager, status='Pending').first()
+        
+    if not reg_request:
+        return Response({'error': 'Registration request not found or unauthorized.'}, status=status.HTTP_404_NOT_FOUND)
+        
+    if action == 'approve':
+        reg_request.status = 'Approved'
+        reg_request.remarks = remarks
+        reg_request.save()
+        
+        # Update user with face data
+        user = reg_request.user
+        user.face_encoding = reg_request.face_encoding
+        user.face_photo = reg_request.face_photo
+        user.is_face_enrolled = True
+        user.allow_photo_reset = False
+        user.save()
+        
+        # Notify user
+        Notification.objects.create(
+            user=user,
+            title="Face Registration Approved",
+            message="Your face registration has been approved. You can now use FRS for attendance.",
+            type="success"
+        )
+    else:
+        reg_request.status = 'Rejected'
+        reg_request.remarks = remarks
+        reg_request.save()
+        
+        # Notify user
+        Notification.objects.create(
+            user=reg_request.user,
+            title="Face Registration Rejected",
+            message=f"Your face registration was rejected. Reason: {remarks}",
+            type="error"
+        )
+        
+    return Response({'message': f'Request {action}ed successfully.'})
+
+@api_view(['GET'])
+@permission_classes([IsCustomAuthenticated])
+def get_pending_frs_approvals_view(request):
+    manager = request.custom_user
+    # Fetch all recently recorded attendance logs
+    # We show 'Recorded' logs which replace the 'Pending' approval ones
+    attendance_qs = AttendanceFRS.objects.filter(status='Recorded').select_related('user').order_by('-timestamp')
+    
+    data = []
+    import pytz
+    local_tz = pytz.timezone(settings.TIME_ZONE)
+    
+    for a in attendance_qs:
+        # Check if user reports to this manager
+        if a.user.reporting_manager != manager:
+            # Check if this person IS HR (they can see all logs)
+            is_hr = 'hr' in manager.role.name.lower() or manager.role.name.lower() == 'hr' or manager.employee_id.lower().startswith('hr')
+            if not is_hr:
+                continue
+            
+        photo_url = request.build_absolute_uri(a.photo_captured.url) if a.photo_captured else None
+        
+        # Format timestamp to local for better display
+        local_dt = a.timestamp.astimezone(local_tz)
+        
+        data.append({
+            'id': a.id,
+            'employee_name': a.user.name,
+            'employee_id': a.user.employee_id,
+            'date': local_dt.strftime('%Y-%m-%d'),
+            'time': local_dt.strftime('%H:%M'),
+            'timestamp': local_dt.isoformat(),
+            'photo_url': photo_url,
+            'latitude': a.latitude,
+            'longitude': a.longitude,
+            'address': a.location_address,
+            'match_score': a.match_score,
+            'level': a.hierarchy_level
+        })
+    return Response(data)
+
+@api_view(['POST'])
+@permission_classes([IsCustomAuthenticated])
+def handle_frs_approval_view(request):
+    manager = request.custom_user
+    attendance_id = request.data.get('attendance_id')
+    action = request.data.get('action') # 'approve' or 'reject'
+    remarks = request.data.get('remarks', '')
+    
+    attendance = AttendanceFRS.objects.filter(
+        id=attendance_id,
+        status='Pending'
+    ).select_related('user').first()
+    
+    if not attendance or attendance.user.reporting_manager != manager:
+        return Response({'error': 'Attendance record not found or unauthorized'}, status=status.HTTP_404_NOT_FOUND)
+        
+    attendance.status = 'Approved' if action == 'approve' else 'Rejected'
+    attendance.remarks = remarks
+    attendance.save()
+    
+    return Response({'message': f'Request {action}ed successfully'})
+
+@api_view(['POST'])
+@permission_classes([IsCustomAuthenticated])
+def clear_frs_notifications_view(request):
+    user = request.custom_user
+    # Mark all FRS related notifications as read
+    Notification.objects.filter(
+        user=user, 
+        title__in=["FRS Attendance Capture", "FRS Attendance Approval Request", "Face Registration Request", "Face Registration Approved", "Face Registration Rejected"]
+    ).update(unread=False)
+    
+    # Update clear timestamp to hide logs from screen
+    user.frs_logs_cleared_at = timezone.now()
+    user.save()
+    
+    return Response({'message': 'FRS notifications cleared.'})
+
+

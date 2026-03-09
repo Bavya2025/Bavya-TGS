@@ -5,7 +5,8 @@ class UserSerializer(serializers.ModelSerializer):
     role = serializers.StringRelatedField()
     class Meta:
         model = User
-        fields = ['id', 'name', 'employee_id', 'role', 'designation', 'department']
+        fields = ['id', 'name', 'employee_id', 'role', 'designation', 'department', 
+                  'is_face_enrolled', 'face_photo', 'allow_photo_reset']
 
 class SessionSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.name', read_only=True)
