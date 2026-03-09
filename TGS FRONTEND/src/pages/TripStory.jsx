@@ -1,0 +1,640 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+    ChevronLeft,
+    CheckCircle2,
+    Clock,
+    MapPin,
+    Calendar,
+    Briefcase,
+    TrendingUp,
+    ShieldCheck,
+    Gauge,
+    Info,
+    CreditCard,
+    IndianRupee,
+    Layers,
+    User,
+    Award,
+    Image,
+    Navigation,
+    Printer,
+    Download,
+    Share2,
+    LayoutGrid,
+    StickyNote,
+    Plus,
+    CheckCircle,
+    XCircle,
+    HelpCircle,
+    PauseCircle,
+    AlertTriangle,
+    FileText,
+    ArrowRight
+} from 'lucide-react';
+import { encodeId, decodeId } from '../utils/idEncoder';
+import api from '../api/api';
+import { useToast } from '../context/ToastContext.jsx';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+import { useAuth } from '../context/AuthContext';
+import DynamicExpenseGrid from '../components/trips/DynamicExpenseGrid.jsx';
+import TripWalletModal from '../components/trips/TripWalletModal';
+import ExpenseReportPDF from '../components/trips/ExpenseReportPDF';
+import { formatIndianCurrency } from '../utils/formatters';
+
+
+const TripStory = () => {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const { showToast } = useToast();
+    const { user } = useAuth();
+    const [trip, setTrip] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [showWalletModal, setShowWalletModal] = useState(false);
+    const [isActionLoading, setIsActionLoading] = useState(false);
+    const [auditRemarks, setAuditRemarks] = useState({});
+    
+    // PDF Export refs and state
+    const reportRef = useRef(null);
+    const [isExportingPDF, setIsExportingPDF] = useState(false);
+    const [isExportingExcel, setIsExportingExcel] = useState(false);
+
+    useEffect(() => {
+        fetchTripStory();
+    }, [id]);
+
+    const fetchTripStory = async () => {
+        setIsLoading(true);
+        try {
+            const decodedId = decodeId(id);
+            const response = await api.get(`/api/trips/${decodedId}/`);
+            setTrip(response.data);
+        } catch (error) {
+            console.error("Failed to fetch trip story:", error);
+            showToast("Failed to load trip story", "error");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleAction = async (action) => {
+        if (!trip) return;
+        setIsActionLoading(true);
+        try {
+            const task_id = trip.claim ? `CLAIM-${trip.claim.id}` : `TRIP-${trip.trip_id}`;
+            await api.post('/api/approvals/', {
+                id: task_id,
+                action: action
+            });
+            showToast(`${action} successful`, "success");
+            fetchTripStory();
+        } catch (error) {
+            showToast(`Failed to ${action}`, "error");
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const handleItemAction = async (itemId, itemStatus) => {
+        if (!trip?.claim) return;
+        const remarks = auditRemarks[itemId] || "";
+
+        if (itemStatus === 'Rejected' && !remarks.trim()) {
+            showToast("Please provide remarks for rejection", "error");
+            return;
+        }
+
+        try {
+            await api.post('/api/approvals/', {
+                id: `CLAIM-${trip.claim.id}`,
+                action: 'UpdateItem',
+                item_id: itemId,
+                item_status: itemStatus,
+                remarks: remarks
+            });
+
+            // Re-fetch to get updated state across all remark fields
+            await fetchTripStory();
+            showToast(`Item ${itemStatus} updated`, "success");
+        } catch (e) {
+            showToast("Failed to update item", "error");
+        }
+    };
+
+    const handleExport = async (format) => {
+        if (!trip) return;
+        
+        const setter = format === 'pdf' ? setIsExportingPDF : setIsExportingExcel;
+        setter(true);
+        showToast(`Generating ${format.toUpperCase()} statement...`, "info");
+        
+        try {
+            const response = await api.get(`/api/trips/${trip.trip_id}/export/${format}/`, {
+                responseType: 'blob'
+            });
+            
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Travel_Expense_Statement_${trip.trip_id}.${format === 'pdf' ? 'pdf' : 'xlsx'}`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            
+            showToast(`${format.toUpperCase()} downloaded successfully`, "success");
+        } catch (error) {
+            console.error(`${format.toUpperCase()} export failed:`, error);
+            showToast(`Failed to generate ${format.toUpperCase()}`, "error");
+        } finally {
+            setter(false);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="story-page-loading">
+                <div className="spinner"></div>
+                <p>Curating Trip Story...</p>
+            </div>
+        );
+    }
+
+    if (!trip) {
+        return (
+            <div className="story-page-error">
+                <h2>Story Not Found</h2>
+                <button onClick={() => navigate('/trips')}>Back to My Trips</button>
+            </div>
+        );
+    }
+
+    const formatDate = (dateStr) => {
+        if (!dateStr) return 'N/A';
+        return new Date(dateStr).toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+        });
+    };
+
+    const formatCurrency = (amt) => {
+        return `₹${formatIndianCurrency(amt || 0)}`;
+    };
+
+    return (
+        <div className="story-page-container animate-fade-in">
+            <header className="story-header report-mode">
+                <div className="header-top">
+                    <button className="back-btn" onClick={() => navigate('/trips')}>
+                        <ChevronLeft size={20} />
+                        <span>Back</span>
+                    </button>
+                    <div className="header-actions-group">
+                        <div className="report-seal">
+                            <ShieldCheck size={14} />
+                            <span>OFFICIAL REPORT</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="story-hero">
+                    <div className="hero-content">
+                        <div className="hero-branding">
+                            <img src="/bavya.png" alt="Bavya Logo" className="story-bavya-logo" />
+                            <div className="hero-divider-v"></div>
+                            <div className="trip-id-pill">{trip.trip_id}</div>
+                        </div>
+                        <h1>Trip Story</h1>
+                        <p className="hero-subtitle">{trip.purpose}</p>
+                        <div className="hero-badges">
+                            <span className={`status-badge ${trip.status?.toLowerCase() || 'pending'}`}>
+                                {trip.status}
+                            </span>
+                        </div>
+                    </div>
+                    <div className="hero-stat-main">
+                        <div className="hero-stat-item">
+                            <label>Total Investment</label>
+                            <strong>{formatCurrency(trip.total_expenses)}</strong>
+                        </div>
+                        <div className="hero-stat-divider"></div>
+                        <div className="hero-stat-item">
+                            <label>Settlement Status</label>
+                            <strong style={{ color: trip.wallet_balance < 0 ? '#ef4444' : '#10b981' }}>
+                                {trip.wallet_balance < 0 ? `Payable: ${formatCurrency(Math.abs(trip.wallet_balance))}` : `Surplus: ${formatCurrency(trip.wallet_balance)}`}
+                            </strong>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div className="story-grid">
+                {/* SECTION 1: Logistics & Meta */}
+                <div className="story-section span-2">
+                    <div className="section-header">
+                        <LayoutGrid size={20} />
+                        <h3>Trip Core Details</h3>
+                    </div>
+                    <div className="details-grid-4">
+                        <div className="detail-card">
+                            <MapPin className="icon-orange" size={20} />
+                            <div className="detail-info">
+                                <label>Route</label>
+                                <p>{trip.source} → {trip.destination}</p>
+                                {trip.en_route && <span className="sub-detail">via {trip.en_route}</span>}
+                            </div>
+                        </div>
+                        <div className="detail-card">
+                            <Calendar className="icon-blue" size={20} />
+                            <div className="detail-info">
+                                <label>Timeline</label>
+                                <p>{formatDate(trip.start_date)} - {formatDate(trip.end_date)}</p>
+                            </div>
+                        </div>
+                        <div className="detail-card">
+                            <User className="icon-purple" size={20} />
+                            <div className="detail-info">
+                                <label>Personnel</label>
+                                <p>{trip.user_name || 'N/A'}</p>
+                                {trip.composition !== 'Solo' && trip.user_emp_id && trip.user_emp_id !== 'N/A' && (
+                                    <span className="sub-detail">{trip.user_emp_id}</span>
+                                )}
+                                
+                                {trip.composition !== 'Solo' && (trip.user_bank_name || trip.user_account_no) && (
+                                    <div className="bank-detail-mini mt-2">
+                                        {trip.user_bank_name && trip.user_bank_name !== 'N/A' && (
+                                            <div className="bank-row">
+                                                <span className="bank-label">Bank:</span>
+                                                <span className="bank-val">{trip.user_bank_name}</span>
+                                            </div>
+                                        )}
+                                        {trip.user_account_no && trip.user_account_no !== 'N/A' && (
+                                            <div className="bank-row">
+                                                <span className="bank-label">A/C:</span>
+                                                <span className="bank-val">{trip.user_account_no}</span>
+                                            </div>
+                                        )}
+                                        {trip.user_ifsc_code && trip.user_ifsc_code !== 'N/A' && (
+                                            <div className="bank-row">
+                                                <span className="bank-label">IFSC:</span>
+                                                <span className="bank-val">{trip.user_ifsc_code}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {trip.composition !== 'Solo' && trip.members && (
+                                    <div className="sub-detail-list mt-3">
+                                        <label className="text-xs font-semibold text-slate-500 uppercase block mb-1">Team Members</label>
+                                        <div className="flex flex-wrap gap-1">
+                                            {(() => {
+                                                let members = [];
+                                                try {
+                                                    members = typeof trip.members === 'string' ? JSON.parse(trip.members) : (trip.members || []);
+                                                } catch (e) {
+                                                    members = Array.isArray(trip.members) ? trip.members : [trip.members];
+                                                }
+                                                
+                                                if (Array.isArray(members)) {
+                                                    return members.map((member, idx) => {
+                                                        const name = typeof member === 'object' ? (member.name || member.employee_name) : member;
+                                                        return <span key={idx} className="member-tag-mini">{name}</span>;
+                                                    });
+                                                }
+                                                return <span className="member-tag-mini">{String(trip.members)}</span>;
+                                            })()}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="detail-card">
+                            <ShieldCheck className="icon-green" size={20} />
+                            <div className="detail-info">
+                                <label>Project</label>
+                                <p>{trip.project_code || 'General Activity'}</p>
+                            </div>
+                        </div>
+                        <div className="detail-card">
+                            <Briefcase className="icon-magenta" size={20} />
+                            <div className="detail-info">
+                                <label>Purpose</label>
+                                <p>{trip.purpose}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* SECTION 2: Financial Grid */}
+                <div className="story-section span-3">
+                    <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <IndianRupee size={20} />
+                            <h3>Financial Summary</h3>
+                        </div>
+                        {['approved', 'hr approved', 'on-going'].includes(trip.status?.toLowerCase()) && (
+                            <button
+                                className="top-up-btn"
+                                onClick={() => setShowWalletModal(true)}
+                            >
+                                <Plus size={14} /> Request Top-up / Advance
+                            </button>
+                        )}
+                    </div>
+                    <div className="finance-grid">
+                        <div className="fin-box premium">
+                            <label>Approved Advance</label>
+                            <div className="val-row">
+                                <CreditCard size={18} />
+                                <h2>{formatCurrency(trip.total_approved_advance)}</h2>
+                            </div>
+                            <p className="fin-desc">Funds disbursed by HQ</p>
+                        </div>
+                        <div className="fin-box warning">
+                            <label>Recorded Expenses</label>
+                            <div className="val-row">
+                                <TrendingUp size={18} />
+                                <h2>{formatCurrency(trip.total_expenses)}</h2>
+                            </div>
+                            <p className="fin-desc">On-field spending</p>
+                        </div>
+                        <div className="fin-box" style={{ background: 'var(--bg-main)' }}>
+                            <label>Wallet Balance</label>
+                            <div className="val-row">
+                                <Layers size={18} />
+                                <h2 style={{ color: trip.wallet_balance >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                    {formatCurrency(trip.wallet_balance)}
+                                </h2>
+                            </div>
+                            <p className="fin-desc">Current available liquidity</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* SECTION 4: Dynamic Expense Registry / Audit View */}
+                <div className="story-section span-3">
+                    <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <StickyNote size={20} />
+                            <h3>Detailed Expense Registry</h3>
+                        </div>
+
+                        {(String(user?.id) === String(trip.current_approver) || String(user?.id) === String(trip.claim?.current_approver)) && (
+                            <div className="audit-actions-quick">
+                                <button className="btn-sm-audit secondary" onClick={() => navigate('/approvals')}>
+                                    <ArrowRight size={14} style={{ transform: 'rotate(180deg)' }} /> Back to Inbox
+                                </button>
+                                <button className="btn-sm-audit reject" onClick={() => handleAction('Reject')} disabled={isActionLoading}>
+                                    <XCircle size={14} /> Reject All
+                                </button>
+                                <button className="btn-sm-audit approve" onClick={() => handleAction('Approve')} disabled={isActionLoading}>
+                                    <CheckCircle size={14} /> Final Approve
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {(String(user?.id) === String(trip.current_approver) || String(user?.id) === String(trip.claim?.current_approver)) && trip.expenses?.length > 0 && (
+                        <div className="audit-grid-container mb-4">
+                            <div className="expense-summary-strip">
+                                <div className="summary-box">
+                                    <span className="label">Total Claimed</span>
+                                    <span className="value">₹{trip.expenses.reduce((s, e) => s + parseFloat(e.amount), 0).toLocaleString()}</span>
+                                </div>
+                                <div className="summary-box approved">
+                                    <span className="label">Approved (Net)</span>
+                                    <span className="value">₹{trip.expenses.filter(e => e.status !== 'Rejected').reduce((s, e) => s + parseFloat(e.amount), 0).toLocaleString()}</span>
+                                </div>
+                                <div className="summary-box rejected">
+                                    <span className="label">Rejected</span>
+                                    <span className="value">₹{trip.expenses.filter(e => e.status === 'Rejected').reduce((s, e) => s + parseFloat(e.amount), 0).toLocaleString()}</span>
+                                </div>
+                            </div>
+
+                            <div className="expense-breakdown-table-wrapper">
+                                <table className="breakdown-table audit-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Category</th>
+                                            <th>Amount</th>
+                                            <th>RM Remarks</th>
+                                            <th>HR Remarks</th>
+                                            <th>Finance Remarks</th>
+                                            <th className="text-center">Verdict</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {trip.expenses.map(exp => {
+                                            const role = user?.role?.toLowerCase() || '';
+                                            const isFinance = role.includes('finance');
+                                            const isHR = role.includes('hr');
+                                            const isRM = !isFinance && !isHR;
+
+                                            return (
+                                                <tr key={exp.id} className={exp.status === 'Rejected' ? 'row-rejected' : ''}>
+                                                    <td className="mono">{exp.date}</td>
+                                                    <td>
+                                                        <span className="cat-tag">{exp.category}</span>
+                                                        <div className="json-desc-clean mt-1">
+                                                            {exp.description && exp.description.startsWith('{') ? (
+                                                                (() => {
+                                                                    try {
+                                                                        const d = JSON.parse(exp.description);
+                                                                        return `${d.origin || ''}${d.origin ? ' → ' : ''}${d.destination || d.location || d.hotelName || d.hotel_name || ''}`;
+                                                                    } catch (e) { return exp.description; }
+                                                                })()
+                                                            ) : exp.description}
+                                                        </div>
+                                                    </td>
+                                                    <td className="amount-cell">
+                                                        <div className="amount-with-bill">
+                                                            ₹{parseFloat(exp.amount).toLocaleString()}
+                                                            {exp.receipt_image && (() => {
+                                                                let bills = [];
+                                                                try {
+                                                                    if (typeof exp.receipt_image === 'string' && exp.receipt_image.startsWith('[')) {
+                                                                        bills = JSON.parse(exp.receipt_image);
+                                                                    } else {
+                                                                        bills = [exp.receipt_image];
+                                                                    }
+                                                                } catch (e) { bills = [exp.receipt_image]; }
+
+                                                                return (
+                                                                    <div className="audit-bills-list" style={{ display: 'flex', gap: '4px', marginLeft: '8px' }}>
+                                                                        {bills.map((b, idx) => (
+                                                                            <button
+                                                                                key={idx}
+                                                                                className="bill-preview-icon"
+                                                                                title={`View Bill ${idx + 1}`}
+                                                                                onClick={() => {
+                                                                                    const nw = window.open();
+                                                                                    nw.document.write(`<img src="${b}" style="max-width:100%;" />`);
+                                                                                }}
+                                                                            >
+                                                                                <FileText size={12} />
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    </td>
+                                                    <td className="remarks-audit-cell">
+                                                        {isRM ? (
+                                                            <input
+                                                                className="audit-remark-input"
+                                                                placeholder="Add RM remarks..."
+                                                                value={auditRemarks[exp.id] !== undefined ? auditRemarks[exp.id] : (exp.rm_remarks || "")}
+                                                                onChange={(e) => setAuditRemarks({ ...auditRemarks, [exp.id]: e.target.value })}
+                                                            />
+                                                        ) : (
+                                                            <span className="static-remark">{exp.rm_remarks || "—"}</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="remarks-audit-cell">
+                                                        {isHR ? (
+                                                            <input
+                                                                className="audit-remark-input"
+                                                                placeholder="Add HR remarks..."
+                                                                value={auditRemarks[exp.id] !== undefined ? auditRemarks[exp.id] : (exp.hr_remarks || "")}
+                                                                onChange={(e) => setAuditRemarks({ ...auditRemarks, [exp.id]: e.target.value })}
+                                                            />
+                                                        ) : (
+                                                            <span className="static-remark">{exp.hr_remarks || "—"}</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="remarks-audit-cell">
+                                                        {isFinance ? (
+                                                            <input
+                                                                className="audit-remark-input"
+                                                                placeholder="Add Fin remarks..."
+                                                                value={auditRemarks[exp.id] !== undefined ? auditRemarks[exp.id] : (exp.finance_remarks || "")}
+                                                                onChange={(e) => setAuditRemarks({ ...auditRemarks, [exp.id]: e.target.value })}
+                                                            />
+                                                        ) : (
+                                                            <span className="static-remark">{exp.finance_remarks || "—"}</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="actions-cell">
+                                                        <div className="row-actions">
+                                                            <button
+                                                                className={`row-action-btn approve ${exp.status === 'Approved' ? 'active' : ''}`}
+                                                                onClick={() => handleItemAction(exp.id, 'Approved')}
+                                                            >
+                                                                <CheckCircle size={14} />
+                                                            </button>
+                                                            <button
+                                                                className={`row-action-btn reject ${exp.status === 'Rejected' ? 'active' : ''}`}
+                                                                onClick={() => handleItemAction(exp.id, 'Rejected')}
+                                                            >
+                                                                <XCircle size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {!(String(user?.id) === String(trip.current_approver) || String(user?.id) === String(trip.claim?.current_approver)) && (
+                        <DynamicExpenseGrid
+                            tripId={trip.trip_id}
+                            startDate={trip.start_date}
+                            endDate={trip.end_date}
+                            initialExpenses={trip.expenses || []}
+                            totalAdvance={trip.total_approved_advance || 0}
+                            onUpdate={fetchTripStory}
+                            tripStatus={trip.status}
+                            claimStatus={trip.claim?.status}
+                        />
+                    )}
+                </div>
+
+                {/* SECTION 5: Approval & Settlement Story */}
+                <div className="story-section span-3">
+                    <div className="section-header">
+                        <CheckCircle2 size={20} />
+                        <h3>Settlement & Payout Lifecycle</h3>
+                    </div>
+                    <div className="settlement-summary-grid">
+                        <div className="settle-card">
+                            <label>Claim Status</label>
+                            <div className={`settle-badge ${trip.claim?.status?.toLowerCase() || 'unsubmitted'}`}>
+                                {trip.claim?.status || 'No Claim Filed'}
+                            </div>
+                        </div>
+                        <div className="settle-card">
+                            <label>Transferred By</label>
+                            <p>{trip.claim?.processed_by?.name || 'Waiting'}</p>
+                        </div>
+                        <div className="settle-card">
+                            <label>Transaction ID</label>
+                            <p className="mono">{trip.claim?.transaction_id || 'N/A'}</p>
+                        </div>
+                        <div className="settle-card">
+                            <label>Payout Date</label>
+                            <p>{trip.claim?.payment_date ? formatDate(trip.claim.payment_date) : 'N/A'}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* REPORT EXPORT ACTIONS AT BOTTOM */}
+            <div className="story-footer-actions animate-fade-in" style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '1rem',
+                padding: '2rem 0',
+                borderTop: '1px solid #e2e8f0',
+                marginTop: '2rem'
+            }}>
+                <button 
+                    className="btn btn-secondary" 
+                    style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: '700' }}
+                    onClick={() => handleExport('pdf')}
+                    disabled={isExportingPDF}
+                >
+                    <FileText size={20} />
+                    {isExportingPDF ? 'Generating PDF...' : 'Download PDF Statement'}
+                </button>
+                <button 
+                    className="btn btn-secondary" 
+                    style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: '700' }}
+                    onClick={() => handleExport('excel')}
+                    disabled={isExportingExcel}
+                >
+                    <Download size={20} />
+                    {isExportingExcel ? 'Generating Excel...' : 'Export to Excel'}
+                </button>
+                <button 
+                    className="btn btn-outline" 
+                    style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: '700', border: '1px solid #cbd5e1' }}
+                    onClick={() => window.print()}
+                >
+                    <Printer size={20} />
+                    <span>Print Summary</span>
+                </button>
+            </div>
+
+            <TripWalletModal
+                isOpen={showWalletModal}
+                onClose={() => setShowWalletModal(false)}
+                trip={{ id: trip.trip_id, ...trip }}
+                onUpdate={fetchTripStory}
+            />
+            
+            {/* Hidden PDF Template Container */}
+            <div style={{ overflow: 'hidden', height: 0, width: 0 }}>
+                 <ExpenseReportPDF ref={reportRef} trip={trip} />
+            </div>
+        </div>
+    );
+};
+
+export default TripStory;

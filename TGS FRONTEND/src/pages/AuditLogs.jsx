@@ -1,0 +1,230 @@
+import React, { useState, useEffect } from 'react';
+import api from '../api/api';
+import { useAuth } from '../context/AuthContext';
+import { format } from 'date-fns';
+import { Search, Eye, ArrowRight, FileText, User, Box, Activity } from 'lucide-react';
+import Modal from '../components/Modal';
+
+const AuditLogs = () => {
+    const { user } = useAuth();
+    const [logs, setLogs] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [selectedLog, setSelectedLog] = useState(null);
+    const [filters, setFilters] = useState({
+        search: '',
+        model: '',
+        action: ''
+    });
+
+    useEffect(() => {
+        fetchLogs();
+    }, [filters]);
+
+    const fetchLogs = async () => {
+        setIsLoading(true);
+        try {
+            const params = {};
+            if (filters.search) params.search = filters.search;
+            if (filters.model) params.model_name = filters.model;
+            if (filters.action) params.action = filters.action;
+            
+            const response = await api.get('/api/audit-logs/', { params });
+            setLogs(response.data.results || response.data);
+        } catch (error) {
+            console.error("Failed to fetch audit logs:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSearchChange = (e) => {
+        setFilters(prev => ({ ...prev, search: e.target.value }));
+    };
+
+    const formatLogValue = (val) => {
+        if (val === null || val === undefined) return <span className="text-muted italic">null</span>;
+        if (typeof val === 'boolean') return <span className="font-bold">{val ? 'True' : 'False'}</span>;
+        
+        if (Array.isArray(val)) {
+            if (val.length === 0) return <span className="text-muted italic">[]</span>;
+            return (
+                <div className="log-array-wrapper">
+                    {val.map((item, i) => (
+                        <div key={i} className="log-array-item">
+                            <span className="log-index">[{i}]</span>
+                            {formatLogValue(item)}
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        if (typeof val === 'object') {
+            if (Object.keys(val).length === 0) return <span className="text-muted italic">{}</span>;
+            return (
+                <div className="log-obj-wrapper">
+                    {Object.entries(val).map(([k, v]) => (
+                        <div key={k} className="log-obj-row">
+                            <span className="log-key">{k}:</span>
+                            <span className="log-val">{formatLogValue(v)}</span>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        return <span>{String(val)}</span>;
+    };
+
+    const renderDiff = (details) => {
+        if (!details) return <p className="text-muted italic">No meaningful changes recorded.</p>;
+        
+        const entries = Object.entries(details);
+        if (entries.length === 0) return <p className="text-muted italic">No changes.</p>;
+
+        return (
+            <div className="diff-view">
+                {entries.map(([field, change]) => (
+                    <div key={field} className="diff-item">
+                        <span className="diff-field">{field}</span>
+                        <div className="diff-values">
+                            <div className="diff-old">
+                                <span className="diff-label">Old:</span>
+                                <div className="diff-content">{formatLogValue(change.old)}</div>
+                            </div>
+                            <div className="diff-arrow"><ArrowRight size={14} /></div>
+                            <div className="diff-new">
+                                <span className="diff-label">New:</span>
+                                <div className="diff-content">{formatLogValue(change.new)}</div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    return (
+        <div className="page-container animate-fade-in">
+            <header className="page-header">
+                <div>
+                    <h1>Audit Logs</h1>
+                    <p>Comprehensive trail of data changes and activities.</p>
+                </div>
+            </header>
+
+            <div className="filters-bar">
+                <div className="search-box">
+                    <Search size={18} />
+                    <input 
+                        type="text" 
+                        placeholder="Search logs..." 
+                        value={filters.search}
+                        onChange={handleSearchChange}
+                    />
+                </div>
+                <select 
+                    value={filters.action} 
+                    onChange={e => setFilters(prev => ({...prev, action: e.target.value}))}
+                    className="filter-select"
+                >
+                    <option value="">All Actions</option>
+                    <option value="CREATE">Create</option>
+                    <option value="UPDATE">Update</option>
+                    <option value="DELETE">Delete</option>
+                    <option value="LOGIN">Login</option>
+                    <option value="LOGOUT">Logout</option>
+                </select>
+            </div>
+
+            <div className="table-container premium-shadow">
+                <table className="data-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>User</th>
+                            <th>Action</th>
+                            <th>Entity</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {isLoading ? (
+                            <tr><td colSpan="5" className="text-center">Loading logs...</td></tr>
+                        ) : logs.length === 0 ? (
+                            <tr><td colSpan="5" className="text-center">No audit logs found.</td></tr>
+                        ) : (
+                            logs.map(log => (
+                                <tr 
+                                    key={log.id} 
+                                    className="hover-row"
+                                    onClick={() => setSelectedLog(log)}
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    <td>{format(new Date(log.timestamp), 'MMM dd, HH:mm')}</td>
+                                    <td>{log.user_name || 'System'}</td>
+                                    <td>
+                                        <span className={`status-pill ${log.action.toLowerCase()}`}>
+                                            {log.action}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div className="text-sm font-semibold">{log.model_name}</div>
+                                        <div className="text-xs text-muted truncate max-w-[150px]">{log.object_repr}</div>
+                                    </td>
+                                    <td><Eye size={16} className="text-muted hover:text-primary" /></td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            <Modal
+                isOpen={!!selectedLog}
+                onClose={() => setSelectedLog(null)}
+                title="Audit Log Details"
+                size="lg"
+            >
+                {selectedLog && (
+                    <div className="log-details-modal-content">
+                        <div className="grid grid-cols-3 gap-6 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                            <div className="detail-group">
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-1">
+                                    <Activity size={14} /> Action
+                                </label>
+                                <p className="font-bold text-slate-800 text-lg">{selectedLog.action}</p>
+                                <span className="text-xs font-semibold text-slate-500">{selectedLog.model_name}</span>
+                            </div>
+                            
+                            <div className="detail-group">
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-1">
+                                    <Box size={14} /> Object
+                                </label>
+                                <p className="font-bold text-slate-800">{selectedLog.object_repr}</p>
+                                <span className="text-xs text-slate-400">ID: {selectedLog.object_id}</span>
+                            </div>
+
+                            <div className="detail-group">
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-1">
+                                    <User size={14} /> User
+                                </label>
+                                <p className="font-bold text-slate-800">{selectedLog.user_name}</p>
+                                <span className="text-xs text-slate-400">{selectedLog.ip_address}</span>
+                            </div>
+                        </div>
+
+                        <div className="detail-group">
+                            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-3">
+                                <FileText size={16} /> Data Changes
+                            </label>
+                            {renderDiff(selectedLog.details)}
+                        </div>
+                    </div>
+                )}
+            </Modal>
+        </div>
+    );
+};
+
+export default AuditLogs;

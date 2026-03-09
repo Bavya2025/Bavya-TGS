@@ -1,0 +1,281 @@
+from django.db import models
+from django.utils import timezone
+
+class Role(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    description = models.TextField(blank=True)
+    
+    def __str__(self):
+        return self.name
+
+class User(models.Model):
+    employee_id = models.CharField(max_length=20, unique=True)
+    
+    role = models.ForeignKey(Role, on_delete=models.PROTECT)
+    password_hash = models.CharField(max_length=255)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.employee_id})"
+
+    def _get_api_data(self):
+        # Guard for purely local users by ID and Role
+        lower_id = self.employee_id.lower()
+        role_name = (self.role.name if self.role else '').lower()
+        
+        # Check against common local ID and Role patterns
+        management_keywords = ['admin', 'hr', 'guesthousemanager', 'finance', 'cfo']
+        if lower_id in management_keywords or 'admin001' in lower_id or any(kw in role_name for kw in management_keywords) or 'superuser' in role_name:
+             return None
+             
+        from api_management.services import get_dynamic_employee_data
+        return get_dynamic_employee_data(self.employee_id)
+
+    @classmethod
+    def _get_or_create_shell_user(cls, employee_code):
+        """Ensures a shell user exists for a given employee code."""
+        if not employee_code:
+            return None
+        user = User.objects.filter(employee_id=employee_code).first()
+        if not user:
+            try:
+                role, _ = Role.objects.get_or_create(name='Employee')
+                user = User.objects.create(
+                    employee_id=employee_code,
+                    role=role,
+                    password_hash='dynamic_user'
+                )
+            except Exception as e:
+                print(f"Error creating shell user {employee_code}: {e}")
+                return None
+        return user
+
+    @property
+    def name(self):
+        # 1. Hardcoded ID check (fastest)
+        lower_id = self.employee_id.lower()
+        if lower_id in ['admin', 'admin001']: return 'System Administrator'
+        if lower_id == 'guesthousemanager': return 'Guest House Manager'
+        if lower_id == 'hr': return 'HR Manager'
+        if lower_id == 'finance': return 'Finance Manager'
+        if lower_id == 'cfo': return 'CFO'
+        
+        # 2. Local fallback if API skip is active
+        if self._get_api_data() is None:
+            return self.employee_id
+            
+        # 3. Dynamic fetch
+        data = self._get_api_data()
+        return data.get('employee', {}).get('name') or self.employee_id
+
+    @property
+    def email(self):
+        lower_id = self.employee_id.lower()
+        if lower_id in ['admin', 'hr', 'guesthousemanager', 'finance', 'cfo']:
+             return f"{lower_id}@tgs.com"
+        data = self._get_api_data()
+        return data.get('employee', {}).get('email', '') if data else ''
+
+    @property
+    def phone(self):
+        data = self._get_api_data()
+        return data.get('employee', {}).get('phone', '') if data else ''
+
+    @property
+    def designation(self):
+        lower_id = self.employee_id.lower()
+        if lower_id == 'admin': return 'Administrator'
+        if lower_id == 'guesthousemanager': return 'Facility Manager'
+        if lower_id == 'hr': return 'HR Head'
+        data = self._get_api_data()
+        return data.get('position', {}).get('name', '') if data else ''
+
+    @property
+    def department(self):
+        lower_id = self.employee_id.lower()
+        if lower_id in ['admin', 'hr', 'guesthousemanager', 'finance', 'cfo']:
+             return 'Management'
+        data = self._get_api_data()
+        return data.get('position', {}).get('department') or 'N/A' if data else 'N/A'
+
+    @property
+    def section(self):
+        data = self._get_api_data()
+        return data.get('position', {}).get('section') or 'N/A' if data else 'N/A'
+
+    @property
+    def project_name(self):
+        data = self._get_api_data()
+        return data.get('project', {}).get('name') or 'N/A' if data else 'N/A'
+
+    @property
+    def project_code(self):
+        data = self._get_api_data()
+        return data.get('project', {}).get('code') or 'N/A' if data else 'N/A'
+
+    @property
+    def photo(self):
+        data = self._get_api_data()
+        return data.get('employee', {}).get('photo', None) if data else None
+
+    @property
+    def office_level(self):
+        data = self._get_api_data()
+        if data:
+            level_str = data.get('office', {}).get('level', '')
+            if 'Level' in str(level_str):
+                try: return int(str(level_str).replace('Level', '').strip())
+                except: pass
+        return 3
+
+    @property
+    def base_location(self):
+        data = self._get_api_data()
+        return data.get('office', {}).get('name', '') if data else ''
+
+    @property
+    def level_rank(self):
+        data = self._get_api_data()
+        return data.get('position', {}).get('level_rank', 10) if data else 10
+
+    @property
+    def bank_name(self):
+        data = self._get_api_data()
+        if not data: return ''
+        emp_info = data.get('employee', {})
+        return emp_info.get('bank_name', '')
+
+    @property
+    def account_no(self):
+        data = self._get_api_data()
+        if not data: return ''
+        emp_info = data.get('employee', {})
+        raw_acc = str(emp_info.get('account_no') or '')
+        if not raw_acc: return ''
+        
+        # Masking: show last 5 digits
+        if len(raw_acc) <= 5:
+            return raw_acc
+        return '*' * (len(raw_acc) - 5) + raw_acc[-5:]
+
+    @property
+    def ifsc_code(self):
+        data = self._get_api_data()
+        if not data: return ''
+        emp_info = data.get('employee', {})
+        return emp_info.get('ifsc_code', '')
+
+    @property
+    def reporting_manager(self):
+        data = self._get_api_data()
+        if not data: return None
+        # Handle both top-level and nested reporting_to
+        pos_details = data.get('positions_details', [])
+        reporting_to = pos_details[0].get('reporting_to', []) if pos_details else []
+        if not reporting_to:
+             return None
+        
+        mgr_info = reporting_to[0]
+        if isinstance(mgr_info, dict):
+            emp_code = mgr_info.get('employee_code') or mgr_info.get('employee', {}).get('employee_code')
+            if not emp_code and mgr_info.get('id'):
+                # Try to use ID if code is missing? 
+                # Actually, our _get_or_create_shell_user expects a code.
+                # If we only have an ID, we might need a separate resolution step.
+                # For now, we return None if no code is found to avoid corrupting User records.
+                return None
+            return self._get_or_create_shell_user(emp_code)
+        return self._get_or_create_shell_user(mgr_info)
+
+    @property
+    def senior_manager(self):
+        data = self._get_api_data()
+        if not data: return None
+        pos_details = data.get('positions_details', [])
+        reporting_to = pos_details[0].get('reporting_to', []) if pos_details else []
+        if len(reporting_to) < 2:
+             return None
+             
+        mgr_info = reporting_to[1]
+        if isinstance(mgr_info, dict):
+            emp_code = mgr_info.get('employee_code') or mgr_info.get('employee', {}).get('employee_code')
+            return self._get_or_create_shell_user(emp_code)
+        return self._get_or_create_shell_user(mgr_info)
+
+    @property
+    def hod_director(self):
+        data = self._get_api_data()
+        if not data: return None
+        pos_details = data.get('positions_details', [])
+        reporting_to = pos_details[0].get('reporting_to', []) if pos_details else []
+        if len(reporting_to) < 3:
+             return None
+             
+        mgr_info = reporting_to[2]
+        if isinstance(mgr_info, dict):
+            emp_code = mgr_info.get('employee_code') or mgr_info.get('employee', {}).get('employee_code')
+            return self._get_or_create_shell_user(emp_code)
+        return self._get_or_create_shell_user(mgr_info)
+
+class Session(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    token = models.CharField(max_length=255, unique=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+    logged_out_at = models.DateTimeField(null=True, blank=True)
+    last_activity = models.DateTimeField(default=timezone.now)
+
+    def is_valid(self):
+        return self.is_active and self.expires_at > timezone.now()
+
+
+class Notification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=100)
+    message = models.TextField()
+    type = models.CharField(max_length=20, default='info')
+    unread = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.title} for {self.user.name}"
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class LoginHistory(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='login_history')
+    login_time = models.DateTimeField(auto_now_add=True)
+    logout_time = models.DateTimeField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+    device_type = models.CharField(max_length=50, default='Web')
+    browser_type = models.CharField(max_length=50, default='Chrome')
+    status = models.CharField(max_length=20, default='Success')
+    failure_reason = models.TextField(null=True, blank=True)
+
+    class Meta:
+        verbose_name_plural = "Login History"
+        ordering = ['-login_time']
+
+    def __str__(self):
+        return f"{self.user} - {self.login_time}"
+
+class AuditLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=50)
+    model_name = models.CharField(max_length=100)
+    object_id = models.CharField(max_length=100, null=True, blank=True)
+    object_repr = models.CharField(max_length=255, null=True, blank=True)
+    details = models.JSONField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
