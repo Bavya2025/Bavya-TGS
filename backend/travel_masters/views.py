@@ -207,14 +207,6 @@ class RouteViewSet(viewsets.ModelViewSet):
         data['source'] = source_loc.pk if source_loc else None
         data['destination'] = dest_loc.pk if dest_loc else None
         
-        # Prevent exact duplicates
-        if source_loc and dest_loc:
-            existing_route = Route.objects.filter(source=source_loc, destination=dest_loc).first()
-            if existing_route:
-                return Response(
-                    {"detail": "A route already exists between these locations. You can configure multiple paths internally."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)

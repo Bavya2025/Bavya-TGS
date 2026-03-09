@@ -520,16 +520,16 @@ const RouteManagement = () => {
             if (!mandal) return [];
             if (filters.cluster) {
                 const cluster = clusters.find(c => (c.name || '').trim().toLowerCase() === getFilterName(filters.cluster));
-                return cluster ? [cluster] : [];
+                return cluster ? [{ ...cluster, id: `Cluster-${cluster.id}` }] : [];
             }
-            return clusters;
+            return clusters.map(c => ({ ...c, id: `Cluster-${c.id}` }));
         } else {
             // LOCAL ROUTE: Return Sites/Landmarks only
             if (!mandal) return [];
             if (filters.cluster) {
                 const cluster = clusters.find(c => (c.name || '').trim().toLowerCase() === getFilterName(filters.cluster));
-                const sites = cluster ? extractPoints(cluster) : [];
-                return sites.map(p => ({ ...p, id: `Site-${p.id}` }));
+                const points = cluster ? extractPoints(cluster) : [];
+                return points.map(p => ({ ...p, id: `Site-${p.id}` }));
             }
             
             let allPoints = [];
@@ -991,15 +991,6 @@ const RouteManagement = () => {
             return;
         }
 
-        // Frontend Duplicate Guard
-        const isDuplicate = routes.some(r => 
-            String(r.source) === String(newRoute.source) && String(r.destination) === String(newRoute.destination)
-        );
-        if (isDuplicate && !editingId) {
-            showToast("A route already exists between these locations.", "error");
-            return;
-        }
-
         try {
             if (editingId) {
                 await api.put(`/api/masters/routes/${editingId}/`, newRoute);
@@ -1013,7 +1004,20 @@ const RouteManagement = () => {
             showToast(editingId ? "Route updated successfully!" : "Route created successfully!", "success");
         } catch (error) {
             console.error("Failed to save route:", error.response?.data || error.message);
-            showToast("Failed to save route. Please check the inputs.", "error");
+            const errData = error.response?.data;
+            let errMsg = "Failed to save route.";
+            
+            if (errData) {
+                if (typeof errData === 'string') {
+                    // Prevent showing huge HTML snippets in toast
+                    errMsg = errData.includes('<!DOCTYPE html>') ? "Server error occurred. Please contact admin." : errData;
+                } else {
+                    // Extract first error message from response data
+                    const firstErr = Object.values(errData)[0];
+                    errMsg = Array.isArray(firstErr) ? firstErr[0] : (typeof firstErr === 'string' ? firstErr : errMsg);
+                }
+            }
+            showToast(errMsg, "error");
         }
     };
 
@@ -1186,7 +1190,18 @@ const RouteManagement = () => {
             handleManagePaths(selectedRoute);
         } catch (error) {
             console.error("Error adding path:", error.response?.data || error.message);
-            showToast("Failed to create enroute path", "error");
+            const errData = error.response?.data;
+            let errMsg = "Failed to create enroute path";
+            
+            if (errData) {
+                if (typeof errData === 'string') {
+                    errMsg = errData.includes('<!DOCTYPE html>') ? "Server error occurred. Please contact admin." : errData;
+                } else {
+                    const firstErr = Object.values(errData)[0];
+                    errMsg = Array.isArray(firstErr) ? firstErr[0] : (typeof firstErr === 'string' ? firstErr : errMsg);
+                }
+            }
+            showToast(errMsg, "error");
         }
     };
 
@@ -2602,240 +2617,309 @@ const RouteManagement = () => {
                 isOpen={isPathViewerOpen}
                 onClose={() => setIsPathViewerOpen(false)}
                 title={`Route Explorer: ${viewingRoute?.name}`}
-                maxWidth="1100px"
+                maxWidth="1150px"
             >
                 {viewingRoute && (
-                    <div className="space-y-8 p-2">
-                        <div className="flex items-center justify-between bg-slate-100/50 p-2 rounded-[2.5rem] shadow-inner mb-4">
-                            <div className="flex items-center gap-1.5 p-1 bg-white/50 rounded-full border border-slate-200/50 shadow-sm ml-1">
-                                {(viewingRoute.paths || []).map((path, idx) => (
-                                    <button
-                                        key={path.id || idx}
-                                        onClick={() => setActivePathIndex(idx)}
-                                        className={`h-9 px-6 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
-                                            activePathIndex === idx 
-                                            ? 'bg-slate-900 text-white shadow-lg' 
-                                            : 'text-slate-500 hover:text-slate-900 hover:bg-white'
-                                        }`}
-                                    >
-                                        Variant {String.fromCharCode(65 + idx)}
-                                    </button>
-                                ))}
+                    <div className="p-2" style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
+                        {/* Header & Style Toggle Section */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px', padding: '0 16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                <div style={{ padding: '12px', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: '16px' }}>
+                                    <RouteIcon style={{ color: '#3b82f6' }} size={24} />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <h3 style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', margin: 0, lineHeight: 1.2 }}>Terminal Registry Explorer</h3>
+                                    <p style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.2em', margin: '4px 0 0' }}>
+                                        Multi-Variant Network Mapping
+                                    </p>
+                                </div>
                             </div>
 
-                            <div className="flex items-center gap-2 p-1 bg-white/80 rounded-full border border-slate-200 shadow-sm mr-1">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px', backgroundColor: '#f1f5f9', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                                 <button 
                                     onClick={() => setDiagramStyle('straight')}
-                                    className={`h-8 px-4 rounded-full text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${diagramStyle === 'straight' ? 'bg-primary text-white shadow-md shadow-primary/20' : 'text-slate-400 hover:text-slate-600'}`}
+                                    style={{ 
+                                        height: '36px', padding: '0 20px', borderRadius: '12px', fontSize: '10px', fontWeight: 900, 
+                                        textTransform: 'uppercase', letterSpacing: '0.05em', transition: 'all 0.2s',
+                                        display: 'flex', alignItems: 'center', gap: '10px', border: 'none', cursor: 'pointer',
+                                        backgroundColor: diagramStyle === 'straight' ? '#3b82f6' : 'transparent',
+                                        color: diagramStyle === 'straight' ? '#ffffff' : '#64748b',
+                                        boxShadow: diagramStyle === 'straight' ? '0 10px 15px -3px rgba(59, 130, 246, 0.25)' : 'none'
+                                    }}
                                 >
-                                    <MoveHorizontal size={12} /> Straight
+                                    <MoveHorizontal size={14} /> Straight
                                 </button>
                                 <button 
                                     onClick={() => setDiagramStyle('curved')}
-                                    className={`h-8 px-4 rounded-full text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${diagramStyle === 'curved' ? 'bg-primary text-white shadow-md shadow-primary/20' : 'text-slate-400 hover:text-slate-600'}`}
+                                    style={{ 
+                                        height: '36px', padding: '0 20px', borderRadius: '12px', fontSize: '10px', fontWeight: 900, 
+                                        textTransform: 'uppercase', letterSpacing: '0.05em', transition: 'all 0.2s',
+                                        display: 'flex', alignItems: 'center', gap: '10px', border: 'none', cursor: 'pointer',
+                                        backgroundColor: diagramStyle === 'curved' ? '#3b82f6' : 'transparent',
+                                        color: diagramStyle === 'curved' ? '#ffffff' : '#64748b',
+                                        boxShadow: diagramStyle === 'curved' ? '0 10px 15px -3px rgba(59, 130, 246, 0.25)' : 'none'
+                                    }}
                                 >
-                                    <GitCommit size={12} className="rotate-90" /> Curved
+                                    <GitCommit size={14} style={{ transform: 'rotate(90deg)' }} /> Curved
                                 </button>
                             </div>
                         </div>
 
-                        {viewingRoute.paths?.[activePathIndex] && (
-                            <div className="animate-fade-in-up">
-                                {/* Path Metadata */}
-                                <div className="flex justify-between items-end mb-12">
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-3">
-                                            <div className="badge-pill bg-primary/10 text-primary border-primary/20">Active Path Configuration</div>
-                                            <h3 className="text-2xl font-black text-slate-900">{viewingRoute.paths[activePathIndex].path_name}</h3>
+                        {/* All Paths "Single View" Selection Grid */}
+                        <div style={{ padding: '0 16px' }}>
+                            <h4 style={{ fontSize: '11px', fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Layers size={14} />
+                                Available Configurations <span style={{ color: '#cbd5e1', marginLeft: '4px' }}>• SELECT ONE TO INSPECT</span>
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
+                                {(viewingRoute.paths || []).map((path, idx) => (
+                                    <motion.button
+                                        key={path.id || idx}
+                                        whileHover={{ y: -4 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => setActivePathIndex(idx)}
+                                        style={{ 
+                                            position: 'relative', padding: '24px', borderRadius: '28px', border: '2px solid', 
+                                            textAlign: 'left', transition: 'all 0.3s', cursor: 'pointer',
+                                            backgroundColor: activePathIndex === idx ? '#ffffff' : 'rgba(248, 250, 252, 0.5)',
+                                            borderColor: activePathIndex === idx ? '#3b82f6' : '#f1f5f9',
+                                            boxShadow: activePathIndex === idx ? '0 20px 25px -5px rgba(59, 130, 246, 0.1)' : 'none'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                                            <div style={{ 
+                                                width: '36px', height: '36px', borderRadius: '12px', display: 'flex', 
+                                                alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '12px',
+                                                backgroundColor: activePathIndex === idx ? '#3b82f6' : '#e2e8f0',
+                                                color: activePathIndex === idx ? '#ffffff' : '#64748b'
+                                            }}>
+                                                {String.fromCharCode(65 + idx)}
+                                            </div>
+                                            {activePathIndex === idx && (
+                                                <div className="animate-pulse" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6' }} />
+                                            )}
                                         </div>
-                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                                            Sequence Registry • <span className="text-slate-900">{(viewingRoute.paths[activePathIndex].via_locations || []).length} STOPS</span>
-                                        </p>
-                                    </div>
-                                    <div className="text-right glass p-4 px-8 rounded-3xl border-slate-200">
-                                        <div className="text-[32px] font-black text-primary leading-none tabular-nums">{viewingRoute.paths[activePathIndex].distance_km}</div>
-                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total KM Distance</div>
-                                    </div>
-                                </div>
+                                        <div>
+                                            <div style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: activePathIndex === idx ? '#3b82f6' : '#94a3b8' }}>Variant</div>
+                                            <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }}>
+                                                {path.path_name || `Stream ${idx + 1}`}
+                                            </div>
+                                        </div>
+                                        <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>
+                                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <Navigation size={10} /> {path.distance_km} KM
+                                            </span>
+                                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <GitCommit size={10} /> {(path.via_locations || []).length} STOPS
+                                            </span>
+                                        </div>
+                                    </motion.button>
+                                ))}
+                            </div>
+                        </div>
 
-                                {/* Visual SVG Diagram */}
-                                <div className="relative py-12 px-6 bg-slate-50/50 rounded-[3rem] border border-dashed border-slate-200 overflow-hidden group/diagram">
-                                    <div className="w-full h-[320px] relative">
-                                        <svg viewBox="0 0 1000 300" className="w-full h-full preserve-3d">
-                                            <defs>
-                                                <linearGradient id="pathGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                                    <stop offset="0%" stopColor="#10b981" />
-                                                    <stop offset="100%" stopColor="var(--primary)" />
-                                                </linearGradient>
-                                                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                                                    <feGaussianBlur stdDeviation="3" result="blur" />
-                                                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                                                </filter>
-                                            </defs>
+                        {/* Detailed Perspective View */}
+                        <AnimatePresence mode="wait">
+                            {viewingRoute.paths?.[activePathIndex] && (
+                                <motion.div 
+                                    key={activePathIndex}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -20 }}
+                                    style={{ padding: '0 16px' }}
+                                >
+                                    {/* Visual SVG Diagram */}
+                                    <div style={{ 
+                                        position: 'relative', padding: '64px 32px', backgroundColor: '#0f172a', borderRadius: '56px', 
+                                        overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25)', border: '4px solid #ffffff' 
+                                    }}>
+                                        <div style={{ position: 'absolute', inset: 0, opacity: 0.05, pointerEvents: 'none', backgroundImage: 'radial-gradient(#ffffff 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }} />
+                                        
+                                        <div style={{ width: '100%', height: '380px', position: 'relative' }}>
+                                            <svg viewBox="0 0 1000 400" style={{ width: '100%', height: '100%' }}>
+                                                <defs>
+                                                    <linearGradient id="pathGradientActive" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                        <stop offset="0%" stopColor="#10b981" />
+                                                        <stop offset="100%" stopColor="#3b82f6" />
+                                                    </linearGradient>
+                                                    <filter id="glowActive" x="-20%" y="-20%" width="140%" height="140%">
+                                                        <feGaussianBlur stdDeviation="4" result="blur" />
+                                                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                                                    </filter>
+                                                </defs>
 
-                                            {/* Drawing the Connection Path */}
-                                            {(() => {
-                                                const nodes = [
-                                                    { x: 80, y: 150 },
-                                                    ...(viewingRoute.paths[activePathIndex].via_locations_data || []).map((_, i, arr) => ({
-                                                        x: 80 + (840 / (arr.length + 1)) * (i + 1),
-                                                        y: diagramStyle === 'curved' ? (i % 2 === 0 ? 100 : 200) : 150
-                                                    })),
-                                                    { x: 920, y: 150 }
-                                                ];
+                                                {(() => {
+                                                    const pathCenterY = 220;
+                                                    const nodes = [
+                                                        { x: 80, y: pathCenterY },
+                                                        ...(viewingRoute.paths[activePathIndex].via_locations_data || []).map((_, i, arr) => ({
+                                                            x: 80 + (840 / (arr.length + 1)) * (i + 1),
+                                                            y: diagramStyle === 'curved' ? (i % 2 === 0 ? pathCenterY - 40 : pathCenterY + 40) : pathCenterY
+                                                        })),
+                                                        { x: 920, y: pathCenterY }
+                                                    ];
 
-                                                let pathD = `M ${nodes[0].x} ${nodes[0].y}`;
-                                                if (diagramStyle === 'curved') {
-                                                    for (let i = 0; i < nodes.length - 1; i++) {
-                                                        const curr = nodes[i];
-                                                        const next = nodes[i + 1];
-                                                        const cp1x = curr.x + (next.x - curr.x) / 3;
-                                                        const cp2x = curr.x + (2 * (next.x - curr.x)) / 3;
-                                                        pathD += ` C ${cp1x} ${curr.y}, ${cp2x} ${next.y}, ${next.x} ${next.y}`;
+                                                    let pathD = `M ${nodes[0].x} ${nodes[0].y}`;
+                                                    if (diagramStyle === 'curved') {
+                                                        for (let i = 0; i < nodes.length - 1; i++) {
+                                                            const curr = nodes[i];
+                                                            const next = nodes[i + 1];
+                                                            const cp1x = curr.x + (next.x - curr.x) / 3;
+                                                            const cp2x = curr.x + (2 * (next.x - curr.x)) / 3;
+                                                            pathD += ` C ${cp1x} ${curr.y}, ${cp2x} ${next.y}, ${next.x} ${next.y}`;
+                                                        }
+                                                    } else {
+                                                        nodes.forEach((n, i) => { if (i > 0) pathD += ` L ${n.x} ${n.y}`; });
                                                     }
-                                                } else {
-                                                    nodes.forEach((n, i) => { if (i > 0) pathD += ` L ${n.x} ${n.y}`; });
-                                                }
 
-                                                return (
-                                                    <React.Fragment>
-                                                        {/* Background Shadows & Glow */}
-                                                        <motion.path
-                                                            initial={false}
-                                                            animate={{ d: pathD }}
-                                                            transition={{ type: "spring", stiffness: 50, damping: 15 }}
-                                                            fill="none"
-                                                            stroke="white"
-                                                            strokeWidth="10"
-                                                            strokeLinecap="round"
-                                                            opacity="0.5"
-                                                        />
-                                                        <motion.path
-                                                            initial={false}
-                                                            animate={{ d: pathD }}
-                                                            transition={{ type: "spring", stiffness: 50, damping: 15 }}
-                                                            fill="none"
-                                                            stroke="url(#pathGradient)"
-                                                            strokeWidth="4"
-                                                            strokeLinecap="round"
-                                                            strokeDasharray={diagramStyle === 'curved' ? "8,8" : "none"}
-                                                            className="drop-shadow-lg"
-                                                        />
-                                                        
-                                                        {/* Interaction Nodes */}
-                                                        {nodes.map((node, nidx) => {
-                                                            const isEnd = nidx === 0 || nidx === nodes.length - 1;
-                                                            const data = nidx === 0 ? { name: viewingRoute.source_name, code: 'SRC' } :
-                                                                         nidx === nodes.length - 1 ? { name: viewingRoute.destination_name, code: 'DST' } :
-                                                                         (viewingRoute.paths[activePathIndex].via_locations_data[nidx - 1]);
+                                                    return (
+                                                        <React.Fragment>
+                                                            <motion.path
+                                                                initial={false}
+                                                                animate={{ d: pathD }}
+                                                                transition={{ type: "spring", stiffness: 40, damping: 15 }}
+                                                                fill="none"
+                                                                stroke="#ffffff"
+                                                                strokeWidth="12"
+                                                                strokeLinecap="round"
+                                                                opacity="0.1"
+                                                            />
+                                                            <motion.path
+                                                                initial={false}
+                                                                animate={{ d: pathD }}
+                                                                transition={{ type: "spring", stiffness: 40, damping: 15 }}
+                                                                fill="none"
+                                                                stroke="url(#pathGradientActive)"
+                                                                strokeWidth="5"
+                                                                strokeLinecap="round"
+                                                                strokeDasharray={diagramStyle === 'curved' ? "10,10" : "none"}
+                                                                filter="url(#glowActive)"
+                                                            />
+                                                            
+                                                            {nodes.map((node, nidx) => {
+                                                                const isEnd = nidx === 0 || nidx === nodes.length - 1;
+                                                                const data = nidx === 0 ? { name: viewingRoute.source_name, code: 'SRC' } :
+                                                                             nidx === nodes.length - 1 ? { name: viewingRoute.destination_name, code: 'DST' } :
+                                                                             (viewingRoute.paths[activePathIndex].via_locations_data[nidx - 1]);
 
-                                                            return (
-                                                                <g key={nidx}>
-                                                                    <motion.circle
-                                                                        initial={false}
-                                                                        animate={{ cx: node.x, cy: node.y }}
-                                                                        transition={{ type: "spring", stiffness: 50, damping: 15 }}
-                                                                        r={isEnd ? 10 : 7}
-                                                                        fill="white"
-                                                                        stroke={nidx === 0 ? "#10b981" : nidx === nodes.length - 1 ? "var(--primary)" : "#cbd5e1"}
-                                                                        strokeWidth={isEnd ? 4 : 3}
-                                                                        className="cursor-pointer hover:stroke-slate-900 transition-all"
-                                                                    />
-                                                                    {/* Node Info Floating Labels */}
-                                                                    <motion.g
-                                                                        initial={false}
-                                                                        animate={{ x: node.x, y: node.y }}
-                                                                        transition={{ type: "spring", stiffness: 50, damping: 15 }}
-                                                                    >
-                                                                        <foreignObject x="-60" y={nidx % 2 === 0 ? -65 : 20} width="120" height="50">
-                                                                            <div className="flex flex-col items-center text-center">
-                                                                                <div className={`text-[9px] font-black uppercase tracking-tight truncate w-full ${isEnd ? 'text-slate-900' : 'text-slate-500'}`}>
-                                                                                    {data.name}
-                                                                                </div>
-                                                                                <div className="text-[8px] font-bold text-slate-300 bg-slate-50 px-1.5 rounded-full border border-slate-100">
-                                                                                    [{data.code || 'STP'}]
-                                                                                </div>
-                                                                            </div>
-                                                                        </foreignObject>
-                                                                    </motion.g>
+                                                                const labelY = 100; 
+                                                                const distY = 340; 
 
-                                                                    {/* Segment Distance Pill */}
-                                                                    {nidx < nodes.length - 1 && (
+                                                                return (
+                                                                    <g key={nidx}>
+                                                                        <motion.circle
+                                                                            initial={false}
+                                                                            animate={{ cx: node.x, cy: node.y }}
+                                                                            transition={{ type: "spring", stiffness: 40, damping: 15 }}
+                                                                            r={isEnd ? 20 : 14}
+                                                                            fill="#ffffff"
+                                                                            stroke={nidx === 0 ? "#10b981" : nidx === nodes.length - 1 ? "#3b82f6" : "#475569"}
+                                                                            strokeWidth={isEnd ? 8 : 6}
+                                                                        />
+                                                                        
                                                                         <motion.g
                                                                             initial={false}
-                                                                            animate={{ 
-                                                                                x: (node.x + nodes[nidx+1].x) / 2, 
-                                                                                y: (node.y + nodes[nidx+1].y) / 2 
-                                                                            }}
-                                                                            transition={{ type: "spring", stiffness: 50, damping: 15 }}
+                                                                            animate={{ x: node.x, y: labelY }}
+                                                                            transition={{ type: "spring", stiffness: 40, damping: 15 }}
                                                                         >
-                                                                            <foreignObject x="-25" y="-12" width="50" height="24">
-                                                                                <div className="flex items-center justify-center">
-                                                                                    <div className="bg-slate-900 text-white px-2 py-0.5 rounded-lg shadow-xl border border-slate-800 scale-90 hover:scale-100 transition-transform">
-                                                                                        <span className="text-[8px] font-black tabular-nums whitespace-nowrap">
-                                                                                            {viewingRoute.paths[activePathIndex].segment_data?.[nidx] || viewingRoute.paths[activePathIndex].segment_data?.[String(nidx)] || '0'} KM
-                                                                                        </span>
+                                                                            <foreignObject x="-120" y="-100" width="240" height="100">
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', textAlign: 'center', paddingBottom: '12px' }}>
+                                                                                    <div style={{ fontSize: '18px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', color: isEnd ? '#ffffff' : '#f8fafc' }}>
+                                                                                        {data.name}
                                                                                     </div>
+                                                                                    <div style={{ fontSize: '12px', fontWeight: 900, marginTop: '8px', padding: '4px 12px', borderRadius: '100px', border: '1px solid', backgroundColor: isEnd ? 'rgba(255, 255, 255, 0.2)' : '#1e293b', borderColor: isEnd ? 'rgba(255, 255, 255, 0.4)' : '#64748b', color: isEnd ? '#ffffff' : '#cbd5e1' }}>
+                                                                                        {data.code || 'HUB'}
+                                                                                    </div>
+                                                                                    <div style={{ width: '3px', height: '24px', backgroundColor: '#475569', marginTop: '12px', opacity: 0.8 }} />
                                                                                 </div>
                                                                             </foreignObject>
                                                                         </motion.g>
-                                                                    )}
-                                                                </g>
-                                                            );
-                                                        })}
-                                                    </React.Fragment>
-                                                );
-                                            })()}
-                                        </svg>
-                                    </div>
-                                    
-                                    {/* Decorative Map Grid Background */}
-                                    <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
-                                </div>
 
-                                {/* Summary List */}
-                                <div className="mt-8 grid grid-cols-2 gap-4">
-                                    <div className="glass p-6 rounded-[2rem] border-slate-100">
-                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                            <Navigation size={14} className="text-emerald-500" />
-                                            Origin Node
-                                        </h4>
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 font-black">A</div>
-                                            <div>
-                                                <div className="text-lg font-black text-slate-900 leading-none">{viewingRoute.source_name}</div>
-                                                <div className="text-[10px] font-bold text-slate-400 mt-1">Starting Point of Trip</div>
+                                                                        {nidx < nodes.length - 1 && (
+                                                                            <motion.g
+                                                                                initial={false}
+                                                                                animate={{ x: (node.x + nodes[nidx+1].x) / 2, y: distY }}
+                                                                                transition={{ type: "spring", stiffness: 40, damping: 15 }}
+                                                                            >
+                                                                                <foreignObject x="-65" y="-35" width="130" height="70">
+                                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                                                        <div style={{ width: '3px', height: '20px', backgroundColor: '#475569', marginBottom: '12px', opacity: 0.5 }} />
+                                                                                        <div style={{ backgroundColor: '#ffffff', color: '#0f172a', padding: '8px 20px', borderRadius: '16px', boxShadow: '0 20px 30px -5px rgba(0, 0, 0, 0.3)', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                            <span style={{ fontSize: '18px', fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>
+                                                                                                {viewingRoute.paths[activePathIndex].segment_data?.[nidx] || viewingRoute.paths[activePathIndex].segment_data?.[String(nidx)] || '0'}
+                                                                                            </span>
+                                                                                            <span style={{ fontSize: '12px', fontWeight: 900, opacity: 0.6 }}>KM</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </foreignObject>
+                                                                            </motion.g>
+                                                                        )}
+                                                                    </g>
+                                                                );
+                                                            })}
+                                                        </React.Fragment>
+                                                    );
+                                                })()}
+                                            </svg>
+                                        </div>
+                                    </div>
+
+                                    {/* Detailed Context Cards */}
+                                    <div style={{ marginTop: '32px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
+                                        <div style={{ position: 'relative', padding: '32px', borderRadius: '40px', backgroundColor: '#ffffff', border: '1px solid #f1f5f9', overflow: 'hidden' }}>
+                                            <div style={{ position: 'absolute', top: 0, right: 0, padding: '24px', opacity: 0.05 }}>
+                                                <Navigation size={64} />
+                                            </div>
+                                            <h5 style={{ fontSize: '10px', fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '16px' }}>Starting Origin</h5>
+                                            <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginBottom: '8px' }}>{viewingRoute.source_name}</div>
+                                            <p style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8' }}>Main hub where the journey begins.</p>
+                                        </div>
+
+                                        <div style={{ position: 'relative', padding: '32px', borderRadius: '40px', backgroundColor: '#ffffff', border: '1px solid #f1f5f9', overflow: 'hidden' }}>
+                                            <div style={{ position: 'absolute', top: 0, right: 0, padding: '24px', opacity: 0.05 }}>
+                                                <MapPin size={64} />
+                                            </div>
+                                            <h5 style={{ fontSize: '10px', fontWeight: 900, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '16px' }}>Target Arrival</h5>
+                                            <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginBottom: '8px' }}>{viewingRoute.destination_name}</div>
+                                            <p style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8' }}>Final destination point of this route.</p>
+                                        </div>
+
+                                        <div style={{ position: 'relative', padding: '32px', borderRadius: '40px', backgroundColor: '#0f172a', color: '#ffffff', overflow: 'hidden' }}>
+                                            <div style={{ position: 'absolute', top: 0, right: 0, padding: '24px', opacity: 0.1 }}>
+                                                <Activity size={64} />
+                                            </div>
+                                            <h5 style={{ fontSize: '10px', fontWeight: 900, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '16px' }}>Stream Metrics</h5>
+                                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', marginBottom: '8px' }}>
+                                                <div style={{ fontSize: '40px', fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>{viewingRoute.paths[activePathIndex].distance_km}</div>
+                                                <div style={{ fontSize: '14px', fontWeight: 900, opacity: 0.4, paddingBottom: '8px' }}>TOTAL KM</div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 700, color: '#94a3b8' }}>
+                                                <Zap size={14} style={{ color: '#eab308' }} />
+                                                Verified Network Mapping
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="glass p-6 rounded-[2rem] border-slate-100">
-                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                            <MapPin size={14} className="text-primary" />
-                                            Target Destination
-                                        </h4>
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 bg-primary/5 rounded-2xl flex items-center justify-center text-primary font-black">Z</div>
-                                            <div>
-                                                <div className="text-lg font-black text-slate-900 leading-none">{viewingRoute.destination_name}</div>
-                                                <div className="text-[10px] font-bold text-slate-400 mt-1">Final Arrival Point</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 )}
-                <div className="flex justify-end gap-3 pt-6 mt-8 border-t border-slate-100">
-                    <button className="btn-secondary px-8 h-12 rounded-2xl font-black text-[11px] uppercase tracking-widest" onClick={() => setIsPathViewerOpen(false)}>Close Config</button>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '32px', marginTop: '40px', borderTop: '1px solid #f1f5f9' }}>
                     <button 
-                        className="btn-primary px-8 h-12 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-primary/20"
+                        style={{ height: '56px', padding: '0 40px', borderRadius: '16px', fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', color: '#64748b' }} 
+                        onClick={() => setIsPathViewerOpen(false)}
+                    >
+                        Dismiss
+                    </button>
+                    <button 
+                        className="btn-primary"
+                        style={{ height: '56px', padding: '0 40px', borderRadius: '16px', fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer', boxShadow: '0 20px 25px -5px rgba(59, 130, 246, 0.2)' }}
                         onClick={() => {
                             setIsPathViewerOpen(false);
                             handleManagePaths(viewingRoute);
                         }}
                     >
-                        Modify Sequence
+                        Modify Sequence Registry
                     </button>
                 </div>
             </Modal>
@@ -2844,3 +2928,4 @@ const RouteManagement = () => {
 };
 
 export default RouteManagement;
+
