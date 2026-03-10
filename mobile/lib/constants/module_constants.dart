@@ -26,36 +26,23 @@ import '../screens/frs_requests_hub_screen.dart';
 import '../screens/my_requests_screen.dart';
 import '../screens/my_claims_screen.dart';
 import '../screens/my_tracking_screen.dart';
+import '../screens/help_support_screen.dart';
 
 /// Module constants matching the Header.jsx navigation structure
 class ModuleConstants {
-  /// Main navigation modules (always visible to applicable roles)
+  static final List<String> allRoles = [
+    'employee',
+    'reporting_authority',
+    'finance',
+    'admin',
+    'cfo',
+    'guesthouse_manager',
+    'hr',
+    'management',
+  ];
+
+  /// Main navigation modules (based on mainNav in Header.jsx)
   static final List<NavigationModule> mainNavModules = [
-    NavigationModule(
-      title: 'Location Tracking',
-      description: 'Real-time team tracking',
-      icon: Icons.gps_fixed_rounded,
-      backgroundColor: const Color(0xFFE0F2FE),
-      iconColor: const Color(0xFF0369A1),
-      allowedRoles: [
-        'reporting_authority',
-        'reporting_manager',
-        'manager',
-        'admin',
-        'hr',
-        'management',
-      ],
-      destinationScreen: () => const TeamTripDetailsScreen(),
-    ),
-    NavigationModule(
-      title: 'My Tracking',
-      description: 'Review tracking status',
-      icon: Icons.my_location_rounded,
-      backgroundColor: const Color(0xFFF0FDF4),
-      iconColor: const Color(0xFF16A34A),
-      allowedRoles: ['employee', 'reporting_authority', 'hr', 'management'],
-      destinationScreen: () => const MyTrackingScreen(),
-    ),
     NavigationModule(
       title: 'Trips',
       description: 'Manage trips',
@@ -64,36 +51,6 @@ class ModuleConstants {
       iconColor: const Color(0xFFE11D48),
       allowedRoles: ['employee', 'reporting_authority', 'finance', 'admin'],
       destinationScreen: () => const MyTripsScreen(),
-    ),
-    NavigationModule(
-      title: 'Documents',
-      description: 'Document organizer',
-      icon: Icons.folder_open_rounded,
-      backgroundColor: const Color(0xFFE3F2FD),
-      iconColor: const Color(0xFF1976D2),
-      allowedRoles: [
-        'employee',
-        'reporting_authority',
-        'finance',
-        'admin',
-        'cfo',
-      ],
-      destinationScreen: () => const DocumentsScreen(),
-    ),
-    NavigationModule(
-      title: 'Policy',
-      description: 'Travel policies',
-      icon: Icons.book_rounded,
-      backgroundColor: const Color(0xFFF1F8E9),
-      iconColor: const Color(0xFF388E3C),
-      allowedRoles: [
-        'employee',
-        'reporting_authority',
-        'finance',
-        'admin',
-        'cfo',
-      ],
-      destinationScreen: () => const PolicyCenterScreen(),
     ),
     NavigationModule(
       title: 'My Requests',
@@ -110,59 +67,18 @@ class ModuleConstants {
       ],
       destinationScreen: () => const MyRequestsScreen(),
     ),
-    NavigationModule(
-      title: 'FRS Requests',
-      description: 'Manager Approvals',
-      icon: Icons.security_rounded,
-      backgroundColor: const Color(0xFFFEE2E2),
-      iconColor: const Color(0xFFBB0633),
-      allowedRoles: [
-        'employee',
-        'reporting_authority',
-        'hr',
-        'finance',
-        'cfo',
-        'admin',
-        'guesthouse_manager',
-        'manager',
-      ],
-      destinationScreen: () => const FrsRequestsHubScreen(),
-    ),
-    NavigationModule(
-      title: 'FRS Attendance',
-      description: 'Daily verification',
-      icon: Icons.face_unlock_rounded,
-      backgroundColor: const Color(0xFFE8EAF6),
-      iconColor: const Color(0xFF3F51B5),
-      allowedRoles: [
-        'employee',
-        'reporting_authority',
-        'finance',
-        'admin',
-        'cfo',
-        'guesthouse_manager',
-      ],
-      destinationScreen: () => const FrsAttendanceScreen(),
-    ),
   ];
 
-  /// Management modules (accessible via "More" menu in web)
+  /// Management modules (based on managementNav in Header.jsx)
   static final List<NavigationModule> managementNavModules = [
     NavigationModule(
-      title: 'Location Tracking',
-      description: 'Real-time team tracking',
-      icon: Icons.gps_fixed_rounded,
-      backgroundColor: const Color(0xFFE0F2FE),
-      iconColor: const Color(0xFF0369A1),
-      allowedRoles: [
-        'reporting_authority',
-        'reporting_manager',
-        'manager',
-        'admin',
-        'hr',
-        'management',
-      ],
-      destinationScreen: () => const TeamTripDetailsScreen(),
+      title: 'Finance Hub',
+      description: 'Finance management',
+      icon: Icons.account_balance_rounded,
+      backgroundColor: const Color(0xFFE8F5E9),
+      iconColor: const Color(0xFF2E7D32),
+      allowedRoles: ['finance', 'admin'],
+      destinationScreen: () => const FinanceHubScreen(),
     ),
     NavigationModule(
       title: 'Approvals',
@@ -181,15 +97,6 @@ class ModuleConstants {
       destinationScreen: () => const ApprovalsInboxScreen(),
     ),
     NavigationModule(
-      title: 'Finance Hub',
-      description: 'Finance management',
-      icon: Icons.account_balance_rounded,
-      backgroundColor: const Color(0xFFE8F5E9),
-      iconColor: const Color(0xFF2E7D32),
-      allowedRoles: ['finance', 'admin'],
-      destinationScreen: () => const FinanceHubScreen(),
-    ),
-    NavigationModule(
       title: 'Settlements',
       description: 'Manage payments',
       icon: Icons.account_balance_wallet_rounded,
@@ -197,6 +104,45 @@ class ModuleConstants {
       iconColor: const Color(0xFFF57C00),
       allowedRoles: ['finance', 'admin'],
       destinationScreen: () => const SettlementsScreen(),
+    ),
+    NavigationModule(
+      title: 'Documents',
+      description: 'Document organizer',
+      icon: Icons.folder_open_rounded,
+      backgroundColor: const Color(0xFFE3F2FD),
+      iconColor: const Color(0xFF1976D2),
+      allowedRoles: [
+        'employee',
+        'reporting_authority',
+        'finance',
+        'admin',
+        'cfo',
+      ],
+      destinationScreen: () => const DocumentsScreen(),
+    ),
+    NavigationModule(
+      title: 'System Policy',
+      description: 'Travel policies',
+      icon: Icons.book_rounded,
+      backgroundColor: const Color(0xFFF1F8E9),
+      iconColor: const Color(0xFF388E3C),
+      allowedRoles: [
+        'employee',
+        'reporting_authority',
+        'finance',
+        'admin',
+        'cfo',
+      ],
+      destinationScreen: () => const PolicyCenterScreen(),
+    ),
+    NavigationModule(
+      title: 'CFO Room',
+      description: 'Executive overview',
+      icon: Icons.insights_rounded,
+      backgroundColor: const Color(0xFFF3E5F5),
+      iconColor: const Color(0xFF7B1FA2),
+      allowedRoles: ['cfo', 'admin'],
+      destinationScreen: () => const CfoRoomScreen(),
     ),
     NavigationModule(
       title: 'User Management',
@@ -226,6 +172,15 @@ class ModuleConstants {
       destinationScreen: () => const FleetManagementScreen(),
     ),
     NavigationModule(
+      title: 'API Management',
+      description: 'Keys & settings',
+      icon: Icons.api_rounded,
+      backgroundColor: const Color(0xFFE0F2F1),
+      iconColor: const Color(0xFF00897B),
+      allowedRoles: ['admin'],
+      destinationScreen: () => const ApiManagementScreen(),
+    ),
+    NavigationModule(
       title: 'Route Masters',
       description: 'Manage routes',
       icon: Icons.map_rounded,
@@ -235,13 +190,20 @@ class ModuleConstants {
       destinationScreen: null, // Coming soon
     ),
     NavigationModule(
-      title: 'API Management',
-      description: 'Keys & settings',
-      icon: Icons.api_rounded,
-      backgroundColor: const Color(0xFFE0F2F1),
-      iconColor: const Color(0xFF00897B),
-      allowedRoles: ['admin'],
-      destinationScreen: () => const ApiManagementScreen(),
+      title: 'Help & Support',
+      description: 'Get assistance',
+      icon: Icons.help_outline_rounded,
+      backgroundColor: const Color(0xFFFDF2F8),
+      iconColor: const Color(0xFFDB2777),
+      allowedRoles: [
+        'employee',
+        'reporting_authority',
+        'finance',
+        'admin',
+        'cfo',
+        'guesthouse_manager',
+      ],
+      destinationScreen: () => const HelpSupportScreen(),
     ),
     NavigationModule(
       title: 'Login History',
@@ -263,32 +225,97 @@ class ModuleConstants {
     ),
   ];
 
-  /// Get modules for specific category based on role
-  static List<NavigationModule> getModulesForRole(
-    String userRole, {
-    bool mainOnly = false,
-  }) {
+  /// Mobile Specific Modules (not in Header.jsx but required)
+  static final List<NavigationModule> mobileSpecificModules = [
+    NavigationModule(
+      title: 'FRS Attendance',
+      description: 'Daily verification',
+      icon: Icons.face_unlock_rounded,
+      backgroundColor: const Color(0xFFE8EAF6),
+      iconColor: const Color(0xFF3F51B5),
+      allowedRoles: allRoles, // Global per instructions
+      destinationScreen: () => const FrsAttendanceScreen(),
+    ),
+    NavigationModule(
+      title: 'Location Tracking',
+      description: 'Real-time team tracking',
+      icon: Icons.gps_fixed_rounded,
+      backgroundColor: const Color(0xFFE0F2FE),
+      iconColor: const Color(0xFF0369A1),
+      allowedRoles: allRoles, // Global per instructions
+      destinationScreen: () => const TeamTripDetailsScreen(),
+    ),
+    NavigationModule(
+      title: 'FRS Requests',
+      description: 'Manager Approvals',
+      icon: Icons.security_rounded,
+      backgroundColor: const Color(0xFFFEE2E2),
+      iconColor: const Color(0xFFBB0633),
+      allowedRoles: allRoles, // Global per instructions
+      destinationScreen: () => const FrsRequestsHubScreen(),
+    ),
+    NavigationModule(
+      title: 'My Tracking',
+      description: 'Review tracking status',
+      icon: Icons.my_location_rounded,
+      backgroundColor: const Color(0xFFF0FDF4),
+      iconColor: const Color(0xFF16A34A),
+      allowedRoles: ['employee', 'reporting_authority', 'hr', 'management'],
+      destinationScreen: () => const MyTrackingScreen(),
+    ),
+  ];
+
+  static List<NavigationModule> getModulesForRole(String? userRole) {
     final normalizedRole = normalizeRole(userRole);
+    List<NavigationModule> result = [];
 
-    if (mainOnly) {
-      return mainNavModules
-          .where((m) => m.allowedRoles.contains(normalizedRole))
-          .toList();
-    }
+    // 1. Add matching mainNav
+    result.addAll(
+      mainNavModules.where((m) => m.allowedRoles.contains(normalizedRole)),
+    );
 
-    return managementNavModules
-        .where((m) => m.allowedRoles.contains(normalizedRole))
-        .toList();
+    // 2. Add matching managementNav
+    result.addAll(
+      managementNavModules.where(
+        (m) => m.allowedRoles.contains(normalizedRole),
+      ),
+    );
+
+    // 3. Add matching mobile specific
+    result.addAll(
+      mobileSpecificModules.where(
+        (m) => m.allowedRoles.contains(normalizedRole),
+      ),
+    );
+
+    return result;
   }
 
-  /// Normalize role name to handle variations
-  static String normalizeRole(String role) {
-    if (role.toLowerCase().contains('admin')) return 'admin';
-    if (role.toLowerCase().contains('hr')) return 'hr';
-    if (role.toLowerCase().contains('finance')) return 'finance';
+  /// Normalize role exactly mapping to web's Header.jsx logic
+  static String normalizeRole(String? role, {String? dept, String? desig}) {
+    if (role == null) return 'employee';
 
-    final normalized = role.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    final rawRole = role.toLowerCase();
+    final department = dept?.toLowerCase() ?? '';
+    final designation = desig?.toLowerCase() ?? '';
 
+    // Header.jsx EXACT LOGIC:
+    if (rawRole == 'admin') return 'admin';
+    if (department.contains('finance') ||
+        designation.contains('finance') ||
+        rawRole == 'finance')
+      return 'finance';
+    if (department.contains('hr') ||
+        designation.contains('hr') ||
+        rawRole == 'hr')
+      return 'hr';
+    if (department.contains('cfo') ||
+        designation.contains('cfo') ||
+        rawRole == 'cfo')
+      return 'cfo';
+
+    // Fuzzy mapping for reporting_authority (backend specific)
+    final normalized = rawRole.replaceAll(RegExp(r'[^a-z0-9_]'), '');
     if (normalized.contains('reporting') ||
         normalized.contains('manager') ||
         normalized.contains('supervisor') ||
@@ -300,33 +327,32 @@ class ModuleConstants {
         normalized.contains('authority')) {
       return 'reporting_authority';
     }
-    if (normalized.contains('employee') || normalized.contains('oe')) {
-      return 'employee';
-    }
-    if (normalized.contains('guesthouse') || normalized.contains('cro')) {
-      return 'guesthouse_manager';
-    }
+
     if (normalized.contains('management') || normalized.contains('mgmt')) {
       return 'management';
     }
 
-    return normalized;
+    if (normalized.contains('guesthouse') || normalized.contains('cro')) {
+      return 'guesthouse_manager';
+    }
+
+    if (normalized.contains('employee') ||
+        normalized.contains('oe') ||
+        normalized.contains('staff')) {
+      return 'employee';
+    }
+
+    return normalized.isEmpty ? 'employee' : normalized;
   }
 
-  /// Check if role has management/supervision permissions
-  static bool isManagementRole(String role) {
-    if (role.toLowerCase().contains('admin')) return true;
-    if (role.toLowerCase().contains('management')) return true;
-    if (role.toLowerCase().contains('manager')) return true;
-
-    final normalized = normalizeRole(role);
+  static bool isManagementRole(String? role, {String? dept, String? desig}) {
+    final normalized = normalizeRole(role, dept: dept, desig: desig);
     return [
       'admin',
       'reporting_authority',
       'hr',
       'management',
-      'manager',
-      'reporting_manager',
+      'cfo',
     ].contains(normalized);
   }
 }

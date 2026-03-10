@@ -9,7 +9,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../services/trip_service.dart';
 import '../models/trip_model.dart';
-import '../services/location_tracking_service.dart';
 
 class StartJourneyScreen extends StatefulWidget {
   const StartJourneyScreen({super.key});

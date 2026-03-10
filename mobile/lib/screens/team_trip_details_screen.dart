@@ -1,5 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:geocoding/geocoding.dart';
 import '../services/trip_service.dart';
 import '../models/trip_model.dart';
 
@@ -15,45 +19,185 @@ class _TeamTripDetailsScreenState extends State<TeamTripDetailsScreen> {
   final TripService _tripService = TripService();
   bool _isLoading = true;
   List<Trip> _ongoingTrips = [];
+  List<Trip> _allTripsFoundForDebug = [];
+  final Map<String, Map<String, dynamic>?> _latestPoints = {};
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _fetchOngoingTrips();
+    // Auto-refresh every 30 seconds for live updates
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted) _fetchOngoingTrips();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchOngoingTrips() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final allTrips = await _tripService.fetchTrips();
+      final List<Trip> trips = [];
+
+      // 1. Try standard all-trips endpoint
+      try {
+        final allTrips = await _tripService.fetchTrips(all: true);
+        trips.addAll(allTrips);
+      } catch (e) {
+        debugPrint('FETCH_ALL_TRIPS_FAILED: $e');
+      }
+
+      // 2. Supplemental: Fetch from Approvals History (what the manager has approved)
+      // This matches the "Approval Flow" consistency the user requested
+      try {
+        final approvalHistory = await _tripService.fetchApprovals(
+          tab: 'history',
+          type: 'trip',
+        );
+        for (var item in approvalHistory) {
+          if (item['details'] != null &&
+              item['details'] is Map<String, dynamic>) {
+            final details = Map<String, dynamic>.from(item['details']);
+            // Robustness: Ensure trip_id is present for models
+            if (details['trip_id'] == null) {
+              details['trip_id'] = item['trip_id'] ?? item['db_id'];
+            }
+            final t = Trip.fromJson(details);
+            // Avoid duplicates
+            if (!trips.any((existing) => existing.id == t.id)) {
+              trips.add(t);
+            }
+          }
+        }
+
+        // Also check Pending just in case (though ongoing trips are usually approved)
+        final pendingApprovals = await _tripService.fetchApprovals(
+          tab: 'pending',
+          type: 'trip',
+        );
+        for (var item in pendingApprovals) {
+          if (item['details'] != null &&
+              item['details'] is Map<String, dynamic>) {
+            final details = Map<String, dynamic>.from(item['details']);
+            if (details['trip_id'] == null) {
+              details['trip_id'] = item['trip_id'] ?? item['db_id'];
+            }
+            final t = Trip.fromJson(details);
+            if (!trips.any((existing) => existing.id == t.id)) {
+              trips.add(t);
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('FETCH_APPROVALS_FAILED: $e');
+      }
+
+      // 3. New Source: Directly check Trip Approvals endpoint
+      try {
+        final resp = await _tripService.fetchTripApprovals();
+        for (var t in resp) {
+          if (!trips.any((existing) => existing.id == t.id)) {
+            trips.add(t);
+          }
+        }
+      } catch (e) {
+        debugPrint('FETCH_TRIP_APPROVALS_FAILED: $e');
+      }
+
       final now = DateTime.now();
+      final nowDay = DateTime(now.year, now.month, now.day);
+
+      // Store all trips for debug visualization
+      _allTripsFoundForDebug = trips;
 
       setState(() {
-        _ongoingTrips = allTrips.where((t) {
+        _ongoingTrips = trips.where((t) {
           final status = t.status.toLowerCase();
 
-          // Show if explicitly On-Going
-          if (status == 'on-going' || status == 'ongoing') return true;
+          // Include 'pending' so managers can see trips awaiting approval
+          bool isViableStatus =
+              status.contains('pending') ||
+              status.contains('approved') ||
+              status.contains('ongoing') ||
+              status.contains('on-going') ||
+              status.contains('started') ||
+              status.contains('live') ||
+              status == 'ready';
 
-          // Show if Approved and within date range
-          if (status == 'approved') {
+          if (isViableStatus) {
             try {
-              final startDate = DateTime.parse(t.startDate);
-              // Include the end day
-              final endDate = DateTime.parse(
-                t.endDate,
-              ).add(const Duration(days: 1));
-              return now.isAfter(startDate) && now.isBefore(endDate);
+              final startDateString = t.startDate;
+              final endDateString = t.endDate;
+
+              if (startDateString.isEmpty || endDateString.isEmpty)
+                return false;
+
+              // Robust date parsing (handles ISO and 'Mar 07, 2026')
+              DateTime parseDate(String dateStr) {
+                try {
+                  return DateTime.parse(dateStr);
+                } catch (_) {
+                  return DateFormat('MMM dd, yyyy').parse(dateStr);
+                }
+              }
+
+              final startDate = parseDate(startDateString);
+              final endDate = parseDate(endDateString);
+
+              final tripStart = DateTime(
+                startDate.year,
+                startDate.month,
+                startDate.day,
+              );
+              final tripEnd = DateTime(
+                endDate.year,
+                endDate.month,
+                endDate.day,
+              );
+
+              return (nowDay.isAfter(tripStart) ||
+                      nowDay.isAtSameMomentAs(tripStart)) &&
+                  (nowDay.isBefore(tripEnd) ||
+                      nowDay.isAtSameMomentAs(tripEnd));
             } catch (e) {
               debugPrint('DATE_PARSE_ERROR: ${t.tripId} - $e');
               return false;
             }
           }
-
           return false;
         }).toList();
         _isLoading = false;
       });
+
+      // After fetching trips, fetch latest points for each
+      for (var trip in _ongoingTrips) {
+        final point = await _tripService.fetchLatestTrackingPoint(trip.id);
+        if (mounted && point != null) {
+          // Attempt reverse geocoding for a "Wow" experience
+          try {
+            final placemarks = await placemarkFromCoordinates(
+              point['latitude'],
+              point['longitude'],
+            );
+            if (placemarks.isNotEmpty) {
+              final p = placemarks[0];
+              point['address'] = "${p.name}, ${p.subLocality}, ${p.locality}";
+            }
+          } catch (e) {
+            debugPrint('GEOCODING_ERROR: $e');
+          }
+
+          setState(() {
+            _latestPoints[trip.id] = point;
+          });
+        }
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -113,23 +257,49 @@ class _TeamTripDetailsScreenState extends State<TeamTripDetailsScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.gps_off_rounded, size: 64, color: Colors.grey.shade400),
+          Icon(
+            Icons.map_outlined,
+            size: 64,
+            color: Colors.white.withOpacity(0.2),
+          ),
           const SizedBox(height: 16),
           Text(
-            'No Active Trips',
+            'No Active Trips Found',
             style: GoogleFonts.plusJakartaSans(
+              color: Colors.white,
               fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF1E293B),
+              fontWeight: FontWeight.w700,
             ),
           ),
+          const SizedBox(height: 8),
           Text(
-            'Currently no team members are on a live trip.',
+            'Trips must be Approved and active today.',
             style: GoogleFonts.plusJakartaSans(
-              fontSize: 14,
-              color: const Color(0xFF64748B),
+              color: Colors.white60,
+              fontSize: 13,
             ),
           ),
+          if (_allTripsFoundForDebug.isNotEmpty) ...[
+            const SizedBox(height: 32),
+            Text(
+              'DEBUG: Detected ${_allTripsFoundForDebug.length} possible trips:',
+              style: const TextStyle(color: Colors.orange, fontSize: 10),
+            ),
+            ..._allTripsFoundForDebug
+                .take(3)
+                .map(
+                  (t) => Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'ID: ${t.tripId.isNotEmpty ? t.tripId : (t.id.isNotEmpty ? t.id : 'N/A')} | Status: ${t.status} | Date: ${t.startDate}',
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ),
+          ],
         ],
       ),
     );
@@ -232,10 +402,28 @@ class _TeamTripDetailsScreenState extends State<TeamTripDetailsScreen> {
               ],
             ),
           ),
-          _buildMapPlaceholder(),
+          _buildMapPlaceholder(trip),
         ],
       ),
     );
+  }
+
+  Future<void> _openGoogleMaps(double lat, double lng) async {
+    final url = 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    }
+  }
+
+  String _formatLastSeen(String? timestamp) {
+    if (timestamp == null || timestamp.isEmpty) return "Unknown";
+    try {
+      final dt = DateTime.parse(timestamp);
+      return DateFormat('HH:mm').format(dt);
+    } catch (e) {
+      debugPrint('TIMESTAMP_PARSE_ERROR: $e');
+      return "Online";
+    }
   }
 
   Widget _buildRouteInfo(Trip trip) {
@@ -314,47 +502,102 @@ class _TeamTripDetailsScreenState extends State<TeamTripDetailsScreen> {
     );
   }
 
-  Widget _buildMapPlaceholder() {
-    return Container(
-      height: 150,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F1E2A),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-        image: DecorationImage(
-          image: const NetworkImage(
-            'https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=1000&auto=format&fit=crop',
+  Widget _buildMapPlaceholder(Trip trip) {
+    final point = _latestPoints[trip.id];
+    final hasCoord = point != null && point['latitude'] != null;
+
+    return GestureDetector(
+      onTap: hasCoord
+          ? () => _openGoogleMaps(point['latitude'], point['longitude'])
+          : null,
+      child: Container(
+        height: 150,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F1E2A),
+          borderRadius: const BorderRadius.only(
+            bottomLeft: Radius.circular(24),
+            bottomRight: Radius.circular(24),
           ),
-          fit: BoxFit.cover,
-          opacity: 0.3,
-          colorFilter: ColorFilter.mode(
-            const Color(0xFF0F1E2A).withOpacity(0.5),
-            BlendMode.darken,
-          ),
-        ),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.location_searching_rounded,
-              color: Colors.white70,
-              size: 32,
+          image: DecorationImage(
+            image: const NetworkImage(
+              'https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=1000&auto=format&fit=crop',
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Real-time position stream active',
-              style: GoogleFonts.plusJakartaSans(
-                color: Colors.white70,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+            fit: BoxFit.cover,
+            opacity: 0.3,
+            colorFilter: ColorFilter.mode(
+              const Color(0xFF0F1E2A).withOpacity(0.5),
+              BlendMode.darken,
+            ),
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                hasCoord
+                    ? Icons.gps_fixed_rounded
+                    : Icons.location_searching_rounded,
+                color: hasCoord ? Colors.greenAccent : Colors.white70,
+                size: 32,
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              if (hasCoord) ...[
+                Text(
+                  'Last Live Sync: ${_formatLastSeen(point['timestamp'])}',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                // debug coordinates
+                Text(
+                  'Lat: ${point['latitude']?.toStringAsFixed(4)}  Lng: ${point['longitude']?.toStringAsFixed(4)}',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (point['address'] != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 4,
+                    ),
+                    child: Text(
+                      point['address'],
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.greenAccent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                Text(
+                  'Tap to open Google Maps',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white60,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ] else
+                Text(
+                  'Waiting for GPS signal stream...',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

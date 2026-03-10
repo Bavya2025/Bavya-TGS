@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/frs_service.dart';
-import '../constants/api_constants.dart';
+import '../components/responsive_image.dart';
 
 class FrsFaceRequestsScreen extends StatefulWidget {
   const FrsFaceRequestsScreen({super.key});
@@ -290,12 +290,7 @@ class _FrsFaceRequestsScreenState extends State<FrsFaceRequestsScreen> {
   }
 
   Widget _buildRequestItem(Map<String, dynamic> request) {
-    String photoUrl = request['photo_url'] ?? '';
-    if (photoUrl.startsWith('/')) {
-      String base = ApiConstants.baseUrl;
-      if (base.endsWith('/')) base = base.substring(0, base.length - 1);
-      photoUrl = "$base$photoUrl";
-    }
+    String? photoData = request['photo_url'];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -368,33 +363,12 @@ class _FrsFaceRequestsScreenState extends State<FrsFaceRequestsScreen> {
           const SizedBox(height: 8),
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
-            child: photoUrl.isNotEmpty
-                ? Image.network(
-                    photoUrl,
-                    height: 250,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      height: 250,
-                      width: double.infinity,
-                      color: const Color(0xFFF8FAFC),
-                      child: const Icon(
-                        Icons.broken_image_outlined,
-                        color: Color(0xFF94A3B8),
-                        size: 40,
-                      ),
-                    ),
-                  )
-                : Container(
-                    height: 250,
-                    width: double.infinity,
-                    color: const Color(0xFFF8FAFC),
-                    child: const Icon(
-                      Icons.person,
-                      size: 60,
-                      color: Color(0xFF94A3B8),
-                    ),
-                  ),
+            child: ResponsiveImage(
+              imageData: photoData,
+              height: 250,
+              width: double.infinity,
+              fit: BoxFit.cover,
+            ),
           ),
           const SizedBox(height: 24),
           Row(

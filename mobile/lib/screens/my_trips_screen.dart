@@ -19,7 +19,6 @@ import 'dart:ui' as ui;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
-
 class MyTripsScreen extends StatefulWidget {
   const MyTripsScreen({super.key});
 
@@ -46,7 +45,11 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     try {
       final trips = await _tripService.fetchTrips(search: _searchTerm);
       if (_searchTerm.trim().isEmpty) {
-        await ExpenseReminderService.syncTripExpenseReminders(trips);
+        try {
+          await ExpenseReminderService.syncTripExpenseReminders(trips);
+        } catch (notifErr) {
+          debugPrint('Notification sync failed (non-critical): $notifErr');
+        }
       }
       setState(() {
         _allTrips = trips;
@@ -56,7 +59,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load trips: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load trips: $e')));
       }
     }
   }
@@ -71,10 +76,14 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
       final cleanString = amount.replaceAll(RegExp(r'[^\d.]'), '');
       numAmount = double.tryParse(cleanString);
     }
-    
+
     if (numAmount == null) return '₹$amount';
-    
-    final formatter = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+
+    final formatter = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 0,
+    );
     return formatter.format(numAmount);
   }
 
@@ -85,27 +94,32 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
         // Normalize status strings for comparison
         final rawStatus = t.status.trim().toLowerCase();
         final status = rawStatus.replaceAll(' ', '').replaceAll('-', '');
-        
+
         final filterLabel = _filter.trim().toLowerCase();
         final filterClean = filterLabel.replaceAll(' ', '').replaceAll('-', '');
-        
+
         bool matchesFilter = _filter == 'All Status' || _filter == 'All';
-        
+
         if (!matchesFilter) {
           // Robust matching: exact cleaned match OR the raw status contains the filter string
-          matchesFilter = (status == filterClean) || rawStatus.contains(filterClean);
-          
+          matchesFilter =
+              (status == filterClean) || rawStatus.contains(filterClean);
+
           // Special case: 'Pending' in web often includes 'Ongoing' and 'Draft'
           if (!matchesFilter && filterClean == 'pending') {
-            matchesFilter = status == 'ongoing' || status == 'draft' || status == 'inprogress';
+            matchesFilter =
+                status == 'ongoing' ||
+                status == 'draft' ||
+                status == 'inprogress';
           }
         }
-        
-        final matchesSearch = term.isEmpty || 
-                             t.purpose.toLowerCase().contains(term) || 
-                             t.id.toLowerCase().contains(term) || 
-                             t.destination.toLowerCase().contains(term);
-                             
+
+        final matchesSearch =
+            term.isEmpty ||
+            t.purpose.toLowerCase().contains(term) ||
+            t.id.toLowerCase().contains(term) ||
+            t.destination.toLowerCase().contains(term);
+
         return matchesFilter && matchesSearch;
       }).toList();
     });
@@ -126,8 +140,11 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
   Future<File?> _processOdometerImage(File imageFile, Position position) async {
     try {
-      final String currentTime = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
-      final String gpsLocation = "Lat: ${position.latitude.toStringAsFixed(4)}, Long: ${position.longitude.toStringAsFixed(4)}";
+      final String currentTime = DateFormat(
+        'yyyy-MM-dd HH:mm',
+      ).format(DateTime.now());
+      final String gpsLocation =
+          "Lat: ${position.latitude.toStringAsFixed(4)}, Long: ${position.longitude.toStringAsFixed(4)}";
 
       final bytes = await imageFile.readAsBytes();
       final ui.Codec codec = await ui.instantiateImageCodec(bytes);
@@ -139,14 +156,32 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
       canvas.drawImage(image, Offset.zero, paint);
       final rectPaint = Paint()..color = Colors.black.withOpacity(0.5);
-      canvas.drawRect(Rect.fromLTWH(0, image.height.toDouble() - 180, image.width.toDouble(), 180), rectPaint);
+      canvas.drawRect(
+        Rect.fromLTWH(
+          0,
+          image.height.toDouble() - 180,
+          image.width.toDouble(),
+          180,
+        ),
+        rectPaint,
+      );
 
-      final textStyle = TextStyle(color: Colors.white, fontSize: (image.width / 30).clamp(24, 80), fontWeight: FontWeight.bold);
-      final textPainterLoc = TextPainter(text: TextSpan(text: 'Location: $gpsLocation', style: textStyle), textDirection: ui.TextDirection.ltr);
+      final textStyle = TextStyle(
+        color: Colors.white,
+        fontSize: (image.width / 30).clamp(24, 80),
+        fontWeight: FontWeight.bold,
+      );
+      final textPainterLoc = TextPainter(
+        text: TextSpan(text: 'Location: $gpsLocation', style: textStyle),
+        textDirection: ui.TextDirection.ltr,
+      );
       textPainterLoc.layout();
       textPainterLoc.paint(canvas, Offset(40, image.height.toDouble() - 140));
 
-      final textPainterTime = TextPainter(text: TextSpan(text: 'Time: $currentTime', style: textStyle), textDirection: ui.TextDirection.ltr);
+      final textPainterTime = TextPainter(
+        text: TextSpan(text: 'Time: $currentTime', style: textStyle),
+        textDirection: ui.TextDirection.ltr,
+      );
       textPainterTime.layout();
       textPainterTime.paint(canvas, Offset(40, image.height.toDouble() - 70));
 
@@ -156,8 +191,12 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
       if (data != null) {
         final directory = await getTemporaryDirectory();
-        final String filePath = p.join(directory.path, 'watermarked_odo_${DateTime.now().millisecondsSinceEpoch}.png');
-        final File watermarkedFile = File(filePath)..writeAsBytesSync(data.buffer.asUint8List());
+        final String filePath = p.join(
+          directory.path,
+          'watermarked_odo_${DateTime.now().millisecondsSinceEpoch}.png',
+        );
+        final File watermarkedFile = File(filePath)
+          ..writeAsBytesSync(data.buffer.asUint8List());
         return watermarkedFile;
       }
     } catch (e) {
@@ -193,7 +232,10 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               height: 400,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  colors: [const Color(0xFFA9052E).withOpacity(0.03), Colors.transparent],
+                  colors: [
+                    const Color(0xFFA9052E).withOpacity(0.03),
+                    Colors.transparent,
+                  ],
                 ),
                 shape: BoxShape.circle,
               ),
@@ -207,41 +249,60 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               height: 350,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  colors: [const Color(0xFF3B82F6).withOpacity(0.02), Colors.transparent],
+                  colors: [
+                    const Color(0xFF3B82F6).withOpacity(0.02),
+                    Colors.transparent,
+                  ],
                 ),
                 shape: BoxShape.circle,
               ),
             ),
           ),
-          
+
           Column(
             children: [
               _buildCustomHeader(),
               _buildToolbar(),
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: Color(0xFFBB0633)))
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFBB0633),
+                        ),
+                      )
                     : _visibleTrips.isEmpty
-                        ? _buildEmptyState()
-                        : ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
-                            itemCount: _visibleTrips.length,
-                            itemBuilder: (context, index) => _buildTripCard(_visibleTrips[index]),
-                          ),
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
+                        itemCount: _visibleTrips.length,
+                        itemBuilder: (context, index) =>
+                            _buildTripCard(_visibleTrips[index]),
+                      ),
               ),
             ],
           ),
-          
+
           // FAB positioned manually if needed, or use Scaffold's
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTripScreen())),
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const CreateTripScreen()),
+        ),
         backgroundColor: const Color(0xFF0F1E2A),
         elevation: 12,
         highlightElevation: 4,
         icon: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
-        label: Text('NEW REQUEST', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, color: Colors.white, fontSize: 13, letterSpacing: 0.5)),
+        label: Text(
+          'NEW REQUEST',
+          style: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            fontSize: 13,
+            letterSpacing: 0.5,
+          ),
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
     );
@@ -297,7 +358,11 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                     onPressed: () => Navigator.pop(context),
                   ),
                   const SizedBox(width: 8),
@@ -314,7 +379,11 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.airplane_ticket_rounded, color: Color(0xFFBB0633), size: 24),
+                    child: const Icon(
+                      Icons.airplane_ticket_rounded,
+                      color: Color(0xFFBB0633),
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -366,16 +435,31 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: const Color(0xFFF1F5F9)),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8)),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
                     ],
                   ),
                   child: TextField(
                     onChanged: _onSearchChanged,
-                    style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF0F172A),
+                    ),
                     decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search_rounded, size: 22, color: Color(0xFFBB0633)),
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        size: 22,
+                        color: Color(0xFFBB0633),
+                      ),
                       hintText: 'Search destinations, IDs...',
-                      hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                      hintStyle: GoogleFonts.plusJakartaSans(
+                        color: const Color(0xFF94A3B8),
+                        fontWeight: FontWeight.w500,
+                      ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 20),
                     ),
@@ -391,21 +475,41 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: const Color(0xFFF1F5F9)),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8)),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
                   ],
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
-                    value: _filter == 'All Status' || _filter == 'All' ? 'All' :
-                           ['Approved', 'Pending', 'Settled'].contains(_filter) ? _filter : 'All',
-                    icon: const Icon(Icons.tune_rounded, color: Color(0xFFBB0633), size: 20),
-                    style: GoogleFonts.plusJakartaSans(color: const Color(0xFF0F172A), fontWeight: FontWeight.w800, fontSize: 13),
+                    value: _filter == 'All Status' || _filter == 'All'
+                        ? 'All'
+                        : ['Approved', 'Pending', 'Settled'].contains(_filter)
+                        ? _filter
+                        : 'All',
+                    icon: const Icon(
+                      Icons.tune_rounded,
+                      color: Color(0xFFBB0633),
+                      size: 20,
+                    ),
+                    style: GoogleFonts.plusJakartaSans(
+                      color: const Color(0xFF0F172A),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
                     dropdownColor: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    items: ['All', 'Approved', 'Pending', 'Settled'].map((String value) {
+                    items: ['All', 'Approved', 'Pending', 'Settled'].map((
+                      String value,
+                    ) {
                       return DropdownMenuItem<String>(
                         value: value,
-                        child: Text(value.toUpperCase(), style: const TextStyle(letterSpacing: 0.5)),
+                        child: Text(
+                          value.toUpperCase(),
+                          style: const TextStyle(letterSpacing: 0.5),
+                        ),
                       );
                     }).toList(),
                     onChanged: (v) {
@@ -431,23 +535,47 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.airplane_ticket_rounded, size: 80, color: Colors.grey.shade200),
+          Icon(
+            Icons.airplane_ticket_rounded,
+            size: 80,
+            color: Colors.grey.shade200,
+          ),
           const SizedBox(height: 16),
-          Text('No Trips Found', style: GoogleFonts.plusJakartaSans(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
+          Text(
+            'No Trips Found',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
           const SizedBox(height: 8),
-          Text('You haven\'t created any trips yet.', style: GoogleFonts.plusJakartaSans(color: Colors.black38, fontWeight: FontWeight.w600)),
+          Text(
+            'You haven\'t created any trips yet.',
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.black38,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _summaryTile(String label, String value, {bool badge = false, bool isBudget = false, IconData? icon}) {
+  Widget _summaryTile(
+    String label,
+    String value, {
+    bool badge = false,
+    bool isBudget = false,
+    IconData? icon,
+  }) {
     String displayValue = value.trim();
     // Improved double symbol check: handle both literal and variant characters
-    bool hasCurrency = displayValue.contains('₹') || 
-                      displayValue.contains('Rs') || 
-                      displayValue.contains('\u20B9');
-    
+    bool hasCurrency =
+        displayValue.contains('₹') ||
+        displayValue.contains('Rs') ||
+        displayValue.contains('\u20B9');
+
     if (isBudget && !hasCurrency) {
       displayValue = '₹$displayValue';
     }
@@ -476,7 +604,15 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                 Icon(icon, size: 12, color: Colors.black26),
                 const SizedBox(width: 4),
               ],
-              Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.black26, letterSpacing: 0.5)),
+              Text(
+                label.toUpperCase(),
+                style: GoogleFonts.inter(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black26,
+                  letterSpacing: 0.5,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -502,7 +638,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
-                color: isBudget ? const Color(0xFFBB0633) : const Color(0xFF0F172A),
+                color: isBudget
+                    ? const Color(0xFFBB0633)
+                    : const Color(0xFF0F172A),
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -514,8 +652,10 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
   Widget _buildTripCard(Trip t) {
     final statusColor = _getStatusColor(t.status);
-    final bool canShowStory = t.status.toLowerCase() != 'draft' && t.status.toLowerCase() != 'cancelled';
-    
+    final bool canShowStory =
+        t.status.toLowerCase() != 'draft' &&
+        t.status.toLowerCase() != 'cancelled';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
@@ -534,7 +674,10 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(28),
         child: InkWell(
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripSummaryScreen(trip: t))),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => TripSummaryScreen(trip: t)),
+          ),
           borderRadius: BorderRadius.circular(28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -546,7 +689,10 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(10),
@@ -556,7 +702,10 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                           Container(
                             width: 6,
                             height: 6,
-                            decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                            decoration: BoxDecoration(
+                              color: statusColor,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -611,7 +760,10 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                         children: [
                           Row(
                             children: [
-                              _cardDetailIcon(Icons.location_on_rounded, const Color(0xFFBB0633)),
+                              _cardDetailIcon(
+                                Icons.location_on_rounded,
+                                const Color(0xFFBB0633),
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
@@ -633,7 +785,10 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                           ),
                           Row(
                             children: [
-                              _cardDetailIcon(Icons.calendar_month_rounded, const Color(0xFF3B82F6)),
+                              _cardDetailIcon(
+                                Icons.calendar_month_rounded,
+                                const Color(0xFF3B82F6),
+                              ),
                               const SizedBox(width: 12),
                               Text(
                                 t.dates,
@@ -657,7 +812,12 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                             Icons.east_rounded,
                             const Color(0xFF0F1E2A),
                             Colors.white,
-                            () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripSummaryScreen(trip: t))),
+                            () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => TripSummaryScreen(trip: t),
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -667,7 +827,12 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                             Icons.history_rounded,
                             const Color(0xFFF1F5F9),
                             const Color(0xFF475569),
-                            () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsScreen(tripId: t.id))),
+                            () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => TripDetailsScreen(tripId: t.id),
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -677,7 +842,12 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                             Icons.auto_awesome_rounded,
                             const Color(0xFFFDF2F4),
                             const Color(0xFFBB0633),
-                            () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripStoryScreen(tripId: t.id))),
+                            () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => TripStoryScreen(tripId: t.id),
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -703,10 +873,16 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     );
   }
 
-  Widget _actionBtn(String label, IconData icon, Color bg, Color text, VoidCallback onTap) {
+  Widget _actionBtn(
+    String label,
+    IconData icon,
+    Color bg,
+    Color text,
+    VoidCallback onTap,
+  ) {
     // Determine if it's a secondary button to apply a subtle border
     final bool isPrimary = bg == const Color(0xFF0F1E2A);
-    
+
     return Material(
       color: bg,
       borderRadius: BorderRadius.circular(100),
@@ -717,7 +893,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(100),
-            border: isPrimary ? null : Border.all(color: text.withOpacity(0.12), width: 1.2),
+            border: isPrimary
+                ? null
+                : Border.all(color: text.withOpacity(0.12), width: 1.2),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -740,7 +918,6 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     );
   }
 
-
   Widget _modalActionButton(String label, IconData icon, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
@@ -758,8 +935,12 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
             Icon(icon, size: 16, color: const Color(0xFFBB0633)),
             const SizedBox(width: 8),
             Text(
-              label, 
-              style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))
+              label,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF0F172A),
+              ),
             ),
           ],
         ),
@@ -767,7 +948,13 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     );
   }
 
-  Widget _cardActionButton({required String label, required IconData icon, required VoidCallback onPressed, bool isSecondary = false, Color? textColor}) {
+  Widget _cardActionButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onPressed,
+    bool isSecondary = false,
+    Color? textColor,
+  }) {
     return SizedBox(
       width: double.infinity,
       child: TextButton(
@@ -776,14 +963,20 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
           backgroundColor: Colors.white,
           side: const BorderSide(color: Color(0xFFF1F5F9)),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              label, 
-              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, fontSize: 13, color: textColor ?? const Color(0xFF0F172A))
+              label,
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                color: textColor ?? const Color(0xFF0F172A),
+              ),
             ),
             Icon(icon, size: 18, color: textColor ?? const Color(0xFF0F172A)),
           ],
@@ -800,8 +993,12 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
           Icon(icon, size: 18, color: const Color(0xFF64748B)),
           const SizedBox(width: 12),
           Text(
-            value, 
-            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 13, color: const Color(0xFF0F172A))
+            value,
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+              color: const Color(0xFF0F172A),
+            ),
           ),
         ],
       ),
@@ -810,13 +1007,19 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'approved': return const Color(0xFF10B981);
-      case 'completed': return const Color(0xFF3B82F6);
+      case 'approved':
+        return const Color(0xFF10B981);
+      case 'completed':
+        return const Color(0xFF3B82F6);
       case 'on-going':
-      case 'ongoing': return const Color(0xFFF59E0B);
-      case 'cancelled': return const Color(0xFFEF4444);
-      case 'pending': return const Color(0xFF6366F1);
-      default: return const Color(0xFF64748B);
+      case 'ongoing':
+        return const Color(0xFFF59E0B);
+      case 'cancelled':
+        return const Color(0xFFEF4444);
+      case 'pending':
+        return const Color(0xFF6366F1);
+      default:
+        return const Color(0xFF64748B);
     }
   }
 }

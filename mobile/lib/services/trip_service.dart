@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import '../models/trip_model.dart';
 import 'api_service.dart';
 import '../constants/api_constants.dart';
@@ -10,9 +11,9 @@ class TripService {
     List<String> params = [];
     if (search != null && search.isNotEmpty) params.add('search=$search');
     if (all) params.add('all=true');
-    
+
     if (params.isNotEmpty) url += '?${params.join('&')}';
-    
+
     final response = await _apiService.get(url);
     if (response is List) {
       return response.map((json) => Trip.fromJson(json)).toList();
@@ -59,11 +60,22 @@ class TripService {
   }
 
   Future<Map<String, dynamic>> createClaim(Map<String, dynamic> data) async {
-    return await _apiService.post('${ApiConstants.baseUrl}/api/claims/', body: data, includeAuth: true);
+    return await _apiService.post(
+      '${ApiConstants.baseUrl}/api/claims/',
+      body: data,
+      includeAuth: true,
+    );
   }
 
-  Future<Map<String, dynamic>> updateClaim(int id, Map<String, dynamic> data) async {
-    return await _apiService.put('${ApiConstants.baseUrl}/api/claims/$id/', body: data, includeAuth: true);
+  Future<Map<String, dynamic>> updateClaim(
+    int id,
+    Map<String, dynamic> data,
+  ) async {
+    return await _apiService.put(
+      '${ApiConstants.baseUrl}/api/claims/$id/',
+      body: data,
+      includeAuth: true,
+    );
   }
 
   Future<List<Map<String, dynamic>>> fetchExpenses({String? tripId}) async {
@@ -76,7 +88,11 @@ class TripService {
     return [];
   }
 
-  Future<List<Map<String, dynamic>>> fetchApprovals({String tab = 'pending', String type = 'all', String? search}) async {
+  Future<List<Map<String, dynamic>>> fetchApprovals({
+    String tab = 'pending',
+    String type = 'all',
+    String? search,
+  }) async {
     String url = '${ApiConstants.approvals}?tab=$tab&type=$type';
     if (search != null && search.isNotEmpty) {
       url += '&search=$search';
@@ -84,6 +100,14 @@ class TripService {
     final response = await _apiService.get(url);
     if (response is List) {
       return List<Map<String, dynamic>>.from(response);
+    }
+    return [];
+  }
+
+  Future<List<Trip>> fetchTripApprovals() async {
+    final response = await _apiService.get(ApiConstants.tripApprovals);
+    if (response is List) {
+      return response.map((json) => Trip.fromJson(json)).toList();
     }
     return [];
   }
@@ -96,11 +120,12 @@ class TripService {
     return {'total': 0, 'advances': 0, 'trips': 0, 'claims': 0};
   }
 
-  Future<void> performApproval(dynamic id, String action, {Map<String, dynamic>? extraData}) async {
-    final Map<String, dynamic> body = {
-      'id': id.toString(),
-      'action': action,
-    };
+  Future<void> performApproval(
+    dynamic id,
+    String action, {
+    Map<String, dynamic>? extraData,
+  }) async {
+    final Map<String, dynamic> body = {'id': id.toString(), 'action': action};
     if (extraData != null) {
       body.addAll(extraData);
     }
@@ -114,7 +139,9 @@ class TripService {
 
   Future<dynamic> getReportingManager() async {
     try {
-      final response = await _apiService.get('${ApiConstants.baseUrl}/api/employees/');
+      final response = await _apiService.get(
+        '${ApiConstants.baseUrl}/api/employees/',
+      );
       // Logic matching CreateTrip.jsx to find manager
       // This is simplified for service, complexity handled in screen if needed
       return response;
@@ -123,7 +150,11 @@ class TripService {
     }
   }
 
-  Future<void> requestAdvance(String tripId, double amount, String purpose) async {
+  Future<void> requestAdvance(
+    String tripId,
+    double amount,
+    String purpose,
+  ) async {
     await _apiService.post(
       '${ApiConstants.baseUrl}/api/advances/',
       body: {
@@ -137,7 +168,9 @@ class TripService {
     );
   }
 
-  Future<Map<String, dynamic>> addExpense(Map<String, dynamic> expenseData) async {
+  Future<Map<String, dynamic>> addExpense(
+    Map<String, dynamic> expenseData,
+  ) async {
     final response = await _apiService.post(
       ApiConstants.expenses,
       body: expenseData,
@@ -146,7 +179,10 @@ class TripService {
     return Map<String, dynamic>.from(response);
   }
 
-  Future<Map<String, dynamic>> updateExpense(String id, Map<String, dynamic> expenseData) async {
+  Future<Map<String, dynamic>> updateExpense(
+    String id,
+    Map<String, dynamic> expenseData,
+  ) async {
     final response = await _apiService.put(
       '${ApiConstants.expenses}$id/',
       body: expenseData,
@@ -156,13 +192,14 @@ class TripService {
   }
 
   Future<void> deleteExpense(String id) async {
-    await _apiService.delete(
-      '${ApiConstants.expenses}$id/',
-      includeAuth: true,
-    );
+    await _apiService.delete('${ApiConstants.expenses}$id/', includeAuth: true);
   }
 
-  Future<void> updateOdometer(String tripId, {String? start, String? end}) async {
+  Future<void> updateOdometer(
+    String tripId, {
+    String? start,
+    String? end,
+  }) async {
     final payload = {'trip': tripId};
     if (start != null) payload['start_odo_reading'] = start;
     if (end != null) payload['end_odo_reading'] = end;
@@ -175,7 +212,9 @@ class TripService {
   }
 
   Future<List<Map<String, dynamic>>> fetchGuestHouses() async {
-    final response = await _apiService.get('${ApiConstants.baseUrl}/api/guesthouse/');
+    final response = await _apiService.get(
+      '${ApiConstants.baseUrl}/api/guesthouse/',
+    );
     if (response is List) {
       return response.map((item) => Map<String, dynamic>.from(item)).toList();
     }
@@ -183,30 +222,49 @@ class TripService {
   }
 
   Future<Map<String, dynamic>> fetchGuestHouseById(int id) async {
-    final response = await _apiService.get('${ApiConstants.baseUrl}/api/guesthouse/$id');
+    final response = await _apiService.get(
+      '${ApiConstants.baseUrl}/api/guesthouse/$id',
+    );
     return Map<String, dynamic>.from(response);
   }
 
   Future<void> saveGuestHouse(Map<String, dynamic> data, {int? id}) async {
     if (id != null) {
-      await _apiService.put('${ApiConstants.baseUrl}/api/guesthouse/$id', body: data, includeAuth: true);
+      await _apiService.put(
+        '${ApiConstants.baseUrl}/api/guesthouse/$id',
+        body: data,
+        includeAuth: true,
+      );
     } else {
-      await _apiService.post('${ApiConstants.baseUrl}/api/guesthouse/', body: data, includeAuth: true);
+      await _apiService.post(
+        '${ApiConstants.baseUrl}/api/guesthouse/',
+        body: data,
+        includeAuth: true,
+      );
     }
   }
 
   Future<void> deleteGuestHouse(int id) async {
-    await _apiService.delete('${ApiConstants.baseUrl}/api/guesthouse/$id', includeAuth: true);
+    await _apiService.delete(
+      '${ApiConstants.baseUrl}/api/guesthouse/$id',
+      includeAuth: true,
+    );
   }
 
   Future<void> createRoomBooking(int roomId, Map<String, dynamic> data) async {
-    await _apiService.post('${ApiConstants.baseUrl}/api/guesthouse/rooms/$roomId/bookings', body: data, includeAuth: true);
+    await _apiService.post(
+      '${ApiConstants.baseUrl}/api/guesthouse/rooms/$roomId/bookings',
+      body: data,
+      includeAuth: true,
+    );
   }
 
   Future<List<Map<String, dynamic>>> fetchAllTransactions() async {
     final claims = await fetchClaims();
-    final advances = await _apiService.get('${ApiConstants.baseUrl}/api/advances/');
-    
+    final advances = await _apiService.get(
+      '${ApiConstants.baseUrl}/api/advances/',
+    );
+
     List<Map<String, dynamic>> all = [];
     for (var c in claims) {
       all.add({
@@ -236,62 +294,97 @@ class TripService {
     return all;
   }
 
-  Future<List<Map<String, dynamic>>> fetchAuditLogs({String? search, String? action}) async {
+  Future<List<Map<String, dynamic>>> fetchAuditLogs({
+    String? search,
+    String? action,
+  }) async {
     String url = ApiConstants.auditLogs;
     List<String> params = [];
     if (search != null && search.isNotEmpty) params.add('search=$search');
     if (action != null && action.isNotEmpty) params.add('action=$action');
     if (params.isNotEmpty) url += '?${params.join('&')}';
-    
+
     final response = await _apiService.get(url, includeAuth: true);
     if (response is List) return List<Map<String, dynamic>>.from(response);
     return [];
   }
 
   Future<Map<String, dynamic>> fetchApiDashboardStats() async {
-    final response = await _apiService.get(ApiConstants.apiDashboardStats, includeAuth: true);
+    final response = await _apiService.get(
+      ApiConstants.apiDashboardStats,
+      includeAuth: true,
+    );
     if (response is Map) return Map<String, dynamic>.from(response);
     return {};
   }
 
   Future<List<Map<String, dynamic>>> fetchAccessKeys() async {
-    final response = await _apiService.get(ApiConstants.apiAccessKeys, includeAuth: true);
+    final response = await _apiService.get(
+      ApiConstants.apiAccessKeys,
+      includeAuth: true,
+    );
     if (response is List) return List<Map<String, dynamic>>.from(response);
     return [];
   }
 
   Future<List<Map<String, dynamic>>> fetchDynamicEndpoints() async {
-    final response = await _apiService.get(ApiConstants.apiDynamicEndpoints, includeAuth: true);
+    final response = await _apiService.get(
+      ApiConstants.apiDynamicEndpoints,
+      includeAuth: true,
+    );
     if (response is List) return List<Map<String, dynamic>>.from(response);
     return [];
   }
 
   Future<void> updateMasterApiKey(String key) async {
-    await _apiService.post(ApiConstants.apiUpdateKey, body: {'key': key}, includeAuth: true);
+    await _apiService.post(
+      ApiConstants.apiUpdateKey,
+      body: {'key': key},
+      includeAuth: true,
+    );
   }
 
   Future<void> revokeAccessKey(int id) async {
-    await _apiService.delete('${ApiConstants.apiAccessKeys}$id/', includeAuth: true);
+    await _apiService.delete(
+      '${ApiConstants.apiAccessKeys}$id/',
+      includeAuth: true,
+    );
   }
 
-  Future<Map<String, dynamic>> generateAccessKey(Map<String, dynamic> data) async {
-    final response = await _apiService.post(ApiConstants.apiAccessKeys, body: data, includeAuth: true);
+  Future<Map<String, dynamic>> generateAccessKey(
+    Map<String, dynamic> data,
+  ) async {
+    final response = await _apiService.post(
+      ApiConstants.apiAccessKeys,
+      body: data,
+      includeAuth: true,
+    );
     if (response is Map) return Map<String, dynamic>.from(response);
     return {};
   }
 
   Future<void> createDynamicEndpoint(Map<String, dynamic> data) async {
-    await _apiService.post(ApiConstants.apiDynamicEndpoints, body: data, includeAuth: true);
+    await _apiService.post(
+      ApiConstants.apiDynamicEndpoints,
+      body: data,
+      includeAuth: true,
+    );
   }
 
   Future<List<Map<String, dynamic>>> fetchEmployees() async {
-    final response = await _apiService.get('${ApiConstants.baseUrl}/api/employees/', includeAuth: true);
+    final response = await _apiService.get(
+      '${ApiConstants.baseUrl}/api/employees/',
+      includeAuth: true,
+    );
     if (response is List) return List<Map<String, dynamic>>.from(response);
     return [];
   }
 
   Future<List<Map<String, dynamic>>> fetchUsers() async {
-    final response = await _apiService.get(ApiConstants.users, includeAuth: true);
+    final response = await _apiService.get(
+      ApiConstants.users,
+      includeAuth: true,
+    );
     if (response is List) return List<Map<String, dynamic>>.from(response);
     return [];
   }
@@ -302,7 +395,9 @@ class TripService {
 
   // Fleet Management
   Future<List<Map<String, dynamic>>> fetchFleetHubs() async {
-    final response = await _apiService.get('${ApiConstants.baseUrl}/api/fleet/hub/');
+    final response = await _apiService.get(
+      '${ApiConstants.baseUrl}/api/fleet/hub/',
+    );
     if (response is List) {
       return response.map((item) => Map<String, dynamic>.from(item)).toList();
     }
@@ -311,36 +406,82 @@ class TripService {
 
   Future<void> saveFleetHub(Map<String, dynamic> data, {int? id}) async {
     if (id != null) {
-      await _apiService.put('${ApiConstants.baseUrl}/api/fleet/hub/$id/', body: data, includeAuth: true);
+      await _apiService.put(
+        '${ApiConstants.baseUrl}/api/fleet/hub/$id/',
+        body: data,
+        includeAuth: true,
+      );
     } else {
-      await _apiService.post('${ApiConstants.baseUrl}/api/fleet/hub/', body: data, includeAuth: true);
+      await _apiService.post(
+        '${ApiConstants.baseUrl}/api/fleet/hub/',
+        body: data,
+        includeAuth: true,
+      );
     }
   }
 
   Future<void> deleteFleetHub(int id) async {
-    await _apiService.delete('${ApiConstants.baseUrl}/api/fleet/hub/$id/', includeAuth: true);
+    await _apiService.delete(
+      '${ApiConstants.baseUrl}/api/fleet/hub/$id/',
+      includeAuth: true,
+    );
   }
 
-  Future<void> saveFleetItem(String type, Map<String, dynamic> data, {int? id}) async {
+  Future<void> saveFleetItem(
+    String type,
+    Map<String, dynamic> data, {
+    int? id,
+  }) async {
     // type is 'vehicles' or 'drivers'
     if (id != null) {
-      await _apiService.put('${ApiConstants.baseUrl}/api/fleet/items/$type/$id/', body: data, includeAuth: true);
+      await _apiService.put(
+        '${ApiConstants.baseUrl}/api/fleet/items/$type/$id/',
+        body: data,
+        includeAuth: true,
+      );
     } else {
-      await _apiService.post('${ApiConstants.baseUrl}/api/fleet/items/$type/', body: data, includeAuth: true);
+      await _apiService.post(
+        '${ApiConstants.baseUrl}/api/fleet/items/$type/',
+        body: data,
+        includeAuth: true,
+      );
     }
   }
 
   Future<void> deleteFleetItem(String type, int id) async {
-    await _apiService.delete('${ApiConstants.baseUrl}/api/fleet/items/$type/$id/', includeAuth: true);
+    await _apiService.delete(
+      '${ApiConstants.baseUrl}/api/fleet/items/$type/$id/',
+      includeAuth: true,
+    );
   }
 
   Future<void> assignVehicle(int vehicleId, Map<String, dynamic> data) async {
-    await _apiService.post('${ApiConstants.baseUrl}/api/fleet/vehicles/$vehicleId/bookings/', body: data, includeAuth: true);
+    await _apiService.post(
+      '${ApiConstants.baseUrl}/api/fleet/vehicles/$vehicleId/bookings/',
+      body: data,
+      includeAuth: true,
+    );
   }
 
   Future<Map<String, dynamic>> fetchDashboardStats() async {
-    final response = await _apiService.get('${ApiConstants.baseUrl}/api/dashboard-stats/', includeAuth: true);
+    final response = await _apiService.get(
+      '${ApiConstants.baseUrl}/api/dashboard-stats/',
+      includeAuth: true,
+    );
     if (response is Map) return Map<String, dynamic>.from(response);
     return {};
+  }
+
+  Future<Map<String, dynamic>?> fetchLatestTrackingPoint(String tripId) async {
+    try {
+      final response = await _apiService.get('/api/trips/$tripId/tracking/');
+      if (response is List && response.isNotEmpty) {
+        // Return latest known point from the end of the history
+        return Map<String, dynamic>.from(response.last);
+      }
+    } catch (e) {
+      debugPrint('ERROR FETCHING TRACKING for $tripId: $e');
+    }
+    return null;
   }
 }

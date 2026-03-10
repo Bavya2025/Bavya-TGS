@@ -50,7 +50,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter both username and password')),
+        const SnackBar(
+          content: Text('Please enter both username and password'),
+        ),
       );
       return;
     }
@@ -64,7 +66,8 @@ class _LoginScreenState extends State<LoginScreen> {
       final response = await apiService.post(
         ApiConstants.authLogin,
         body: {
-          'employee_id': username,   // Backend accepts both 'username' and 'employee_id'; web uses 'employee_id'
+          'employee_id':
+              username, // Backend accepts both 'username' and 'employee_id'; web uses 'employee_id'
           'password': password,
         },
       );
@@ -84,7 +87,8 @@ class _LoginScreenState extends State<LoginScreen> {
         role = 'employee';
       }
 
-      final userName = (userDetails['name'] ?? response['name'] ?? username).toString();
+      final userName = (userDetails['name'] ?? response['name'] ?? username)
+          .toString();
       // Persist token + user to SharedPreferences (mirrors web app's localStorage)
       await apiService.setToken(token);
       await apiService.setUser(userDetails);
@@ -104,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final userEmail = (userDetails['email'] ?? '').toString();
       final isFaceEnrolled = userDetails['is_face_enrolled'] == true;
-      
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -115,7 +119,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       );
-
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -133,12 +136,17 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  String _extractRole(Map<String, dynamic> response, Map<String, dynamic> userDetails) {
-    final possibleRole = userDetails['role'] ?? 
-                        response['role'] ?? 
-                        userDetails['role_name'] ?? 
-                        response['user_role'] ?? '';
-    
+  String _extractRole(
+    Map<String, dynamic> response,
+    Map<String, dynamic> userDetails,
+  ) {
+    final possibleRole =
+        userDetails['role'] ??
+        response['role'] ??
+        userDetails['role_name'] ??
+        response['user_role'] ??
+        '';
+
     if (possibleRole == null) return '';
     if (possibleRole is String) return possibleRole;
     if (possibleRole is Map) {
@@ -162,8 +170,6 @@ class _LoginScreenState extends State<LoginScreen> {
       return '';
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -252,7 +258,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             GestureDetector(
                               onTap: () => Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const ForgotPasswordScreen(),
+                                ),
                               ),
                               child: Text(
                                 'Forgot Password?',
@@ -294,7 +303,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               child: _isLoading
-                                  ? const CircularProgressIndicator(color: Colors.white)
+                                  ? const CircularProgressIndicator(
+                                      color: Colors.white,
+                                    )
                                   : Text(
                                       'Login',
                                       style: GoogleFonts.interTight(
@@ -311,7 +322,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             onTap: () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (context) => const SignUpScreen()),
+                                MaterialPageRoute(
+                                  builder: (context) => const SignUpScreen(),
+                                ),
                               );
                             },
                             child: RichText(
@@ -321,7 +334,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                   fontSize: 14,
                                 ),
                                 children: [
-                                  const TextSpan(text: "Don't have an account? "),
+                                  const TextSpan(
+                                    text: "Don't have an account? ",
+                                  ),
                                   TextSpan(
                                     text: 'Sign Up',
                                     style: TextStyle(
@@ -375,11 +390,15 @@ class _LoginScreenState extends State<LoginScreen> {
         controller: controller,
         obscureText: isPassword ? obscureText : false,
         decoration: InputDecoration(
-          prefixIcon: icon != null ? Icon(icon, color: Colors.black45, size: 20) : null,
+          prefixIcon: icon != null
+              ? Icon(icon, color: Colors.black45, size: 20)
+              : null,
           suffixIcon: isPassword
               ? IconButton(
                   icon: Icon(
-                    obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    obscureText
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
                     color: Colors.black45,
                     size: 20,
                   ),
@@ -387,12 +406,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 )
               : null,
           hintText: hintText,
-          hintStyle: GoogleFonts.inter(
-            color: Colors.black38,
-            fontSize: 14,
-          ),
+          hintStyle: GoogleFonts.inter(color: Colors.black38, fontSize: 14),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 15,
+          ),
         ),
         style: GoogleFonts.inter(fontSize: 15),
       ),

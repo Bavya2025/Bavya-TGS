@@ -1,8 +1,10 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
+import 'logger_service.dart';
 
 /// Centralized API Service for handling all HTTP requests
 /// Provides consistent error handling, authentication, and request/response management
@@ -26,18 +28,35 @@ class ApiService {
   static Future<void> loadSession() async {
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getString('tgs_user');
+    LoggerService.log('SESSION: Checking for stored session...');
+
     if (stored != null && stored.isNotEmpty) {
+      // Safety check: metadata should never be megabytes.
+      // Large strings here usually mean un-stripped Base64 images which cause OOM at startup.
+      if (stored.length > 200000) {
+        LoggerService.log(
+          'SESSION: Oversized session data detected (${stored.length} bytes). Clearing for safety.',
+          isError: true,
+        );
+        await prefs.remove('tgs_user');
+        return;
+      }
       try {
         final userData = jsonDecode(stored) as Map<String, dynamic>;
         final token = userData['token']?.toString() ?? '';
         if (token.isNotEmpty) {
           _instance._authToken = token;
           _instance._currentUser = userData;
+          LoggerService.log(
+            'SESSION: Successfully restored token for ${userData['employee_id']}',
+          );
         }
-      } catch (_) {
-        // Corrupted data — clear it
+      } catch (e) {
+        LoggerService.log('SESSION: Corrupted data found: $e', isError: true);
         await prefs.remove('tgs_user');
       }
+    } else {
+      LoggerService.log('SESSION: No stored session found.');
     }
   }
 
@@ -47,7 +66,19 @@ class ApiService {
     if (_currentUser != null) {
       final data = Map<String, dynamic>.from(_currentUser!);
       data['token'] = _authToken ?? '';
+
+      // CRITICAL: Strip large Base64 strings before persisting to SharedPreferences
+      // Storing megabytes of Base64 in XML-based prefs causes OOM and launch crashes.
+      data.remove('face_photo');
+      data.remove('photo_captured');
+      if (data.containsKey('external_profile')) {
+        final ext = Map<String, dynamic>.from(data['external_profile']);
+        ext.remove('photo');
+        data['external_profile'] = ext;
+      }
+
       await prefs.setString('tgs_user', jsonEncode(data));
+      LoggerService.log('SESSION: Persisted metadata to storage.');
     }
   }
 
@@ -99,6 +130,10 @@ class ApiService {
     if (includeAuth && _authToken != null) {
       headers['Authorization'] = 'Bearer $_authToken';
     }
+    // Automatically include the System API Key if present
+    if (ApiConstants.apiKey.isNotEmpty) {
+      headers['X-API-KEY'] = ApiConstants.apiKey;
+    }
     return headers;
   }
 
@@ -120,9 +155,11 @@ class ApiService {
     bool includeAuth = false,
   }) async {
     try {
+      final uri = _buildUri(endpoint);
+      LoggerService.log('API POST: $uri');
       final response = await http
           .post(
-            _buildUri(endpoint),
+            uri,
             headers: _buildHeaders(includeAuth: includeAuth),
             body: jsonEncode(body),
           )
@@ -132,37 +169,39 @@ class ApiService {
           );
 
       return _handleResponse(response);
-    } on SocketException {
+    } on SocketException catch (e) {
+      LoggerService.log('API POST ERR: SocketException - $e', isError: true);
       throw NetworkException('No internet connection');
-    } on TimeoutException {
+    } on TimeoutException catch (e) {
+      LoggerService.log('API POST ERR: Timeout - $e', isError: true);
       throw TimeoutException('Request timeout. Please try again.');
     } catch (e) {
+      LoggerService.log('API POST ERR: $e', isError: true);
       rethrow;
     }
   }
 
   /// GET request
-  Future<dynamic> get(
-    String endpoint, {
-    bool includeAuth = true,
-  }) async {
+  Future<dynamic> get(String endpoint, {bool includeAuth = true}) async {
     try {
+      final uri = _buildUri(endpoint);
+      LoggerService.log('API GET: $uri');
       final response = await http
-          .get(
-            _buildUri(endpoint),
-            headers: _buildHeaders(includeAuth: includeAuth),
-          )
+          .get(uri, headers: _buildHeaders(includeAuth: includeAuth))
           .timeout(
             const Duration(milliseconds: ApiConstants.requestTimeout),
             onTimeout: () => throw TimeoutException('Request timeout'),
           );
 
       return _handleResponse(response);
-    } on SocketException {
+    } on SocketException catch (e) {
+      LoggerService.log('API GET ERR: SocketException - $e', isError: true);
       throw NetworkException('No internet connection');
-    } on TimeoutException {
+    } on TimeoutException catch (e) {
+      LoggerService.log('API GET ERR: Timeout - $e', isError: true);
       throw TimeoutException('Request timeout. Please try again.');
     } catch (e) {
+      LoggerService.log('API GET ERR: $e', isError: true);
       rethrow;
     }
   }
@@ -174,9 +213,11 @@ class ApiService {
     bool includeAuth = true,
   }) async {
     try {
+      final uri = _buildUri(endpoint);
+      LoggerService.log('API PUT: $uri');
       final response = await http
           .put(
-            _buildUri(endpoint),
+            uri,
             headers: _buildHeaders(includeAuth: includeAuth),
             body: jsonEncode(body),
           )
@@ -186,11 +227,14 @@ class ApiService {
           );
 
       return _handleResponse(response);
-    } on SocketException {
+    } on SocketException catch (e) {
+      LoggerService.log('API PUT ERR: SocketException - $e', isError: true);
       throw NetworkException('No internet connection');
-    } on TimeoutException {
+    } on TimeoutException catch (e) {
+      LoggerService.log('API PUT ERR: Timeout - $e', isError: true);
       throw TimeoutException('Request timeout. Please try again.');
     } catch (e) {
+      LoggerService.log('API PUT ERR: $e', isError: true);
       rethrow;
     }
   }
@@ -202,9 +246,11 @@ class ApiService {
     bool includeAuth = true,
   }) async {
     try {
+      final uri = _buildUri(endpoint);
+      LoggerService.log('API PATCH: $uri');
       final response = await http
           .patch(
-            _buildUri(endpoint),
+            uri,
             headers: _buildHeaders(includeAuth: includeAuth),
             body: jsonEncode(body),
           )
@@ -214,37 +260,39 @@ class ApiService {
           );
 
       return _handleResponse(response);
-    } on SocketException {
+    } on SocketException catch (e) {
+      LoggerService.log('API PATCH ERR: SocketException - $e', isError: true);
       throw NetworkException('No internet connection');
-    } on TimeoutException {
+    } on TimeoutException catch (e) {
+      LoggerService.log('API PATCH ERR: Timeout - $e', isError: true);
       throw TimeoutException('Request timeout. Please try again.');
     } catch (e) {
+      LoggerService.log('API PATCH ERR: $e', isError: true);
       rethrow;
     }
   }
 
   /// DELETE request
-  Future<dynamic> delete(
-    String endpoint, {
-    bool includeAuth = true,
-  }) async {
+  Future<dynamic> delete(String endpoint, {bool includeAuth = true}) async {
     try {
+      final uri = _buildUri(endpoint);
+      LoggerService.log('API DELETE: $uri');
       final response = await http
-          .delete(
-            _buildUri(endpoint),
-            headers: _buildHeaders(includeAuth: includeAuth),
-          )
+          .delete(uri, headers: _buildHeaders(includeAuth: includeAuth))
           .timeout(
             const Duration(milliseconds: ApiConstants.requestTimeout),
             onTimeout: () => throw TimeoutException('Request timeout'),
           );
 
       return _handleResponse(response);
-    } on SocketException {
+    } on SocketException catch (e) {
+      LoggerService.log('API DELETE ERR: SocketException - $e', isError: true);
       throw NetworkException('No internet connection');
-    } on TimeoutException {
+    } on TimeoutException catch (e) {
+      LoggerService.log('API DELETE ERR: Timeout - $e', isError: true);
       throw TimeoutException('Request timeout. Please try again.');
     } catch (e) {
+      LoggerService.log('API DELETE ERR: $e', isError: true);
       rethrow;
     }
   }
@@ -264,22 +312,16 @@ class ApiService {
         case 201:
           return data;
         case 400:
-          throw BadRequestException(
-            _extractMessage(data, 'Bad request'),
-          );
+          throw BadRequestException(_extractMessage(data, 'Bad request'));
         case 401:
           clearToken(); // clear persisted session on auth failure
           throw UnauthorizedException(
             _extractMessage(data, 'Unauthorized. Please login again.'),
           );
         case 403:
-          throw ForbiddenException(
-            _extractMessage(data, 'Access forbidden'),
-          );
+          throw ForbiddenException(_extractMessage(data, 'Access forbidden'));
         case 404:
-          throw NotFoundException(
-            _extractMessage(data, 'Resource not found'),
-          );
+          throw NotFoundException(_extractMessage(data, 'Resource not found'));
         case 500:
           throw ServerException(
             _extractMessage(data, 'Server error. Please try again later.'),
@@ -292,7 +334,9 @@ class ApiService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         return response.body;
       }
-      throw Exception('Invalid server response (status ${response.statusCode})');
+      throw Exception(
+        'Invalid server response (status ${response.statusCode})',
+      );
     } catch (e) {
       rethrow;
     }
@@ -300,7 +344,8 @@ class ApiService {
 
   String _extractMessage(dynamic data, String fallback) {
     if (data is Map) {
-      return (data['detail'] ?? data['error'] ?? data['message'] ?? fallback).toString();
+      return (data['detail'] ?? data['error'] ?? data['message'] ?? fallback)
+          .toString();
     }
     return fallback;
   }

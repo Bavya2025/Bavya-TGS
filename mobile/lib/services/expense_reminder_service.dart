@@ -2,34 +2,42 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/trip_model.dart';
 
 class ExpenseReminderService {
-  static final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  static final FlutterLocalNotificationsPlugin _notificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
   static const String _channelId = 'trip_expense_reminder_channel';
   static const String _channelName = 'Trip Expense Reminders';
-  static const String _channelDescription = 'Reminds users to fill daily trip expenses at 3 PM.';
+  static const String _channelDescription =
+      'Reminds users to fill daily trip expenses at 3 PM.';
   static const String _storedIdsKey = 'trip_expense_reminder_ids';
   static const String _sentCatchupKey = 'trip_expense_catchup_sent_keys';
-  static const String _submissionReminderIdsKey = 'trip_submission_reminder_ids';
+  static const String _submissionReminderIdsKey =
+      'trip_submission_reminder_ids';
 
   static bool _initialized = false;
 
   static Future<void> initialize() async {
     if (_initialized) return;
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const settings = InitializationSettings(android: androidSettings);
     await _notificationsPlugin.initialize(settings);
 
-    final androidImpl = _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final androidImpl = _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     await androidImpl?.requestNotificationsPermission();
 
-    tz.initializeTimeZones();
+    tz_data.initializeTimeZones();
     try {
       final localTimeZone = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(localTimeZone));
@@ -45,12 +53,18 @@ class ExpenseReminderService {
       await initialize();
     }
 
-    final androidImpl = _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final androidImpl = _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     final enabled = await androidImpl?.areNotificationsEnabled() ?? true;
     if (!enabled) {
-      final granted = await androidImpl?.requestNotificationsPermission() ?? false;
+      final granted =
+          await androidImpl?.requestNotificationsPermission() ?? false;
       if (!granted) {
-        debugPrint('Expense reminders skipped: notification permission not granted.');
+        debugPrint(
+          'Expense reminders skipped: notification permission not granted.',
+        );
         return;
       }
     }
@@ -111,7 +125,8 @@ class ExpenseReminderService {
             ),
           ),
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
           payload: 'date:$dateKey',
         );
       } else if (_isSameDay(date, today)) {
@@ -188,7 +203,10 @@ class ExpenseReminderService {
 
   static Future<void> _storeReminderIds(List<int> ids) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_storedIdsKey, ids.map((e) => e.toString()).toList());
+    await prefs.setStringList(
+      _storedIdsKey,
+      ids.map((e) => e.toString()).toList(),
+    );
   }
 
   static Future<Set<String>> _getSentCatchupKeys() async {
@@ -207,30 +225,40 @@ class ExpenseReminderService {
     if (!_initialized) await initialize();
 
     final mode = travelMode.toLowerCase();
-    
+
     String title;
     String body;
     String bigText;
 
     // Professional English applied to the requested messages:
     // Bike / 2-Wheeler
-    if (mode.contains('bike') || mode.contains('2 wheeler') || mode.contains('two wheeler') || mode == '2wheeler') {
+    if (mode.contains('bike') ||
+        mode.contains('2 wheeler') ||
+        mode.contains('two wheeler') ||
+        mode == '2wheeler') {
       title = '🪖 Safety Protocol: Two-Wheeler';
-      body = 'Kindly wear your helmet and drive safely.'; 
-      bigText = 'Safety Awareness: For your protection, please ensure your helmet is securely fastened before commencing your journey. Drive responsibly and stay safe.';
+      body = 'Kindly wear your helmet and drive safely.';
+      bigText =
+          'Safety Awareness: For your protection, please ensure your helmet is securely fastened before commencing your journey. Drive responsibly and stay safe.';
     }
     // Car / 4-Wheeler / Local Conveyance
-    else if (mode.contains('car') || mode.contains('4 wheeler') || mode.contains('four wheeler') ||
-        mode.contains('cab') || mode.contains('taxi') || mode.contains('conveyance')) {
+    else if (mode.contains('car') ||
+        mode.contains('4 wheeler') ||
+        mode.contains('four wheeler') ||
+        mode.contains('cab') ||
+        mode.contains('taxi') ||
+        mode.contains('conveyance')) {
       title = '🚗 Safety Protocol: Vehicle';
       body = 'Kindly wear your seat belt and drive safely.';
-      bigText = 'Safety Awareness: For your protection, please ensure your seat belt is securely fastened before commencing your journey. Drive responsibly and stay safe.';
+      bigText =
+          'Safety Awareness: For your protection, please ensure your seat belt is securely fastened before commencing your journey. Drive responsibly and stay safe.';
     }
     // General Travel
     else {
       title = '🛡️ Safe Journey';
       body = 'Kindly maintain safety standards and drive safely.';
-      bigText = 'Your journey has commenced. Please adhere to all safety regulations and proceed with caution. Wishing you a safe and professional travel experience.';
+      bigText =
+          'Your journey has commenced. Please adhere to all safety regulations and proceed with caution. Wishing you a safe and professional travel experience.';
     }
 
     final androidDetails = AndroidNotificationDetails(
@@ -256,16 +284,22 @@ class ExpenseReminderService {
   }
 
   /// Schedules a reminder 22 hours after end odo is captured, prompting submission before the 24h limit.
-  static Future<void> scheduleSubmissionReminder(String expenseId, String location) async {
+  static Future<void> scheduleSubmissionReminder(
+    String expenseId,
+    String location,
+  ) async {
     if (!_initialized) await initialize();
 
     final reminderId = _buildSubmissionReminderId(expenseId);
-    final scheduledTime = tz.TZDateTime.now(tz.local).add(const Duration(hours: 22));
+    final scheduledTime = tz.TZDateTime.now(
+      tz.local,
+    ).add(const Duration(hours: 22));
 
     const androidDetails = AndroidNotificationDetails(
       'submission_deadline_channel',
       'Submission Deadlines',
-      channelDescription: 'Reminds users to submit expenses before the 24h window closes.',
+      channelDescription:
+          'Reminds users to submit expenses before the 24h window closes.',
       importance: Importance.max,
       priority: Priority.high,
       icon: '@mipmap/ic_launcher',
@@ -280,11 +314,14 @@ class ExpenseReminderService {
       scheduledTime,
       const NotificationDetails(android: androidDetails),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
       payload: 'submission_reminder:$expenseId',
     );
 
-    debugPrint('Scheduled submission reminder for expense $expenseId at $scheduledTime');
+    debugPrint(
+      'Scheduled submission reminder for expense $expenseId at $scheduledTime',
+    );
   }
 
   /// Cancels a pending submission reminder. Call this when "FINISH & SUBMIT" is clicked.

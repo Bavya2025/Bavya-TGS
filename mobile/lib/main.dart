@@ -5,36 +5,48 @@ import 'services/expense_reminder_service.dart';
 import 'screens/splash_screen.dart';
 import 'services/location_tracking_service.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+import 'package:flutter/foundation.dart';
+import 'services/logger_service.dart';
 
-  // Move background initialization later to avoid debugger handshake issues
-  Future.delayed(const Duration(milliseconds: 500), () async {
-    try {
-      debugPrint('BOOTSTRAP: Initializing Location Service...');
-      await LocationTrackingService.initializeService();
-      debugPrint('BOOTSTRAP: Location Service Configured.');
-    } catch (e) {
-      debugPrint('BOOTSTRAP: Location Service Init Error: $e');
-    }
-  });
+void main() async {
+  // 1. Setup Early Global Error Handling
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    LoggerService.log(
+      'FLUTTER ERROR: ${details.exceptionAsString()}\nSTACK: ${details.stack}',
+      isError: true,
+    );
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    LoggerService.log('PLATFORM ERROR: $error\nSTACK: $stack', isError: true);
+    return true;
+  };
+
+  WidgetsFlutterBinding.ensureInitialized();
+  LoggerService.log('APP STARTING: Manual Boot sequence init.');
 
   try {
-    debugPrint('BOOTSTRAP: Restoring session...');
-    await ApiService.loadSession();
-    debugPrint('BOOTSTRAP: Session restored.');
-    // Delayed initialization to prevent startup congestion
-    Future.delayed(const Duration(milliseconds: 1510), () async {
-      debugPrint('BOOTSTRAP: Initializing Expense Reminders...');
-      try {
-        await ExpenseReminderService.initialize();
-        debugPrint('BOOTSTRAP: Expense Reminders Ready.');
-      } catch (e) {
-        debugPrint('BOOTSTRAP: Expense Reminder Error: $e');
-      }
-    });
+    LoggerService.log('BOOTSTRAP: Initializing Location Service...');
+    await LocationTrackingService.initializeService();
+    LoggerService.log('BOOTSTRAP: Location Service Configured.');
   } catch (e) {
-    debugPrint('BOOTSTRAP: Initialization Error: $e');
+    LoggerService.log(
+      'BOOTSTRAP: Location Service Init Error: $e',
+      isError: true,
+    );
+  }
+
+  try {
+    LoggerService.log('BOOTSTRAP: Restoring session...');
+    await ApiService.loadSession();
+    LoggerService.log('BOOTSTRAP: Session restored.');
+
+    LoggerService.log('BOOTSTRAP: Initializing Expense Reminders...');
+    await ExpenseReminderService.initialize();
+    LoggerService.log('BOOTSTRAP: Expense Reminders Ready.');
+  } catch (e) {
+    LoggerService.log('BOOTSTRAP: Initialization Error: $e', isError: true);
   }
 
   runApp(const MyApp());

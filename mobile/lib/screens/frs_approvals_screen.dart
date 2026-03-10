@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/frs_service.dart';
-import '../constants/api_constants.dart';
+import '../components/responsive_image.dart';
 
 class FrsApprovalsScreen extends StatefulWidget {
   const FrsApprovalsScreen({super.key});
@@ -264,13 +264,7 @@ class _FrsApprovalsScreenState extends State<FrsApprovalsScreen> {
   }
 
   Widget _buildApprovalItem(Map<String, dynamic> request) {
-    String photoUrl = request['photo_url'] ?? '';
-    if (photoUrl.startsWith('/')) {
-      // Handle relative path from Django if baseUrl doesn't include it
-      String base = ApiConstants.baseUrl;
-      if (base.endsWith('/')) base = base.substring(0, base.length - 1);
-      photoUrl = "$base$photoUrl";
-    }
+    String? photoData = request['photo_url'];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -352,46 +346,12 @@ class _FrsApprovalsScreenState extends State<FrsApprovalsScreen> {
           const SizedBox(height: 24),
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
-            child: photoUrl.isNotEmpty
-                ? Image.network(
-                    photoUrl,
-                    height: 200,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      height: 200,
-                      width: double.infinity,
-                      color: const Color(0xFFF8FAFC),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.broken_image_outlined,
-                            color: Color(0xFF94A3B8),
-                            size: 40,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Photo Load Failed',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              color: const Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : Container(
-                    height: 200,
-                    width: double.infinity,
-                    color: const Color(0xFFF8FAFC),
-                    child: const Icon(
-                      Icons.person,
-                      size: 60,
-                      color: Color(0xFF94A3B8),
-                    ),
-                  ),
+            child: ResponsiveImage(
+              imageData: photoData,
+              height: 200,
+              width: double.infinity,
+              fit: BoxFit.cover,
+            ),
           ),
           const SizedBox(height: 20),
           Container(

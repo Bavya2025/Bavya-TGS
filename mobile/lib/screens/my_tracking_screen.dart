@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/trip_service.dart';
 import '../models/trip_model.dart';
+import 'package:intl/intl.dart';
 
 class MyTrackingScreen extends StatefulWidget {
   const MyTrackingScreen({super.key});
@@ -29,17 +30,29 @@ class _MyTrackingScreenState extends State<MyTrackingScreen> {
 
       Trip? activeMatch;
       for (var t in allTrips) {
-        final status = t.status.toLowerCase();
-        if (status == 'on-going' || status == 'ongoing') {
+        final rawStatus = t.status.trim().toLowerCase();
+        final status = rawStatus.replaceAll(' ', '').replaceAll('-', '');
+
+        if (status == 'ongoing' ||
+            status == 'inprogress' ||
+            status == 'started') {
           activeMatch = t;
           break;
         }
+
         if (status == 'approved') {
           try {
-            final startDate = DateTime.parse(t.startDate);
-            final endDate = DateTime.parse(
-              t.endDate,
-            ).add(const Duration(days: 1));
+            DateTime parseDate(String dateStr) {
+              try {
+                return DateTime.parse(dateStr);
+              } catch (_) {
+                return DateFormat('MMM dd, yyyy').parse(dateStr);
+              }
+            }
+
+            final startDate = parseDate(t.startDate);
+            final endDate = parseDate(t.endDate).add(const Duration(days: 1));
+
             if (now.isAfter(startDate) && now.isBefore(endDate)) {
               activeMatch = t;
               break;

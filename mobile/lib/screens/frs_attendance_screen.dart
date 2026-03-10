@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/frs_service.dart';
+import '../services/api_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'frs_enrollment_screen.dart';
 
 class FrsAttendanceScreen extends StatefulWidget {
   const FrsAttendanceScreen({super.key});
@@ -22,6 +24,65 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
   @override
   void initState() {
     super.initState();
+    _checkEnrollmentAndInitialize();
+  }
+
+  Future<void> _checkEnrollmentAndInitialize() async {
+    final apiService = ApiService();
+    final user = apiService.getUser();
+
+    if (user == null || user['is_face_enrolled'] != true) {
+      // Not enrolled, wait for frame then show dialog
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                SizedBox(width: 10),
+                Text('Face Not Registered'),
+              ],
+            ),
+            content: const Text(
+              'You must register your face once before you can mark attendance. Would you like to register now?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context), // Back
+                child: const Text('BACK'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context); // Close dialog
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const FrsEnrollmentScreen(),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFBB0633),
+                ),
+                child: const Text(
+                  'REGISTER NOW',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ).then((_) {
+          if (mounted && (user == null || user['is_face_enrolled'] != true)) {
+            // If they just closed it without navigating, go back
+            Navigator.of(context).pop();
+          }
+        });
+      });
+      return;
+    }
+
     _initializeCamera();
   }
 
@@ -55,7 +116,10 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
   }
 
   Future<void> _markAttendance() async {
-    if (_controller == null || !_controller!.value.isInitialized || _isCapturing) return;
+    if (_controller == null ||
+        !_controller!.value.isInitialized ||
+        _isCapturing)
+      return;
 
     setState(() {
       _isCapturing = true;
@@ -69,7 +133,7 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
           throw 'Location permissions are denied';
         }
       }
-      
+
       if (permission == LocationPermission.deniedForever) {
         throw 'Location permissions are permanently denied, we cannot request permissions.';
       }
@@ -77,8 +141,9 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.medium,
       );
-      
-      String address = "Coordinates: ${position.latitude}, ${position.longitude}";
+
+      String address =
+          "Coordinates: ${position.latitude}, ${position.longitude}";
       try {
         List<Placemark> placemarks = await placemarkFromCoordinates(
           position.latitude,
@@ -86,32 +151,40 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
         );
         if (placemarks.isNotEmpty) {
           Placemark place = placemarks[0];
-          address = "${place.street}, ${place.locality}, ${place.administrativeArea}";
+          address =
+              "${place.street}, ${place.locality}, ${place.administrativeArea}";
         }
       } catch (e) {
         debugPrint('Geocoding failed: $e');
       }
 
       final image = await _controller!.takePicture();
-      
+
       final response = await _frsService.verifyFace(
         image,
         lat: position.latitude,
         lng: position.longitude,
         address: address,
       );
-      
+
       if (mounted) {
         if (response['match'] == true) {
           showDialog(
             context: context,
             barrierDismissible: false,
             builder: (context) => AlertDialog(
-              title: const Icon(Icons.check_circle, color: Colors.green, size: 60),
+              title: const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 60,
+              ),
               content: Text(
                 response['message'] ?? 'Attendance Request Sent Successfully!',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               actions: [
                 Center(
@@ -120,10 +193,15 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                       Navigator.of(context).pop();
                       Navigator.of(context).pop(true);
                     },
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                    child: const Text('OK', style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                    ),
+                    child: const Text(
+                      'OK',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
-                )
+                ),
               ],
             ),
           );
@@ -135,18 +213,26 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
         if (errorMsg.contains('mismatch') || errorMsg.contains('detected')) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(errorMsg.contains('detected') ? errorMsg : 'Face Mismatch! Please ensure you are the registered user.'),
+              content: Text(
+                errorMsg.contains('detected')
+                    ? errorMsg
+                    : 'Face Mismatch! Please ensure you are the registered user.',
+              ),
               backgroundColor: Colors.orange,
             ),
           );
-        } else if (errorMsg.contains('Location') || errorMsg.contains('denied')) {
+        } else if (errorMsg.contains('Location') ||
+            errorMsg.contains('denied')) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('GPS Error: $errorMsg. Please enable location services.'),
+              content: Text(
+                'GPS Error: $errorMsg. Please enable location services.',
+              ),
               backgroundColor: Colors.red,
             ),
           );
-        } else if (errorMsg.contains('403') || errorMsg.contains('Unauthorized')) {
+        } else if (errorMsg.contains('403') ||
+            errorMsg.contains('Unauthorized')) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Session expired. Please log in again.'),
@@ -156,7 +242,9 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
         } else if (errorMsg.contains('permission')) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Permission denied by server. Please contact admin.'),
+              content: Text(
+                'Permission denied by server. Please contact admin.',
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -180,7 +268,9 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
     if (!_isInitialized) {
       return const Scaffold(
         backgroundColor: Colors.white,
-        body: Center(child: CircularProgressIndicator(color: Color(0xFFBB0633))),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFFBB0633)),
+        ),
       );
     }
 
@@ -196,7 +286,10 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
               height: 400,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  colors: [const Color(0xFFA9052E).withOpacity(0.04), Colors.transparent],
+                  colors: [
+                    const Color(0xFFA9052E).withOpacity(0.04),
+                    Colors.transparent,
+                  ],
                 ),
                 shape: BoxShape.circle,
               ),
@@ -210,7 +303,10 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
               height: 450,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  colors: [const Color(0xFF3B82F6).withOpacity(0.03), Colors.transparent],
+                  colors: [
+                    const Color(0xFF3B82F6).withOpacity(0.03),
+                    Colors.transparent,
+                  ],
                 ),
                 shape: BoxShape.circle,
               ),
@@ -271,7 +367,10 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                           height: MediaQuery.of(context).size.width * 0.75,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFFBB0633), width: 3),
+                            border: Border.all(
+                              color: const Color(0xFFBB0633),
+                              width: 3,
+                            ),
                             boxShadow: [
                               BoxShadow(
                                 color: const Color(0xFFBB0633).withOpacity(0.2),
@@ -299,21 +398,35 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                             backgroundColor: const Color(0xFF0F1E2A),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 20),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
                             elevation: 8,
-                            shadowColor: const Color(0xFF0F1E2A).withOpacity(0.4),
+                            shadowColor: const Color(
+                              0xFF0F1E2A,
+                            ).withOpacity(0.4),
                           ),
-                          child: _isCapturing 
-                              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                          child: _isCapturing
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 3,
+                                  ),
+                                )
                               : Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.verified_user_rounded, size: 20),
+                                    const Icon(
+                                      Icons.verified_user_rounded,
+                                      size: 20,
+                                    ),
                                     const SizedBox(width: 12),
                                     Text(
                                       'VERIFY IDENTITY',
                                       style: GoogleFonts.plusJakartaSans(
-                                        fontSize: 14, 
+                                        fontSize: 14,
                                         fontWeight: FontWeight.w800,
                                         letterSpacing: 0.5,
                                       ),
@@ -364,7 +477,11 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                     onPressed: () => Navigator.pop(context),
                   ),
                   const SizedBox(width: 8),
@@ -374,7 +491,11 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(Icons.face_unlock_rounded, color: Colors.white, size: 24),
+                    child: const Icon(
+                      Icons.face_unlock_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(

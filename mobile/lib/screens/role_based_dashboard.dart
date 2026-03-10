@@ -10,7 +10,6 @@ import '../services/location_tracking_service.dart';
 import '../services/trip_service.dart';
 import '../services/expense_reminder_service.dart';
 import 'notifications_screen.dart';
-import 'team_trip_details_screen.dart';
 import 'frs_attendance_screen.dart';
 import 'frs_enrollment_screen.dart';
 import 'profile_page.dart';
@@ -51,16 +50,53 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   Map<String, dynamic>? _dashboardStats;
   bool _isLoadingStats = true;
   String? _empId;
+  late String _refinedRole;
 
   @override
   void initState() {
     super.initState();
-    _initializeModules();
-    _fetchNotifications();
-    _syncExpenseReminders();
-    LocationTrackingService.syncTrackingWithTrips();
-    _checkFrsStatus();
-    _fetchDashboardData();
+    _initializeSafe();
+  }
+
+  Future<void> _initializeSafe() async {
+    try {
+      _initializeModules();
+    } catch (e) {
+      debugPrint('INIT_SAFE_MODULES: $e');
+    }
+
+    try {
+      _fetchNotifications();
+    } catch (e) {
+      debugPrint('INIT_SAFE_NOTIFS: $e');
+    }
+
+    try {
+      _syncExpenseReminders();
+    } catch (e) {
+      debugPrint('INIT_SAFE_REMINDERS: $e');
+    }
+
+    // Move location sync to after the tree is built to avoid startup crashes
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await LocationTrackingService.syncTrackingWithTrips();
+      } catch (e) {
+        debugPrint('INIT_SAFE_LOCATION: $e');
+      }
+    });
+
+    try {
+      _checkFrsStatus();
+    } catch (e) {
+      debugPrint('INIT_SAFE_FRS: $e');
+    }
+
+    try {
+      _fetchDashboardData();
+    } catch (e) {
+      debugPrint('INIT_SAFE_DATA: $e');
+    }
   }
 
   Future<void> _fetchDashboardData() async {
@@ -148,14 +184,42 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   int get _unreadCount => _notifications.where((n) => n.unread).length;
 
   void _initializeModules() {
-    _mainModules = ModuleConstants.getModulesForRole(
+    final user = _apiService.getUser();
+    final dept = user?['department']?.toString();
+    final desig = user?['designation']?.toString();
+
+    _refinedRole = ModuleConstants.normalizeRole(
       widget.userRole,
-      mainOnly: true,
+      dept: dept,
+      desig: desig,
     );
-    _managementModules = ModuleConstants.getModulesForRole(
-      widget.userRole,
-      mainOnly: false,
-    );
+
+    final allModules = ModuleConstants.getModulesForRole(_refinedRole);
+
+    // Filter main vs management modules based on titles to preserve UI layout
+    _mainModules = allModules
+        .where(
+          (m) =>
+              m.title == 'Trips' ||
+              m.title == 'My Requests' ||
+              m.title == 'FRS Attendance' ||
+              m.title == 'My Tracking' ||
+              m.title == 'FRS Requests' ||
+              m.title == 'Location Tracking',
+        )
+        .toList();
+
+    _managementModules = allModules
+        .where(
+          (m) =>
+              m.title != 'Trips' &&
+              m.title != 'My Requests' &&
+              m.title != 'FRS Attendance' &&
+              m.title != 'My Tracking' &&
+              m.title != 'Location Tracking' &&
+              m.title != 'FRS Requests',
+        )
+        .toList();
   }
 
   bool _isNavigating = false;
@@ -407,92 +471,29 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                   _buildExpenditureMix(),
                 ],
 
-                if (ModuleConstants.isManagementRole(widget.userRole)) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-                    child: Text(
-                      'TEAM SUPERVISION',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0F172A),
-                        letterSpacing: 1.2,
-                      ),
+                // Modules will be shown in ALL SERVICES grid below instead of dedicated header buttons
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                  child: Text(
+                    'ALL SERVICES',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF94A3B8),
+                      letterSpacing: 1.2,
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _buildHeaderBtn(
-                      'Location Tracking',
-                      Icons.gps_fixed_rounded,
-                      const Color(0xFF0F1E2A),
-                      () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const TeamTripDetailsScreen(),
-                          ),
-                        );
-                      },
-                    ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
                   ),
-                ],
-
-                if (_mainModules.isNotEmpty) ...[
-                  if (_mainModules.any((m) => m.title == 'FRS Requests') &&
-                      ModuleConstants.isManagementRole(widget.userRole)) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-                      child: Text(
-                        'BIOMETRIC GOVERNANCE',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFFBB0633),
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: _buildModulesGrid(
-                        _mainModules
-                            .where((m) => m.title == 'FRS Requests')
-                            .toList(),
-                      ),
-                    ),
-                  ],
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-                    child: Text(
-                      'ALL SERVICES',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF94A3B8),
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 8,
-                    ),
-                    child: _buildModulesGrid([
-                      // Only show FRS Requests here if we are NOT showing it in the Hub above
-                      ..._mainModules.where((m) {
-                        if (m.title == 'FRS Requests') {
-                          return !ModuleConstants.isManagementRole(
-                            widget.userRole,
-                          );
-                        }
-                        return true;
-                      }),
-                      ..._managementModules,
-                    ]),
-                  ),
-                ],
+                  child: _buildModulesGrid([
+                    ..._mainModules,
+                    ..._managementModules,
+                  ]),
+                ),
                 const SizedBox(height: 100),
               ],
             ),
@@ -551,29 +552,23 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
             ),
           ),
           // Relocated Face Registration icon to the right of welcome message
-          GestureDetector(
-            onTap: () => _isFaceEnrolled ? {} : _enrollFRS(),
-            child: Stack(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: _isFaceEnrolled
-                        ? const Color(0xFF10B981).withOpacity(0.1)
-                        : const Color(0xFFBB0633).withOpacity(0.1),
-                    shape: BoxShape.circle,
+          if (!_isFaceEnrolled)
+            GestureDetector(
+              onTap: _enrollFRS,
+              child: Stack(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFBB0633).withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.face_retouching_natural,
+                      color: Color(0xFFBB0633),
+                      size: 28,
+                    ),
                   ),
-                  child: Icon(
-                    _isFaceEnrolled
-                        ? Icons.face_rounded
-                        : Icons.face_retouching_natural,
-                    color: _isFaceEnrolled
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFFBB0633),
-                    size: 28,
-                  ),
-                ),
-                if (!_isFaceEnrolled)
                   Positioned(
                     right: 0,
                     top: 0,
@@ -586,9 +581,9 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                       ),
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -802,7 +797,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
-                                  kpi['title'].toUpperCase(),
+                                  (kpi['title'] ?? '').toString().toUpperCase(),
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 9,
                                     fontWeight: FontWeight.w800,
@@ -814,7 +809,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  kpi['value'],
+                                  (kpi['value'] ?? '').toString(),
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 24,
                                     fontWeight: FontWeight.w900,
@@ -824,7 +819,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  kpi['label'],
+                                  (kpi['label'] ?? '').toString(),
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w700,
@@ -934,7 +929,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          item['title'],
+                          (item['title'] ?? '').toString(),
                           style: GoogleFonts.inter(
                             fontWeight: FontWeight.w800,
                             color: const Color(0xFF0F172A),
@@ -942,7 +937,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                           ),
                         ),
                         Text(
-                          item['subtitle'],
+                          (item['subtitle'] ?? '').toString(),
                           style: GoogleFonts.inter(
                             color: const Color(0xFF64748B),
                             fontSize: 11,
@@ -957,7 +952,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        item['amount'],
+                        (item['amount'] ?? '').toString(),
                         style: GoogleFonts.inter(
                           fontWeight: FontWeight.w900,
                           color: const Color(0xFF0F172A),
@@ -972,16 +967,18 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                         ),
                         decoration: BoxDecoration(
                           color: _getStatusColor(
-                            item['status'],
+                            (item['status'] ?? '').toString(),
                           ).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          item['status'].toUpperCase(),
+                          (item['status'] ?? '').toString().toUpperCase(),
                           style: GoogleFonts.inter(
                             fontSize: 8,
                             fontWeight: FontWeight.w900,
-                            color: _getStatusColor(item['status']),
+                            color: _getStatusColor(
+                              (item['status'] ?? '').toString(),
+                            ),
                           ),
                         ),
                       ),
@@ -995,7 +992,8 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
     );
   }
 
-  Color _getStatusColor(String status) {
+  Color _getStatusColor(String? status) {
+    if (status == null) return const Color(0xFF64748B);
     switch (status.toLowerCase()) {
       case 'approved':
       case 'paid':
@@ -1067,7 +1065,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            "${item['type']} (${(item['percentage'] as num).toStringAsFixed(0)}%)",
+                            "${(item['type'] ?? '').toString()} (${double.tryParse((item['percentage'] ?? 0).toString())?.toStringAsFixed(0) ?? '0'}%)",
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -1075,7 +1073,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                             ),
                           ),
                           Text(
-                            "₹${NumberFormat('#,###').format(item['amount'])}",
+                            "₹${NumberFormat('#,###').format(double.tryParse((item['amount'] ?? 0).toString()) ?? 0)}",
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
@@ -1096,7 +1094,12 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                             ),
                           ),
                           FractionallySizedBox(
-                            widthFactor: (item['percentage'] as num) / 100,
+                            widthFactor:
+                                (double.tryParse(
+                                      (item['percentage'] ?? 0).toString(),
+                                    ) ??
+                                    0) /
+                                100,
                             child: Container(
                               height: 6,
                               decoration: BoxDecoration(
