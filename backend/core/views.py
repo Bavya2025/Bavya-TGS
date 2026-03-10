@@ -1,6 +1,7 @@
 import jwt
 import datetime
 import hashlib
+import base64
 from django.conf import settings
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes, action
@@ -8,12 +9,13 @@ from rest_framework.response import Response
 from rest_framework import status, generics, viewsets
 from rest_framework.permissions import AllowAny
 
-from .models import User, Session, LoginHistory, AuditLog, Notification
+from .models import User, Session, LoginHistory, AuditLog, Notification, FaceRegistrationRequest, AttendanceFRS, PhotoUpdateRequest
 from .permissions import IsCustomAuthenticated, IsAdmin
-from .serializers import NotificationSerializer, AuditLogSerializer, LoginHistorySerializer
+from .serializers import NotificationSerializer, AuditLogSerializer, LoginHistorySerializer, UserSerializer
 from django.db.models import Q
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
+from .frs_util import get_face_encoding_from_image, compare_faces, base64_to_file
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
