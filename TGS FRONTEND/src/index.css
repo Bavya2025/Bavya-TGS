@@ -20565,10 +20565,12 @@ input:checked+.slider:before {
   border-color: #bb0633;
   color: #bb0633;
   background: #fff5f7;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(187, 6, 51, 0.1);
 }
 
 .btn-secondary {
-  background: #475569;
+  background: #1e293b;
   border: none;
   color: white;
   padding: 0.625rem 1.25rem;
@@ -20579,11 +20581,21 @@ input:checked+.slider:before {
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .btn-secondary:hover {
-  background: #1e293b;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: #0f172a;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.2);
 }
+/* --- FINAL PREMIUM OVERRIDES --- */
+.search-box.search-box-premium { min-width: 550px !important; flex: 3 !important; }
+.search-input-premium { width: 100% !important; padding-left: 3rem !important; background: #f8fafc !important; border: 1.5px solid #e2e8f0 !important; border-radius: 12px !important; height: 44px !important; }
+.filter-select.filter-select-premium { max-width: 160px !important; flex: 1 !important; height: 44px !important; }
+.page-container .btn-outline, .page-container .btn-secondary { padding: 0.625rem 1.25rem !important; border-radius: 12px !important; font-weight: 700 !important; font-size: 0.875rem !important; display: flex !important; align-items: center !important; gap: 0.5rem !important; cursor: pointer !important; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important; }
+.page-container .btn-secondary { background: #1e293b !important; color: white !important; border: none !important; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important; }
+.page-container .btn-secondary:hover { background: #0f172a !important; transform: translateY(-2px) !important; box-shadow: 0 8px 16px rgba(15, 23, 42, 0.2) !important; }
+.page-container .btn-outline { background: white !important; border: 1.5px solid #e2e8f0 !important; color: #475569 !important; }
+.page-container .btn-outline:hover { border-color: #bb0633 !important; color: #bb0633 !important; background: #fff5f7 !important; transform: translateY(-2px) !important; box-shadow: 0 4px 12px rgba(187, 6, 51, 0.1) !important; }

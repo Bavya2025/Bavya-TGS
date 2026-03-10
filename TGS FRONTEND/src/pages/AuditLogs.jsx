@@ -48,7 +48,8 @@ const AuditLogs = () => {
                     count: data.count,
                     next: data.next,
                     previous: data.previous,
-                    currentPage: page
+                    currentPage: page,
+                    totalPages: data.total_pages || Math.ceil(data.count / 20)
                 });
             } else {
                 setLogs(data);
@@ -56,7 +57,8 @@ const AuditLogs = () => {
                     count: data.length,
                     next: null,
                     previous: null,
-                    currentPage: 1
+                    currentPage: 1,
+                    totalPages: 1
                 });
             }
         } catch (error) {
@@ -172,7 +174,7 @@ const AuditLogs = () => {
         );
     };
 
-    const totalPages = Math.ceil(pagination.count / 20);
+    const totalPages = pagination.totalPages || Math.ceil(pagination.count / 20);
 
     return (
         <div className="page-container animate-fade-in">
@@ -194,25 +196,25 @@ const AuditLogs = () => {
             </header>
 
             <div className="filters-bar premium-shadow">
-                <div className="filters-grid">
-                    <div className="search-box">
+                <div className="flex items-center gap-4 px-6 py-4 overflow-x-auto no-scrollbar">
+                    <div className="search-box search-box-premium">
                         <Search size={18} />
                         <input
                             type="text"
                             placeholder="Search logs..."
                             value={filters.search}
                             onChange={handleSearchChange}
+                            className="search-input-premium"
                         />
                     </div>
 
-                    <div className="filter-group">
+                    <div className="filter-group whitespace-nowrap">
                         <Calendar size={16} />
                         <input
                             type="date"
                             value={filters.startDate}
                             onChange={e => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
                             className="filter-date"
-                            placeholder="Start Date"
                         />
                         <span>to</span>
                         <input
@@ -220,14 +222,13 @@ const AuditLogs = () => {
                             value={filters.endDate}
                             onChange={e => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
                             className="filter-date"
-                            placeholder="End Date"
                         />
                     </div>
 
                     <select
                         value={filters.action}
                         onChange={e => setFilters(prev => ({ ...prev, action: e.target.value }))}
-                        className="filter-select"
+                        className="filter-select filter-select-premium text-sm py-2 px-3 rounded-xl border-1.5 border-gray-200 focus:border-burgundy outline-none transition-all"
                     >
                         <option value="">All Actions</option>
                         <option value="CREATE">Create</option>
@@ -237,7 +238,7 @@ const AuditLogs = () => {
                         <option value="LOGOUT">Logout</option>
                     </select>
 
-                    <button className="text-btn text-xs font-bold uppercase text-slate-400 hover:text-burgundy" onClick={clearFilters}>
+                    <button className="text-btn text-xs font-bold uppercase text-slate-400 hover:text-burgundy whitespace-nowrap" onClick={clearFilters}>
                         Clear Filters
                     </button>
                 </div>
