@@ -165,50 +165,53 @@ class RouteViewSet(viewsets.ModelViewSet):
 
     serializer_class = RouteSerializer
 
-    def resolve_location(self, val):
-        """Resolve a location value to a DB pk. Accepts pk (int), external_id, or name."""
-        if not val:
-            return None
-        val = str(val).strip()
-        # 1. Try by PK
-        if val.isdigit():
-            return Location.objects.filter(pk=val).first()
-        # 2. Try by exact external_id (e.g. "Site-42", "Mandal-7")
-        loc = Location.objects.filter(external_id=val).first()
-        if loc:
-            return loc
-        # 3. Try stripping known prefixes and match by external_id suffix
-        stripped = val.split('-', 1)[-1] if '-' in val else val
-        if stripped.isdigit():
-            loc = Location.objects.filter(external_id__endswith=f"-{stripped}").first()
-            if loc:
-                return loc
-        # 4. Try name match as last resort
-        return Location.objects.filter(name__iexact=val).first()
-
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
         
-        source_val = request.data.get('source')
-        dest_val = request.data.get('destination')
+        # Helper to resolve location from ID (PK or External ID)
+        def resolve_location(val):
+            if not val: return None
+            # If it's a digit, try finding by PK first
+            if str(val).isdigit():
+                loc = Location.objects.filter(pk=val).first()
+                if loc: return loc
+            
+            # Try finding by exact external_id
+            loc = Location.objects.filter(external_id=val).first()
+            if loc: return loc
 
-        source_loc = self.resolve_location(source_val) if source_val else None
-        dest_loc = self.resolve_location(dest_val) if dest_val else None
+            # Try finding by suffix match
+            stripped = str(val).split('-', 1)[-1] if '-' in str(val) else str(val)
+            if stripped.isdigit():
+                loc = Location.objects.filter(external_id__endswith=f"-{stripped}").first()
+                if loc: return loc
+            
+            # If still not found, try a quick sync from the API
+            import time
+            last_sync = getattr(self.__class__, '_last_create_sync', 0)
+            if time.time() - last_sync > 60: # Cooldown
+                from .services import sync_geo_locations
+                sync_geo_locations()
+                setattr(self.__class__, '_last_create_sync', time.time())
+                # Try finding one more time
+                return Location.objects.filter(external_id__endswith=f"-{stripped}").first()
+            
+            return None
 
-        if source_val and not source_loc:
-            return Response(
-                {'source': f'Could not resolve source location: "{source_val}". Please sync the Geo data first.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if dest_val and not dest_loc:
-            return Response(
-                {'destination': f'Could not resolve destination location: "{dest_val}". Please sync the Geo data first.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        source_loc = resolve_location(data.get('source'))
+        dest_loc = resolve_location(data.get('destination'))
 
-        data['source'] = source_loc.pk if source_loc else None
-        data['destination'] = dest_loc.pk if dest_loc else None
+        if source_loc: data['source'] = source_loc.pk
+        if dest_loc: data['destination'] = dest_loc.pk
         
+        # Prevent exact duplicates
+        if source_loc and dest_loc:
+            existing_route = Route.objects.filter(source=source_loc, destination=dest_loc).first()
+            if existing_route:
+                return Response(
+                    {"detail": "A route already exists between these locations. You can configure multiple paths internally."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)

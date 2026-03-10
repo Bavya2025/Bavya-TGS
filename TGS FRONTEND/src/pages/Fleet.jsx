@@ -33,7 +33,7 @@ const Fleet = () => {
     const { user } = useAuth();
 
     const userRole = (user?.role || 'employee').toLowerCase();
-    const isAdmin = userRole === 'admin' || user?.is_superuser || userRole === 'guesthousemanager';
+    const isAdmin = userRole === 'admin' || user?.is_superuser || userRole === 'guesthouse_manager';
 
     const [fleetHubs, setFleetHubs] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -53,12 +53,10 @@ const Fleet = () => {
     const validateItemForm = () => {
         const errors = {};
         if (activeTab === 'vehicles') {
-            const plateRegex = /^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$/;
-            if (!itemFormData.plate_number) {
-                errors.plate_number = "Plate number is required";
-            } else if (!plateRegex.test(itemFormData.plate_number.toUpperCase())) {
-                errors.plate_number = "Format: TG26XT2345 (no spaces)";
+            if (!itemFormData.plate_number || !/^[A-Z]{2}\s\d{2}\s[A-Z]{1,2}\s\d{4}$/.test(itemFormData.plate_number.toUpperCase()) && !/^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$/.test(itemFormData.plate_number.toUpperCase())) {
+                // errors.plate_number = "Format: XX 00 XX 0000"; // Lax validation for now as some might be different
             }
+            if (!itemFormData.plate_number) errors.plate_number = "Plate number is required";
             if (!itemFormData.name) errors.name = "Model name is required";
         } else {
             if (!itemFormData.name || itemFormData.name.length < 3) errors.name = "Name is required";
@@ -303,14 +301,6 @@ const Fleet = () => {
             showToast('Please select a vehicle and dates.', 'error');
             return;
         }
-
-        const start = new Date(assignForm.startDate);
-        const end = new Date(assignForm.endDate);
-        if (end < start) {
-            showToast('End date cannot be before start date', 'warning');
-            return;
-        }
-
         try {
             await api.post(`/api/fleet/vehicles/${assignForm.vehicleId}/bookings/`, {
                 trip: trip.trip_id,
@@ -413,16 +403,7 @@ const Fleet = () => {
 
     const handleHubInputChange = (e) => {
         const { name, value, type, checked } = e.target;
-        let finalValue = type === 'checkbox' ? checked : value;
-
-        // Auto-sanitization
-        if (name === 'pincode') {
-            finalValue = value.replace(/\D/g, '').slice(0, 6);
-        } else if (name === 'latitude' || name === 'longitude') {
-            finalValue = value.replace(/[^0-9.-]/g, '');
-        }
-
-        setHubFormData(prev => ({ ...prev, [name]: finalValue }));
+        setHubFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
 
     const handleEditHub = (hub) => {
@@ -477,17 +458,17 @@ const Fleet = () => {
 
     const handleSaveHub = () => {
         if (!validateHubForm()) return;
-        
+
         const payload = {
-            name: hubFormData.name.trim(),
-            address: hubFormData.address.trim(),
-            location: hubFormData.location ? hubFormData.location.trim() : hubFormData.address.trim(),
+            name: hubFormData.name,
+            address: hubFormData.address,
+            location: hubFormData.location || hubFormData.address,
             pincode: hubFormData.pincode,
             is_active: hubFormData.isActive,
             latitude: hubFormData.latitude || null,
             longitude: hubFormData.longitude || null,
             image: hubFormData.image || null,
-            description: hubFormData.description ? hubFormData.description.trim() : ''
+            description: hubFormData.description || ''
         };
 
         const promise = editingId ? api.put(`/api/fleet/hub/${editingId}/`, payload) : api.post('/api/fleet/hub/', payload);
@@ -500,14 +481,14 @@ const Fleet = () => {
 
     const handleAddItem = () => {
         setEditingItemId(null);
-        setItemFormData({ 
-            name: '', 
-            type: 'sedan', 
-            phone: '', 
-            status: 'Available', 
-            fuel_type: 'diesel', 
-            capacity: 4, 
-            plate_number: '', 
+        setItemFormData({
+            name: '',
+            type: 'sedan',
+            phone: '',
+            status: 'Available',
+            fuel_type: 'diesel',
+            capacity: 4,
+            plate_number: '',
             license_number: '',
             hubId: selectedHub?.id || ''
         });
@@ -521,19 +502,19 @@ const Fleet = () => {
         const isVehicle = activeTab === 'vehicles';
         const endpoint = isVehicle ? 'vehicles' : 'drivers';
         const targetHubId = itemFormData.hubId || selectedHub?.id;
-        
+
         const payload = isVehicle ? {
-            plate_number: itemFormData.plate_number.trim(),
-            model_name: itemFormData.name.trim(),
+            plate_number: itemFormData.plate_number,
+            model_name: itemFormData.name,
             vehicle_type: itemFormData.type,
             fuel_type: itemFormData.fuel_type,
             capacity: parseInt(itemFormData.capacity),
             status: itemFormData.status.toLowerCase(),
             hub: targetHubId
         } : {
-            name: itemFormData.name.trim(),
-            phone: itemFormData.phone.trim(),
-            license_number: itemFormData.license_number.toUpperCase().replace(/[^A-Z0-9]/g, '').trim(),
+            name: itemFormData.name,
+            phone: itemFormData.phone,
+            license_number: itemFormData.license_number,
             status: itemFormData.status,
             hub: targetHubId
         };
@@ -545,7 +526,7 @@ const Fleet = () => {
             await promise;
 
             showToast(editingItemId ? 'Item updated' : 'Added successfully', 'success');
-            
+
             if (selectedHub) {
                 const res = await api.get(`/api/fleet/hub/${selectedHub.id}/`);
                 setSelectedHub(normalizeHub(res.data));
@@ -708,9 +689,8 @@ const Fleet = () => {
             ) : (
                 <>
                     <div className="gh-header-section">
-                        <div className="gh-title-group">
-                            <h1>Fleet Management</h1>
-                            <p>Manage company vehicles and drivers</p>
+                        <div className="header-left">
+                            <h1 className="welcome-text">Fleet Management</h1>
                         </div>
                         <button className="btn-primary" onClick={() => { setEditingId(null); setHubFormData({ name: '', address: '', location: '', pincode: '', isActive: true, latitude: '', longitude: '', image: '', description: '' }); setShowHubModal(true); }}>
                             <Plus size={18} /> Add Fleet Hub
@@ -726,7 +706,7 @@ const Fleet = () => {
                                 <div className="gh-card-map-placeholder">
                                     {hub.image ? <img src={hub.image} alt="Hub" className="gh-card-image" /> : <LocateFixed size={32} className="gh-placeholder-icon" />}
                                     <span className={`status-badge ${hub.isActive ? 'active' : 'inactive'}`}>{hub.isActive ? 'Active' : 'Standby'}</span>
-                                    
+
                                     <div className="card-actions-overlay">
                                         <button className="action-circle-btn edit" onClick={(e) => { e.stopPropagation(); handleEditHub(hub); }} title="Edit Hub">
                                             <Edit size={16} />
@@ -829,15 +809,7 @@ const Fleet = () => {
                                 <>
                                     <div className="form-group">
                                         <label>Plate Number*</label>
-                                        <input 
-                                            className={`input-field ${formErrors.plate_number ? 'error' : ''}`} 
-                                            value={itemFormData.plate_number} 
-                                            onChange={e => setItemFormData({ 
-                                                ...itemFormData, 
-                                                plate_number: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') 
-                                            })} 
-                                            placeholder="e.g. TG26XT2345" 
-                                        />
+                                        <input className={`input-field ${formErrors.plate_number ? 'error' : ''}`} value={itemFormData.plate_number} onChange={e => setItemFormData({ ...itemFormData, plate_number: e.target.value })} placeholder="e.g. TS 09 EA 1234" />
                                         {formErrors.plate_number && <span className="error-text">{formErrors.plate_number}</span>}
                                     </div>
                                     <div className="form-group">
@@ -853,11 +825,6 @@ const Fleet = () => {
                                                 <option value="suv">SUV (6 to 7)</option>
                                                 <option value="pickup">Pickup</option>
                                                 <option value="ambulance">Ambulance</option>
-                                                <option value="van">Van</option>
-                                                <option value="bus">Bus</option>
-                                                <option value="truck">Truck</option>
-                                                <option value="bike">Bike</option>
-                                                <option value="other">Other</option>
                                             </select>
                                         </div>
                                         <div className="form-group" style={{ flex: 1 }}>
@@ -873,21 +840,7 @@ const Fleet = () => {
                                     <div className="form-row">
                                         <div className="form-group" style={{ flex: 1 }}>
                                             <label>Capacity</label>
-                                            <input 
-                                                type="number" 
-                                                className="input-field" 
-                                                value={itemFormData.capacity} 
-                                                onChange={e => {
-                                                    const val = e.target.value.replace(/\D/g, '');
-                                                    const num = parseInt(val);
-                                                    setItemFormData({ 
-                                                        ...itemFormData, 
-                                                        capacity: val === '' ? '' : (num > 20 ? 20 : (num < 1 ? 1 : num)) 
-                                                    });
-                                                }} 
-                                                min={1} 
-                                                max={20} 
-                                            />
+                                            <input type="number" className="input-field" value={itemFormData.capacity} onChange={e => setItemFormData({ ...itemFormData, capacity: e.target.value })} min={1} max={20} />
                                         </div>
                                         <div className="form-group" style={{ flex: 1 }}>
                                             <label>Status</label>
@@ -943,29 +896,12 @@ const Fleet = () => {
                                     </div>
                                     <div className="form-group">
                                         <label>Phone*</label>
-                                        <input 
-                                            className={`input-field ${formErrors.phone ? 'error' : ''}`} 
-                                            value={itemFormData.phone} 
-                                            onChange={e => setItemFormData({ 
-                                                ...itemFormData, 
-                                                phone: e.target.value.replace(/\D/g, '').slice(0, 10) 
-                                            })} 
-                                            maxLength={10} 
-                                            placeholder="10-digit mobile" 
-                                        />
+                                        <input className={`input-field ${formErrors.phone ? 'error' : ''}`} value={itemFormData.phone} onChange={e => setItemFormData({ ...itemFormData, phone: e.target.value })} maxLength={10} placeholder="10-digit mobile" />
                                         {formErrors.phone && <span className="error-text">{formErrors.phone}</span>}
                                     </div>
                                     <div className="form-group">
                                         <label>License Number</label>
-                                        <input 
-                                            className="input-field" 
-                                            value={itemFormData.license_number} 
-                                            onChange={e => setItemFormData({ 
-                                                ...itemFormData, 
-                                                license_number: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') 
-                                            })} 
-                                            placeholder="DL Number" 
-                                        />
+                                        <input className="input-field" value={itemFormData.license_number} onChange={e => setItemFormData({ ...itemFormData, license_number: e.target.value })} placeholder="DL Number" />
                                     </div>
                                     <div className="form-group">
                                         <label>Status</label>

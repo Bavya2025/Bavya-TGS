@@ -9,7 +9,6 @@ TYPE_MAPPING = {
     'states': 'State',
     'districts': 'District',
     'mandals': 'Mandal',
-    'clusters': 'Cluster',
     'metro_polyten_cities': 'Metro City',
     'cities': 'City',
     'towns': 'Town',

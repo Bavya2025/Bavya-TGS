@@ -109,26 +109,6 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
             params['search'] = employee_id_filter
         elif search:
             params['search'] = search
-            
-        # GUARD: Don't call external API for local-only IDs or Management Roles
-        search_term = (employee_id_filter or search or "").lower()
-        
-        # Check against common local ID patterns first (fast check)
-        management_keywords = ['admin', 'guesthousemanager', 'finance', 'cfo']
-        if search_term in management_keywords:
-            return {"count": 0, "results": []}
-
-        # Deep check: see if this ID exists locally with a management role
-        try:
-            from core.models import User
-            memo_user = User.objects.filter(employee_id__iexact=search_term).first()
-            if memo_user:
-                role_name = memo_user.role.name.lower()
-                # We exclude 'hr' and 'employee' here as they might be standard roles 
-                # that actually exist in the external HRMS.
-                if any(kw in role_name for kw in management_keywords) or 'superuser' in role_name:
-                    return {"count": 0, "results": []}
-        except: pass
 
         page_results = []
         total_count = 0
@@ -192,14 +172,10 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
             
             all_results = page_results
 
-        except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout) as e:
-            error_msg = "External Employee API Service is offline or unreachable."
-            print(f"External API Connection failed: {str(e)}")
-            return {"error": error_msg, "status_code": 503, "results": [], "count": 0}
         except requests.exceptions.Timeout as e:
             error_msg = "External Employee API Connection Timed Out. Please try again later."
             print(f"External API Request failed (Timeout): {str(e)}")
-            return {"error": error_msg, "status_code": 408, "results": [], "count": 0}
+            return {"error": error_msg, "status_code": 408}
         except requests.RequestException as e:
             # If it's a 401/403, we should definitely notify the caller
             status_code = getattr(e.response, 'status_code', 'Unknown')
@@ -254,21 +230,6 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
                         if pos_detail:
                             pos_detail['reporting_to'] = resolved_reporting_to
 
-                        # Robust mapping with deep fallbacks (Check pos_detail then top-level detail_data)
-                        dept = pos_detail.get("department_name") or pos_detail.get("department") or \
-                               detail_data.get("department_name") or detail_data.get("department") or \
-                               detail_data.get("dept_name") or detail_data.get("dept") or "N/A"
-                               
-                        sect = pos_detail.get("section_name") or pos_detail.get("section") or \
-                               detail_data.get("section_name") or detail_data.get("section") or \
-                               detail_data.get("sec_name") or detail_data.get("sec") or "N/A"
-                               
-                        proj_n = detail_data.get("project_name") or detail_data.get("project") or \
-                                 detail_data.get("proj_name") or detail_data.get("proj") or "Main Project"
-                                 
-                        proj_c = detail_data.get("project_code") or detail_data.get("project_id") or \
-                                 detail_data.get("proj_code") or detail_data.get("proj_id") or "GENERAL"
-
                         transformed_results.append({
                             "employee": {
                                 "id": detail_data.get("id"),
@@ -284,18 +245,18 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
                             "position": {
                                 "name": pos_detail.get("name"),
                                 "role_name": pos_detail.get("role_name"),
-                                "department": dept,
-                                "section": sect,
+                                "department": pos_detail.get("department_name"),
+                                "section": pos_detail.get("section_name"),
                                 "reporting_to": resolved_reporting_to,
                                 "level_rank": pos_detail.get("level_rank")
                             },
                             "project": {
-                                "name": proj_n,
-                                "code": proj_c
+                                "name": detail_data.get("project_name") or "Main Project",
+                                "code": None
                             },
                             "office": {
-                                "name": pos_detail.get("office_name") or detail_data.get("office_name") or "Head Office",
-                                "level": pos_detail.get("office_level") or detail_data.get("office_level"),
+                                "name": pos_detail.get("office_name") or "Head Office",
+                                "level": pos_detail.get("office_level"),
                                 "geo_location": detail_data.get("location_details", {})
                             },
                             "positions_details": pos_list # Keep for hierarchy properties
@@ -322,15 +283,12 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
                 "position": {
                     "name": pos_info.get("name"),
                     "role_name": pos_info.get("role_name"),
-                    "department": pos_info.get("department_name") or pos_info.get("department") or "N/A",
-                    "section": pos_info.get("section_name") or pos_info.get("section") or "N/A",
+                    "department": pos_info.get("department_name") or pos_info.get("department"),
+                    "section": pos_info.get("section_name") or pos_info.get("section"),
                     "reporting_to": pos_info.get("reporting_to", []),
                     "level_rank": pos_info.get("level_rank")
                 },
-                "project": {
-                    "name": proj_info.get("name") or proj_info.get("project_name") or "Main Project",
-                    "code": proj_info.get("code") or proj_info.get("project_code") or "GENERAL"
-                },
+                "project": proj_info,
                 "office": {
                     "name": off_info.get("name") or off_info.get("office_name"),
                     "level": off_info.get("level") or off_info.get("office_level"),

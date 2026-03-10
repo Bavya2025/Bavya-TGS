@@ -33,6 +33,8 @@ import LocationCodes from './pages/LocationCodes';
 import HelpSupport from './pages/HelpSupport';
 import Fleet from './pages/Fleet';
 import RouteManagement from './pages/RouteManagement';
+import AdminMasterManagement from './pages/AdminMasterManagement';
+import JobReport from './pages/JobReport';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -81,6 +83,8 @@ function App() {
             <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
             <Route path="/help" element={<ProtectedRoute><HelpSupport /></ProtectedRoute>} />
             <Route path="/route-management" element={<ProtectedRoute><RouteManagement /></ProtectedRoute>} />
+            <Route path="/master-management" element={<ProtectedRoute><AdminMasterManagement /></ProtectedRoute>} />
+            <Route path="/job-report" element={<ProtectedRoute><JobReport /></ProtectedRoute>} />
           </Routes>
         </Router>
       </AuthProvider>

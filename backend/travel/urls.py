@@ -4,7 +4,15 @@ from .views import (
     TripListCreateView, TripDetailView, ExpenseViewSet, TravelClaimViewSet, 
     TravelAdvanceViewSet, TripOdometerViewSet, DashboardStatsView,
     ApprovalsView, ApprovalCountView, TripBookingSearchView, DisputeViewSet,
-    PolicyDocumentViewSet, TripSettlementView, CFOWarRoomView
+    PolicyDocumentViewSet, TripSettlementView, CFOWarRoomView, BulkActivityBatchViewSet,
+    TravelModeMasterViewSet, BookingTypeMasterViewSet, AirlineMasterViewSet,
+    FlightClassMasterSerializer, FlightClassMasterViewSet, TrainClassMasterViewSet, BusOperatorMasterViewSet, BusTypeMasterViewSet,
+    IntercityCabVehicleMasterViewSet, TravelProviderMasterViewSet,
+    TrainProviderMasterViewSet, BusProviderMasterViewSet, IntercityCabProviderMasterViewSet,
+    LocalTravelModeMasterViewSet, LocalCarSubTypeMasterViewSet, LocalBikeSubTypeMasterViewSet,
+    LocalProviderMasterViewSet, StayTypeMasterViewSet, RoomTypeMasterViewSet,
+    MealCategoryMasterViewSet, MealTypeMasterViewSet, IncidentalTypeMasterViewSet,
+    CustomMasterDefinitionViewSet, CustomMasterValueViewSet, MasterModuleViewSet
 )
 from .views_export import ExpenseStatementPDFView, ExpenseStatementExcelView
 
@@ -15,6 +23,44 @@ router.register(r'advances', TravelAdvanceViewSet)
 router.register(r'odometers', TripOdometerViewSet)
 router.register(r'disputes', DisputeViewSet)
 router.register(r'policies', PolicyDocumentViewSet)
+router.register(r'bulk-activities', BulkActivityBatchViewSet)
+
+# Master route registers (Travel)
+router.register(r'travel-mode-masters', TravelModeMasterViewSet)
+router.register(r'booking-type-masters', BookingTypeMasterViewSet)
+router.register(r'airline-masters', AirlineMasterViewSet)
+router.register(r'flight-class-masters', FlightClassMasterViewSet)
+router.register(r'train-class-masters', TrainClassMasterViewSet)
+router.register(r'bus-operator-masters', BusOperatorMasterViewSet)
+router.register(r'bus-type-masters', BusTypeMasterViewSet)
+router.register(r'intercity-cab-vehicle-masters', IntercityCabVehicleMasterViewSet)
+router.register(r'travel-provider-masters', TravelProviderMasterViewSet)
+router.register(r'train-provider-masters', TrainProviderMasterViewSet)
+router.register(r'bus-provider-masters', BusProviderMasterViewSet)
+router.register(r'intercity-cab-provider-masters', IntercityCabProviderMasterViewSet)
+
+# Master route registers (Local)
+router.register(r'local-travel-mode-masters', LocalTravelModeMasterViewSet)
+router.register(r'local-car-subtype-masters', LocalCarSubTypeMasterViewSet)
+router.register(r'local-bike-subtype-masters', LocalBikeSubTypeMasterViewSet)
+router.register(r'local-provider-masters', LocalProviderMasterViewSet)
+
+# Master route registers (Stay)
+router.register(r'stay-type-masters', StayTypeMasterViewSet)
+router.register(r'room-type-masters', RoomTypeMasterViewSet)
+
+# Master route registers (Food)
+router.register(r'meal-category-masters', MealCategoryMasterViewSet)
+router.register(r'meal-type-masters', MealTypeMasterViewSet)
+
+# Master route registers (Incidental)
+router.register(r'incidental-type-masters', IncidentalTypeMasterViewSet)
+
+# Master route registers (Custom/Dynamic)
+router.register(r'master-modules', MasterModuleViewSet)
+router.register(r'custom-master-definitions', CustomMasterDefinitionViewSet)
+router.register(r'custom-master-values', CustomMasterValueViewSet)
+
 
 urlpatterns = [
     path('trips/', TripListCreateView.as_view(), name='trip-list-create'),

@@ -175,7 +175,6 @@ class NotificationViewSet(viewsets.ModelViewSet):
         Notification.objects.filter(user=user, unread=True).update(unread=False)
         return Response({'message': 'All notifications marked as read'})
 
-
 class LoginHistoryView(generics.ListAPIView):
     serializer_class = None # We will use a custom simple serializer or just values
     permission_classes = [IsAdmin]
@@ -229,7 +228,6 @@ class AuditLogView(generics.ListAPIView):
             queryset = queryset.filter(model_name__iexact=model_name)
         if action:
             queryset = queryset.filter(action__iexact=action)
-            
 
             
 class LoginHistoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -238,17 +236,52 @@ class LoginHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_fields = ['user', 'ip_address']
-    search_fields = ['user__employee_id', 'ip_address']
+    search_fields = ['user__employee_id', 'ip_address', 'user__name']
     ordering_fields = ['login_time', 'logout_time']
     ordering = ['-login_time']
 
     def get_queryset(self):
         user = self.request.custom_user
         role_name = (user.role.name if user.role else '').lower()
+        
+        queryset = LoginHistory.objects.all().select_related('user')
+        if role_name not in ['admin', 'cfo', 'hr', 'finance']:
+             queryset = queryset.filter(user=user)
+
+        # Date filtering
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        if start_date:
+            queryset = queryset.filter(login_time__date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(login_time__date__lte=end_date)
             
-        if role_name in ['admin', 'cfo', 'hr', 'finance']:
-             return LoginHistory.objects.all().select_related('user')
-        return LoginHistory.objects.filter(user=user).select_related('user')
+        return queryset
+
+    @action(detail=False, methods=['get'], url_path='export-csv')
+    def export_csv(self, request):
+        import csv
+        from django.http import HttpResponse
+        
+        queryset = self.filter_queryset(self.get_queryset())
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="login_history.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['User', 'Email', 'IP Address', 'Browser', 'Device', 'Login Time', 'Logout Time', 'Status'])
+        
+        for log in queryset:
+            writer.writerow([
+                log.user.name,
+                log.user.email,
+                log.ip_address,
+                log.browser_type,
+                log.device_type,
+                log.login_time,
+                log.logout_time,
+                log.status
+            ])
+        return response
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.all().select_related('user')
@@ -256,7 +289,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_fields = ['user', 'action', 'model_name']
-    search_fields = ['user__employee_id', 'object_repr', 'details']
+    search_fields = ['user__employee_id', 'user__name', 'object_repr', 'details']
     ordering_fields = ['timestamp']
     ordering = ['-timestamp']
 
@@ -264,9 +297,43 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.custom_user
         role_name = (user.role.name if user.role else '').lower()
  
-        if role_name in ['admin', 'cfo', 'finance']:
-             return AuditLog.objects.exclude(action='PAGE_ACCESS').select_related('user')
-        return AuditLog.objects.filter(user=user).exclude(action='PAGE_ACCESS').select_related('user')
+        queryset = AuditLog.objects.exclude(action='PAGE_ACCESS').select_related('user')
+        if role_name not in ['admin', 'cfo', 'finance']:
+             queryset = queryset.filter(user=user)
+
+        # Date filtering
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        if start_date:
+            queryset = queryset.filter(timestamp__date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(timestamp__date__lte=end_date)
+
+        return queryset
+
+    @action(detail=False, methods=['get'], url_path='export-csv')
+    def export_csv(self, request):
+        import csv
+        from django.http import HttpResponse
+        
+        queryset = self.filter_queryset(self.get_queryset())
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="audit_logs.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['Timestamp', 'User', 'Action', 'Model', 'Object ID', 'Object Repr', 'IP Address'])
+        
+        for log in queryset:
+            writer.writerow([
+                log.timestamp,
+                log.user.name if log.user else 'System',
+                log.action,
+                log.model_name,
+                log.object_id,
+                log.object_repr,
+                log.ip_address
+            ])
+        return response
 
 @api_view(['POST'])
 @permission_classes([IsCustomAuthenticated])
