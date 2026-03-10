@@ -56,6 +56,7 @@ const Sidebar = () => {
                 { title: 'My Trips', icon: <Plane size={18} />, path: '/trips', roles: ['employee', 'reporting_authority', 'finance', 'admin'] },
                 { title: 'Trip Planner', icon: <MapPin size={18} />, path: '/planner', roles: ['employee', 'admin'] },
                 { title: 'Mileage Log', icon: <MapPin size={18} />, path: '/mileage', roles: ['employee', 'admin'] },
+                { title: 'Job Report', icon: <ClipboardList size={18} />, path: '/job-report', roles: ['employee', 'reporting_authority', 'admin'] },
                 { title: 'Guest House', icon: <Building2 size={18} />, path: '/guesthouse', roles: ['employee', 'admin'] },
                 { title: 'Fleet Management', icon: <Car size={18} />, path: '/fleet', roles: ['employee', 'admin'] },
             ]
@@ -87,6 +88,7 @@ const Sidebar = () => {
                 { title: 'User Management', icon: <Users size={18} />, path: '/employees', roles: ['admin'] },
                 { title: 'API Management', icon: <Settings size={18} />, path: '/api-management', roles: ['admin'] },
                 { title: 'Route Masters', icon: <MapPin size={18} />, path: '/route-management', roles: ['admin'] },
+                { title: 'Master Management', icon: <Settings size={18} />, path: '/master-management', roles: ['admin'] },
             ]
         }
     ];

@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
-import { Search, Filter, ShieldCheck, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Search, Filter, ShieldCheck, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, Calendar, RefreshCcw } from 'lucide-react';
 
 const LoginHistory = () => {
     const { user } = useAuth();
     const [logs, setLogs] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isExporting, setIsExporting] = useState(false);
     const [expandedRow, setExpandedRow] = useState(null);
     const [pagination, setPagination] = useState({
         count: 0,
@@ -17,6 +18,8 @@ const LoginHistory = () => {
     });
     const [filters, setFilters] = useState({
         search: '',
+        startDate: '',
+        endDate: ''
     });
 
     useEffect(() => {
@@ -28,10 +31,12 @@ const LoginHistory = () => {
         try {
             const params = { page };
             if (filters.search) params.search = filters.search;
-            
+            if (filters.startDate) params.start_date = filters.startDate;
+            if (filters.endDate) params.end_date = filters.endDate;
+
             const response = await api.get('/api/login-history/', { params });
             const data = response.data;
-            
+
             if (data.results) {
                 setLogs(data.results);
                 setPagination({
@@ -60,6 +65,41 @@ const LoginHistory = () => {
         setFilters(prev => ({ ...prev, search: e.target.value }));
     };
 
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const params = new URLSearchParams();
+            if (filters.search) params.append('search', filters.search);
+            if (filters.startDate) params.append('start_date', filters.startDate);
+            if (filters.endDate) params.append('end_date', filters.endDate);
+
+            const response = await api.get(`/api/login-history/export-csv/?${params.toString()}`, {
+                responseType: 'blob'
+            });
+
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `login_history_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            console.error("Export failed:", error);
+            alert("Failed to export logs. Please try again.");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const clearFilters = () => {
+        setFilters({
+            search: '',
+            startDate: '',
+            endDate: ''
+        });
+    };
+
     const totalPages = Math.ceil(pagination.count / 20);
 
     return (
@@ -69,17 +109,52 @@ const LoginHistory = () => {
                     <h1>Login History</h1>
                     <p>Track user login and logout activities.</p>
                 </div>
+                <div className="header-actions">
+                    <button className="btn-secondary flex items-center gap-2" onClick={handleExport} disabled={isExporting || isLoading}>
+                        {isExporting ? <RefreshCcw size={18} className="animate-spin" /> : <Download size={18} />}
+                        {isExporting ? 'Exporting...' : 'Export CSV'}
+                    </button>
+                    <button className="btn-outline flex items-center gap-2" onClick={() => fetchLogs(pagination.currentPage)}>
+                        <RefreshCcw size={18} className={isLoading ? 'animate-spin' : ''} />
+                        Refresh
+                    </button>
+                </div>
             </header>
 
-            <div className="filters-bar">
-                <div className="search-box">
-                    <Search size={18} />
-                    <input 
-                        type="text" 
-                        placeholder="Search by user or IP..." 
-                        value={filters.search}
-                        onChange={handleSearchChange}
-                    />
+            <div className="filters-bar premium-shadow">
+                <div className="filters-grid">
+                    <div className="search-box">
+                        <Search size={18} />
+                        <input
+                            type="text"
+                            placeholder="Search by user or IP..."
+                            value={filters.search}
+                            onChange={handleSearchChange}
+                        />
+                    </div>
+
+                    <div className="filter-group">
+                        <Calendar size={16} />
+                        <input
+                            type="date"
+                            value={filters.startDate}
+                            onChange={e => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                            className="filter-date"
+                            placeholder="Start Date"
+                        />
+                        <span>to</span>
+                        <input
+                            type="date"
+                            value={filters.endDate}
+                            onChange={e => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                            className="filter-date"
+                            placeholder="End Date"
+                        />
+                    </div>
+
+                    <button className="text-btn text-xs font-bold uppercase text-slate-400 hover:text-burgundy" onClick={clearFilters}>
+                        Clear Filters
+                    </button>
                 </div>
             </div>
 
@@ -152,12 +227,11 @@ const LoginHistory = () => {
                                                                                 {format(new Date(act.timestamp), 'HH:mm:ss')}
                                                                             </td>
                                                                             <td className="p-2">
-                                                                                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                                                                                    act.action === 'VIEW' ? 'bg-blue-100 text-blue-800' :
+                                                                                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${act.action === 'VIEW' ? 'bg-blue-100 text-blue-800' :
                                                                                     act.action === 'LOGIN' ? 'bg-green-100 text-green-800' :
-                                                                                    act.action === 'LOGOUT' ? 'bg-gray-100 text-gray-800' :
-                                                                                    'bg-yellow-100 text-yellow-800'
-                                                                                }`}>
+                                                                                        act.action === 'LOGOUT' ? 'bg-gray-100 text-gray-800' :
+                                                                                            'bg-yellow-100 text-yellow-800'
+                                                                                    }`}>
                                                                                     {act.action}
                                                                                 </span>
                                                                             </td>
@@ -192,34 +266,34 @@ const LoginHistory = () => {
                         Showing {logs.length} of {pagination.count} records (Page {pagination.currentPage} of {totalPages})
                     </div>
                     <div className="pagination-controls">
-                        <button 
-                            className="pagination-btn" 
-                            onClick={() => fetchLogs(1)} 
+                        <button
+                            className="pagination-btn"
+                            onClick={() => fetchLogs(1)}
                             disabled={pagination.currentPage === 1 || isLoading}
                             title="First Page"
                         >
                             <ChevronsLeft size={18} />
                         </button>
-                        <button 
-                            className="pagination-btn" 
-                            onClick={() => fetchLogs(pagination.currentPage - 1)} 
+                        <button
+                            className="pagination-btn"
+                            onClick={() => fetchLogs(pagination.currentPage - 1)}
                             disabled={!pagination.previous || isLoading}
                             title="Previous Page"
                         >
                             <ChevronLeft size={18} />
                         </button>
                         <div className="page-number">{pagination.currentPage}</div>
-                        <button 
-                            className="pagination-btn" 
-                            onClick={() => fetchLogs(pagination.currentPage + 1)} 
+                        <button
+                            className="pagination-btn"
+                            onClick={() => fetchLogs(pagination.currentPage + 1)}
                             disabled={!pagination.next || isLoading}
                             title="Next Page"
                         >
                             <ChevronRight size={18} />
                         </button>
-                        <button 
-                            className="pagination-btn" 
-                            onClick={() => fetchLogs(totalPages)} 
+                        <button
+                            className="pagination-btn"
+                            onClick={() => fetchLogs(totalPages)}
                             disabled={pagination.currentPage === totalPages || isLoading}
                             title="Last Page"
                         >

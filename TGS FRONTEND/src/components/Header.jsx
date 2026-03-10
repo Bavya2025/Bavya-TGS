@@ -66,7 +66,7 @@ const Header = () => {
     const rawRole = user?.role?.toLowerCase() || 'employee';
     const dept = user?.department?.toLowerCase() || '';
     const desig = user?.designation?.toLowerCase() || '';
-    
+
     // Comprehensive role detection matching backend logic
     let userRole = rawRole;
     if (rawRole === 'admin') userRole = 'admin';
@@ -74,7 +74,7 @@ const Header = () => {
     else if (dept.includes('hr') || desig.includes('hr') || rawRole === 'hr') userRole = 'hr';
     else if (dept.includes('cfo') || desig.includes('cfo') || rawRole === 'cfo') userRole = 'cfo';
     else if (rawRole.includes('guesthouse') || rawRole === 'guesthousemanager') userRole = 'guesthousemanager';
-    
+
     const unreadCount = notifications.filter(n => n.unread).length;
 
     useEffect(() => {
@@ -116,6 +116,7 @@ const Header = () => {
     const managementNav = [
         { title: 'Finance Hub', icon: <IndianRupee size={18} />, path: '/finance', roles: ['finance', 'admin'] },
         { title: 'Approvals', icon: <BarChart3 size={18} />, path: '/approvals', roles: ['employee', 'reporting_authority', 'hr', 'finance', 'cfo', 'admin'] },
+        { title: 'Job Report', icon: <ClipboardList size={18} />, path: '/job-report', roles: ['employee', 'reporting_authority', 'admin'] },
         { title: 'Settlements', icon: <Wallet size={18} />, path: '/settlement', roles: ['finance', 'admin'] },
         { title: 'Documents', icon: <FolderOpen size={18} />, path: '/documents', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo'] },
         { title: 'System Policy', icon: <BookOpen size={18} />, path: '/policy', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo'] },
@@ -125,6 +126,7 @@ const Header = () => {
         { title: 'Fleet Management', icon: <Car size={18} />, path: '/fleet', roles: ['admin', 'guesthousemanager'] },
         { title: 'API Management', icon: <Settings size={18} />, path: '/api-management', roles: ['admin'] },
         { title: 'Route Masters', icon: <MapPin size={18} />, path: '/route-management', roles: ['admin'] },
+        { title: 'Master Management', icon: <Settings size={18} />, path: '/master-management', roles: ['admin'] },
         { title: 'Help & Support', icon: <HelpCircle size={18} />, path: '/help', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo', 'guesthousemanager'] },
         { title: 'Login History', icon: <Settings size={18} />, path: '/login-history', roles: ['admin'] },
         { title: 'Audit Logs', icon: <ShieldCheck size={18} />, path: '/audit-logs', roles: ['admin'] },

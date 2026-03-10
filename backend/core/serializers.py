@@ -56,7 +56,7 @@ class LoginHistorySerializer(serializers.ModelSerializer):
             user=obj.user, 
             timestamp__gte=obj.login_time,
             timestamp__lte=end_time
-        ).exclude(action='PAGE_ACCESS').order_by('timestamp')[:50]
+        ).order_by('timestamp')
         
         return AuditLogSerializer(logs, many=True).data
 

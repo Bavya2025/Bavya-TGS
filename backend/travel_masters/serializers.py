@@ -63,35 +63,10 @@ class RoutePathSerializer(serializers.ModelSerializer):
     source_name = serializers.ReadOnlyField(source='route.source.name')
     destination_name = serializers.ReadOnlyField(source='route.destination.name')
     via_location_names = serializers.SerializerMethodField()
-    via_locations_data = serializers.SerializerMethodField()
     
     class Meta:
         model = RoutePath
         fields = '__all__'
-
-    def get_via_locations_data(self, obj):
-        if not obj.via_locations or not isinstance(obj.via_locations, list):
-            return []
-        
-        data = []
-        for vid in obj.via_locations:
-            loc = None
-            if str(vid).isdigit():
-                loc = Location.objects.filter(pk=vid).first()
-            else:
-                loc = Location.objects.filter(external_id=vid).first()
-            
-            if loc:
-                data.append({
-                    "id": loc.id,
-                    "name": loc.name,
-                    "code": loc.code,
-                    "location_type": loc.location_type,
-                    "external_id": loc.external_id
-                })
-            else:
-                data.append({"id": vid, "name": str(vid), "code": "???"})
-        return data
 
     def get_via_location_names(self, obj):
         if not obj.via_locations or not isinstance(obj.via_locations, list):

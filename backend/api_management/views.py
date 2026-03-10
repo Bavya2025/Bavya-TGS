@@ -249,20 +249,42 @@ class UserListView(APIView):
         page_size = request.query_params.get('page_size', 20)
         fetch_all = request.query_params.get('all_pages') == 'true'
         
+        user = getattr(request, 'custom_user', None)
+        role_name = (user.role.name if user and user.role else '').lower()
+        is_admin = any(keyword in role_name for keyword in ['admin', 'superuser', 'it admin'])
+        is_hr_fin = any(keyword in role_name for keyword in ['hr', 'finance', 'cfo'])
+        
         users_queryset = User.objects.all().order_by('-id')
         
+        # Hierarchy filtering for Managers
+        if not (is_admin or is_hr_fin) and role_name == 'reporting_authority' and user:
+            from travel.models import Trip
+            from django.db.models import Q
+            # Get IDs of users who have trips where this user is the recorded manager
+            team_user_ids = Trip.objects.filter(
+                Q(reporting_manager_name=user.name) | 
+                Q(senior_manager_name=user.name) | 
+                Q(hod_director_name=user.name)
+            ).values_list('user_id', flat=True).distinct()
+            
+            # Show team + self
+            users_queryset = users_queryset.filter(Q(id__in=team_user_ids) | Q(id=user.id))
+            
         if search_query:
             from django.db.models import Q
             # Search locally by employeecode
             users_queryset = users_queryset.filter(employee_id__icontains=search_query)
 
         if fetch_all:
-            # OPTIMIZATION: Return only DB-stored fields to avoid N+1 dynamic property fetches
-            # when doing a bulk existence check.
-            results = list(users_queryset.values('id', 'employee_id'))
-            # Map for frontend compatibility
-            for item in results:
-                item['username'] = item['employee_id']
+            # We need names for dropdowns, so we can't do a simple values() call
+            results = []
+            for u in users_queryset:
+                results.append({
+                    'id': u.id,
+                    'employee_id': u.employee_id,
+                    'username': u.employee_id,
+                    'name': u.name # This calls the dynamic property
+                })
             return Response(results)
 
         paginator = Paginator(users_queryset, page_size)
@@ -522,50 +544,5 @@ class GeoHierarchyView(APIView):
     def get(self, request):
         data = fetch_geo_data()
         if "error" in data:
-            # Return 200 with empty list so frontend dropdowns don't crash
-            return Response({
-                "results": [],
-                "error": data["error"],
-                "warning": "Using local fallback data (empty)"
-            }, status=status.HTTP_200_OK)
-        return Response(data)
-
-class EmployeeProfileView(APIView):
-    """
-    Direct endpoint for the logged-in user to fetch their own detailed profile
-    from the external system without searching.
-    """
-    permission_classes = [IsCustomAuthenticated]
-
-    def get(self, request):
-        user = request.custom_user
-        from .services import get_dynamic_employee_data
-        data = get_dynamic_employee_data(user.employee_id)
-        
-        if not data:
-            # Fallback to User model properties
-            return Response({
-                "employee": {
-                    "name": user.name,
-                    "employee_code": user.employee_id,
-                    "email": user.email,
-                    "phone": user.phone,
-                    "photo": user.photo
-                },
-                "position": {
-                    "name": user.designation,
-                    "department": user.department,
-                    "section": user.section,
-                    "reporting_to": [] 
-                },
-                "project": {
-                    "name": user.project_name,
-                    "code": user.project_code
-                },
-                "office": {
-                    "name": user.base_location,
-                    "level": user.office_level,
-                }
-            })
-            
+            return Response(data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(data)
