@@ -17,58 +17,35 @@ class Route(SoftDeleteModel):
     source = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='routes_starting_here')
     destination = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='routes_ending_here')
     
-    # Removed unique_together = [['source', 'destination']] to allow duplicate routes with suffixes
-
     def save(self, *args, **kwargs):
         # 1. Update Name (Clean Format: SOURCE-DEST)
         source_label = self.source.code or self.source.name
         dest_label = self.destination.code or self.destination.name
         self.name = f"{source_label} TO {dest_label}".upper()
 
-        # 2. Assign Route Code
+        # 2. Assign Route Code (Starts from 10001)
         if not self.route_code:
-            # Check if a route between these same locations already exists
-            existing_route = Route.all_objects.filter(
-                source=self.source, 
-                destination=self.destination
-            ).exclude(route_code__isnull=True).exclude(route_code='').order_by('id').first()
-
-            if existing_route:
-                # Variant Logic: B, C, D...
-                base_code = existing_route.route_code
-                if base_code and not base_code[-1].isdigit():
-                    # If the existing matches are already variants, we need the numeric base
-                    import re
-                    match = re.search(r'^(\d+)', base_code)
-                    if match:
-                        base_code = match.group(1)
-
-                # Count how many routes exist with this base code
-                count = Route.all_objects.filter(route_code__startswith=base_code).count()
+            while True:
+                # Find the highest existing route code that is actually a number
+                last_route = Route.all_objects.exclude(route_code__isnull=True).exclude(route_code='').order_by('-route_code').first()
+                if last_route and last_route.route_code and last_route.route_code.isdigit():
+                    next_code = str(int(last_route.route_code) + 1)
+                else:
+                    next_code = "10001"
                 
-                # A corresponds to 0 (no suffix), B corresponds to 1 (count=1), C to 2 (count=2)...
-                # Since we found at least one (existing_route), count will be >= 1
-                if count >= 1:
-                    suffix = chr(65 + count) # 65 is 'A', 66 is 'B'... so count=1 -> 66 ('B')
-                    self.route_code = f"{base_code}{suffix}"
-            
-            if not self.route_code:
-                # Standard Logic: Assign Fresh Numeric Code (Starts from 10001)
-                while True:
-                    # Find the highest existing route code that is strictly numeric
-                    numeric_codes = []
-                    for rc in Route.all_objects.exclude(route_code__isnull=True).exclude(route_code='').values_list('route_code', flat=True):
-                        if rc.isdigit():
-                            numeric_codes.append(int(rc))
-                    
-                    if numeric_codes:
-                        next_code = str(max(numeric_codes) + 1)
-                    else:
-                        next_code = "10001"
-                    
-                    if not Route.all_objects.filter(route_code=next_code).exists():
-                        self.route_code = next_code
-                        break
+                # Double check to prevent IntegrityError specifically if ordering by string was weird
+                if not Route.all_objects.filter(route_code=next_code).exists():
+                    self.route_code = next_code
+                    break
+                else:
+                    # In case of string order collision (e.g. '9999' > '10000'), increment until free
+                    # We just need to find the max by casting to integer if possible, but an iterative check is safer
+                    max_code = 10000
+                    for r in Route.all_objects.exclude(route_code__isnull=True).exclude(route_code='').values_list('route_code', flat=True):
+                        if r.isdigit() and int(r) > max_code:
+                            max_code = int(r)
+                    self.route_code = str(max_code + 1)
+                    break
                 
         super().save(*args, **kwargs)
 
@@ -83,7 +60,6 @@ class RoutePath(SoftDeleteModel):
     distance_km = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     latitude = models.DecimalField(max_digits=12, decimal_places=9, null=True, blank=True)
     longitude = models.DecimalField(max_digits=12, decimal_places=9, null=True, blank=True)
-    segment_data = models.JSONField(default=dict, blank=True, help_text="Breakdown of distances between points")
     
     def __str__(self):
         return f"{self.route.name} - {self.path_name}"

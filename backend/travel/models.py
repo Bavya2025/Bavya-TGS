@@ -43,9 +43,14 @@ class Trip(SoftDeleteModel):
         ('Airways', 'Airways'),
         ('Train', 'Train'),
         ('Bus', 'Bus'),
-        ('2 Wheeler', '2 Wheeler'),
-        ('3 Wheeler', '3 Wheeler'),
-        ('4 Wheeler', '4 Wheeler'),
+        ('Car / Jeep / Van', 'Car / Jeep / Van'),
+        ('LCV', 'LCV (Light Commercial Vehicle)'),
+        ('Bus / Truck (2 Axle)', 'Bus / Truck (2 Axle)'),
+        ('3-Axle Commercial', '3-Axle Commercial'),
+        ('MAV (4-6 Axle)', 'MAV (Multi-Axle Vehicle 4-6)'),
+        ('Oversized (7+ Axle)', 'Oversized Vehicle (7+ Axle)'),
+        ('2 Wheeler', '2 Wheeler (Non-Tollable)'),
+        ('3 Wheeler', '3 Wheeler (Non-Tollable)'),
     ]
 
     VEHICLE_TYPE_CHOICES = [
@@ -82,7 +87,6 @@ class Trip(SoftDeleteModel):
     reporting_manager_name = models.CharField(max_length=255, null=True, blank=True)
     senior_manager_name = models.CharField(max_length=255, null=True, blank=True)
     hod_director_name = models.CharField(max_length=255, null=True, blank=True)
-
     rejection_reason = models.TextField(blank=True, null=True)
     rejected_by = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='rejected_trips')
 
@@ -227,7 +231,6 @@ class TravelClaim(SoftDeleteModel):
     final_executive = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='final_processed_claims')
     
     hierarchy_level = models.IntegerField(default=1)
-    hr_remarks = models.TextField(blank=True, null=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
     remarks = models.TextField(blank=True)
     
@@ -247,7 +250,6 @@ class TravelClaim(SoftDeleteModel):
     reporting_manager_name = models.CharField(max_length=255, null=True, blank=True)
     senior_manager_name = models.CharField(max_length=255, null=True, blank=True)
     hod_director_name = models.CharField(max_length=255, null=True, blank=True)
-
     rejection_reason = models.TextField(blank=True, null=True)
     rejected_by = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='rejected_claims')
 
@@ -312,7 +314,6 @@ class TravelAdvance(SoftDeleteModel):
     reporting_manager_name = models.CharField(max_length=255, null=True, blank=True)
     senior_manager_name = models.CharField(max_length=255, null=True, blank=True)
     hod_director_name = models.CharField(max_length=255, null=True, blank=True)
-
     rejection_reason = models.TextField(blank=True, null=True)
     rejected_by = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='rejected_advances')
 
@@ -381,4 +382,170 @@ class PolicyDocument(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+class BulkActivityBatch(SoftDeleteModel):
+    STATUS_CHOICES = [
+        ('Draft', 'Draft'),
+        ('Submitted', 'Submitted'),
+        ('Approved', 'Approved'),
+        ('Rejected', 'Rejected'),
+    ]
+
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='activity_batches')
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='activity_batches', null=True, blank=True)
+    file_name = models.CharField(max_length=255)
+    
+    # Store the actual rows in JSON temporarily until approval
+    data_json = models.JSONField(default=list) 
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Draft')
+    current_approver = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='batches_to_approve')
+    hierarchy_level = models.IntegerField(default=1) 
+    remarks = models.TextField(blank=True, null=True)
+    
+    # To track which expenses were created from this batch
+    created_expenses = models.JSONField(default=list, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Batch {self.id} - {self.user.name} ({self.status})"
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+# --- MASTER TABLES ---
+
+# --- MASTER TABLES (TRAVEL MODULE) ---
+
+class TravelModeMaster(SoftDeleteModel):
+    mode_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class BookingTypeMaster(SoftDeleteModel):
+    booking_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class AirlineMaster(SoftDeleteModel):
+    airline_name = models.CharField(max_length=100, unique=True)
+    airline_code = models.CharField(max_length=50, blank=True, null=True, unique=True)
+    status = models.BooleanField(default=True)
+
+class FlightClassMaster(SoftDeleteModel):
+    class_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class TrainClassMaster(SoftDeleteModel):
+    class_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class BusOperatorMaster(SoftDeleteModel):
+    operator_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class BusTypeMaster(SoftDeleteModel):
+    bus_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class IntercityCabVehicleMaster(SoftDeleteModel):
+    vehicle_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class TravelProviderMaster(SoftDeleteModel):
+    provider_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class TrainProviderMaster(SoftDeleteModel):
+    provider_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class BusProviderMaster(SoftDeleteModel):
+    provider_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class IntercityCabProviderMaster(SoftDeleteModel):
+    provider_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+# --- MASTER TABLES (LOCAL CONVEYANCE MODULE) ---
+
+class LocalTravelModeMaster(SoftDeleteModel):
+    mode_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class LocalCarSubTypeMaster(SoftDeleteModel):
+    sub_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class LocalBikeSubTypeMaster(SoftDeleteModel):
+    sub_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class LocalProviderMaster(SoftDeleteModel):
+    provider_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+# --- MASTER TABLES (STAY & LODGING MODULE) ---
+
+class StayTypeMaster(SoftDeleteModel):
+    stay_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class RoomTypeMaster(SoftDeleteModel):
+    room_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+# --- MASTER TABLES (FOOD & REFRESHMENTS MODULE) ---
+
+class MealCategoryMaster(SoftDeleteModel):
+    category_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class MealTypeMaster(SoftDeleteModel):
+    meal_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+# --- MASTER TABLES (INCIDENTAL MODULE) ---
+
+class IncidentalTypeMaster(SoftDeleteModel):
+    expense_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+# --- DYNAMIC MASTER SYSTEM ---
+
+class MasterModule(SoftDeleteModel):
+    name = models.CharField(max_length=100, unique=True)
+    display_order = models.IntegerField(default=0)
+    status = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+class CustomMasterDefinition(SoftDeleteModel):
+    table_name = models.CharField(max_length=100, unique=True)
+    module_ref = models.ForeignKey(MasterModule, on_delete=models.CASCADE, related_name='tables', null=True, blank=True)
+    module = models.CharField(max_length=50, blank=True, null=True) # Legacy
+    api_endpoint = models.CharField(max_length=255, blank=True, null=True) # For system tables
+    fields_list = models.TextField(default='name,code') # Comma separated list of fields
+    is_system = models.BooleanField(default=False)
+    status = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.table_name
+
+class CustomMasterValue(SoftDeleteModel):
+    definition = models.ForeignKey(CustomMasterDefinition, on_delete=models.CASCADE, related_name='values')
+    name = models.CharField(max_length=200)
+    code = models.CharField(max_length=100, blank=True, null=True)
+    status = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['definition', 'name'], name='unique_name_per_definition')
+        ]
+
+    def __str__(self):
+        return f"{self.definition.table_name} - {self.name}"
 

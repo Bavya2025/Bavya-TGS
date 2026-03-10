@@ -54,7 +54,12 @@ const TripStory = () => {
     const [showWalletModal, setShowWalletModal] = useState(false);
     const [isActionLoading, setIsActionLoading] = useState(false);
     const [auditRemarks, setAuditRemarks] = useState({});
-    
+
+    // Luggage popup state
+    const [showLuggagePopup, setShowLuggagePopup] = useState(false);
+    const [luggageWeight, setLuggageWeight] = useState('');
+    const [luggageRemarks, setLuggageRemarks] = useState('');
+
     // PDF Export refs and state
     const reportRef = useRef(null);
     const [isExportingPDF, setIsExportingPDF] = useState(false);
@@ -124,16 +129,16 @@ const TripStory = () => {
 
     const handleExport = async (format) => {
         if (!trip) return;
-        
+
         const setter = format === 'pdf' ? setIsExportingPDF : setIsExportingExcel;
         setter(true);
         showToast(`Generating ${format.toUpperCase()} statement...`, "info");
-        
+
         try {
             const response = await api.get(`/api/trips/${trip.trip_id}/export/${format}/`, {
                 responseType: 'blob'
             });
-            
+
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
@@ -141,7 +146,7 @@ const TripStory = () => {
             document.body.appendChild(link);
             link.click();
             link.remove();
-            
+
             showToast(`${format.toUpperCase()} downloaded successfully`, "success");
         } catch (error) {
             console.error(`${format.toUpperCase()} export failed:`, error);
@@ -260,7 +265,7 @@ const TripStory = () => {
                                 {trip.composition !== 'Solo' && trip.user_emp_id && trip.user_emp_id !== 'N/A' && (
                                     <span className="sub-detail">{trip.user_emp_id}</span>
                                 )}
-                                
+
                                 {trip.composition !== 'Solo' && (trip.user_bank_name || trip.user_account_no) && (
                                     <div className="bank-detail-mini mt-2">
                                         {trip.user_bank_name && trip.user_bank_name !== 'N/A' && (
@@ -295,7 +300,7 @@ const TripStory = () => {
                                                 } catch (e) {
                                                     members = Array.isArray(trip.members) ? trip.members : [trip.members];
                                                 }
-                                                
+
                                                 if (Array.isArray(members)) {
                                                     return members.map((member, idx) => {
                                                         const name = typeof member === 'object' ? (member.name || member.employee_name) : member;
@@ -380,19 +385,28 @@ const TripStory = () => {
                             <h3>Detailed Expense Registry</h3>
                         </div>
 
-                        {(String(user?.id) === String(trip.current_approver) || String(user?.id) === String(trip.claim?.current_approver)) && (
-                            <div className="audit-actions-quick">
-                                <button className="btn-sm-audit secondary" onClick={() => navigate('/approvals')}>
-                                    <ArrowRight size={14} style={{ transform: 'rotate(180deg)' }} /> Back to Inbox
-                                </button>
-                                <button className="btn-sm-audit reject" onClick={() => handleAction('Reject')} disabled={isActionLoading}>
-                                    <XCircle size={14} /> Reject All
-                                </button>
-                                <button className="btn-sm-audit approve" onClick={() => handleAction('Approve')} disabled={isActionLoading}>
-                                    <CheckCircle size={14} /> Final Approve
-                                </button>
-                            </div>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <button
+                                style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600, border: 'none', background: '#db2777', color: 'white', cursor: 'pointer' }}
+                                onClick={() => setShowLuggagePopup(true)}
+                            >
+                                Additional Luggage
+                            </button>
+
+                            {(String(user?.id) === String(trip.current_approver) || String(user?.id) === String(trip.claim?.current_approver)) && (
+                                <div className="audit-actions-quick" style={{ display: 'flex', gap: '8px' }}>
+                                    <button className="btn-sm-audit secondary" onClick={() => navigate('/approvals')}>
+                                        <ArrowRight size={14} style={{ transform: 'rotate(180deg)' }} /> Back to Inbox
+                                    </button>
+                                    <button className="btn-sm-audit reject" onClick={() => handleAction('Reject')} disabled={isActionLoading}>
+                                        <XCircle size={14} /> Reject All
+                                    </button>
+                                    <button className="btn-sm-audit approve" onClick={() => handleAction('Approve')} disabled={isActionLoading}>
+                                        <CheckCircle size={14} /> Final Approve
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {(String(user?.id) === String(trip.current_approver) || String(user?.id) === String(trip.claim?.current_approver)) && trip.expenses?.length > 0 && (
@@ -594,8 +608,8 @@ const TripStory = () => {
                 borderTop: '1px solid #e2e8f0',
                 marginTop: '2rem'
             }}>
-                <button 
-                    className="btn btn-secondary" 
+                <button
+                    className="btn btn-secondary"
                     style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: '700' }}
                     onClick={() => handleExport('pdf')}
                     disabled={isExportingPDF}
@@ -603,8 +617,8 @@ const TripStory = () => {
                     <FileText size={20} />
                     {isExportingPDF ? 'Generating PDF...' : 'Download PDF Statement'}
                 </button>
-                <button 
-                    className="btn btn-secondary" 
+                <button
+                    className="btn btn-secondary"
                     style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: '700' }}
                     onClick={() => handleExport('excel')}
                     disabled={isExportingExcel}
@@ -612,8 +626,8 @@ const TripStory = () => {
                     <Download size={20} />
                     {isExportingExcel ? 'Generating Excel...' : 'Export to Excel'}
                 </button>
-                <button 
-                    className="btn btn-outline" 
+                <button
+                    className="btn btn-outline"
                     style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: '700', border: '1px solid #cbd5e1' }}
                     onClick={() => window.print()}
                 >
@@ -628,10 +642,59 @@ const TripStory = () => {
                 trip={{ id: trip.trip_id, ...trip }}
                 onUpdate={fetchTripStory}
             />
-            
+
+            {showLuggagePopup && (
+                <div className="custom-confirm-overlay">
+                    <div className="custom-confirm-modal" style={{ maxWidth: '400px' }}>
+                        <div className="modal-content-p" style={{ padding: '1.5rem', textAlign: 'left' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>Additional Luggage</h3>
+                                <button onClick={() => setShowLuggagePopup(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                                    <XCircle size={20} color="#94a3b8" />
+                                </button>
+                            </div>
+                            <div className="field-group mb-3" style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>
+                                    Luggage weight (in kg/grams) <span style={{ color: 'red' }}>*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g., 5 kg"
+                                    value={luggageWeight}
+                                    onChange={(e) => setLuggageWeight(e.target.value)}
+                                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                />
+                            </div>
+                            <div className="field-group mb-3" style={{ marginBottom: '1.5rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>
+                                    Remarks <span style={{ color: 'red' }}>*</span>
+                                </label>
+                                <textarea
+                                    placeholder="Add any additional notes..."
+                                    value={luggageRemarks}
+                                    onChange={(e) => setLuggageRemarks(e.target.value)}
+                                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', minHeight: '80px', fontSize: '0.9rem', resize: 'vertical' }}
+                                />
+                            </div>
+                            <div className="modal-actions-p" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                <button className="modal-btn cancel" onClick={() => setShowLuggagePopup(false)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>Cancel</button>
+                                <button className="modal-btn confirm" onClick={() => {
+                                    if (!luggageWeight || !luggageRemarks) {
+                                        showToast("Please enter both luggage weight and remarks.", "error");
+                                        return;
+                                    }
+                                    setShowLuggagePopup(false);
+                                    showToast("Additional Luggage info saved locally.", "success");
+                                }} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#db2777', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>Save</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Hidden PDF Template Container */}
             <div style={{ overflow: 'hidden', height: 0, width: 0 }}>
-                 <ExpenseReportPDF ref={reportRef} trip={trip} />
+                <ExpenseReportPDF ref={reportRef} trip={trip} />
             </div>
         </div>
     );

@@ -1,10 +1,36 @@
 from rest_framework import generics, viewsets, status, serializers
 from rest_framework.response import Response
-from .models import Trip, Expense, TravelClaim, TravelAdvance, TripOdometer, Dispute, PolicyDocument
+from rest_framework.decorators import action
+from .models import (
+    Trip, Expense, TravelClaim, TravelAdvance, TripOdometer, Dispute, PolicyDocument, BulkActivityBatch,
+    TravelModeMaster, BookingTypeMaster, AirlineMaster, FlightClassMaster, TrainClassMaster,
+    BusOperatorMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
+    TrainProviderMaster, BusProviderMaster, IntercityCabProviderMaster,
+    LocalTravelModeMaster, LocalCarSubTypeMaster, LocalBikeSubTypeMaster, LocalProviderMaster,
+    StayTypeMaster, RoomTypeMaster, MealCategoryMaster, MealTypeMaster, IncidentalTypeMaster,
+    CustomMasterDefinition, CustomMasterValue, MasterModule
+)
+from .serializers import (
+    TripSerializer, ExpenseSerializer, TravelClaimSerializer, TravelAdvanceSerializer,
+    TripOdometerSerializer, DisputeSerializer, PolicyDocumentSerializer, BulkActivityBatchSerializer,
+    TravelModeMasterSerializer, BookingTypeMasterSerializer, AirlineMasterSerializer,
+    FlightClassMasterSerializer, TrainClassMasterSerializer, BusOperatorMasterSerializer,
+    BusTypeMasterSerializer, IntercityCabVehicleMasterSerializer, TravelProviderMasterSerializer,
+    TrainProviderMasterSerializer, BusProviderMasterSerializer, IntercityCabProviderMasterSerializer,
+    LocalTravelModeMasterSerializer, LocalCarSubTypeMasterSerializer, LocalBikeSubTypeMasterSerializer,
+    LocalProviderMasterSerializer, StayTypeMasterSerializer, RoomTypeMasterSerializer,
+    MealCategoryMasterSerializer, MealTypeMasterSerializer, IncidentalTypeMasterSerializer,
+    CustomMasterDefinitionSerializer, CustomMasterValueSerializer, MasterModuleSerializer
+)
+import io
+import json
+import pandas as pd
+from django.http import HttpResponse
+from .models import Trip, Expense, TravelClaim, TravelAdvance, TripOdometer, Dispute, PolicyDocument, BulkActivityBatch
 from .serializers import (
     TripSerializer, ExpenseSerializer, TravelClaimSerializer, 
     TravelAdvanceSerializer, TripOdometerSerializer, DisputeSerializer,
-    PolicyDocumentSerializer, PolicyDocumentDetailSerializer
+    PolicyDocumentSerializer, PolicyDocumentDetailSerializer, BulkActivityBatchSerializer
 )
 from rest_framework.permissions import AllowAny
 from django.db.models import Q
@@ -539,7 +565,7 @@ class ApprovalsView(APIView):
                         "requested_amount": str(c.total_amount),
                         "approved_amount": str(c.approved_amount),
                         "hr_approved_amount": str(c.hr_approved_amount or 0),
-                        "hr_remarks": getattr(c, 'hr_remarks', c.remarks) or "",
+                        "hr_remarks": getattr(c, "hr_remarks", ""),
                         "executive_approved_amount": str(c.executive_approved_amount),
                         "trip_id": c.trip.trip_id,
                         "start_date": c.trip.start_date.strftime("%b %d, %Y") if c.trip.start_date else "N/A",
@@ -628,46 +654,15 @@ class ApprovalsView(APIView):
         
         from core.models import AuditLog
         if action == 'Reject':
-            reason = data.get('remarks') if data else ''
             obj.status = 'Rejected'
-            obj.rejection_reason = reason
-            obj.rejected_by = user
             obj.current_approver = None
             obj.save()
             
             AuditLog.objects.create(
                 user=user, action='REJECT', model_name=obj.__class__.__name__,
                 object_id=str(obj.pk), object_repr=str(obj),
-                details={'reason': reason}
+                details={'reason': data.get('remarks') if data else ''}
             )
-
-            # --- Notifications ---
-            obj_id = getattr(obj, 'trip_id', str(obj.pk))
-            # 1. To Requester
-            Notification.objects.create(
-                user=requester,
-                title=f"{request_type} Rejected",
-                message=f"Your {request_type} ({obj_id}) was rejected by {user.name}. Reason: {reason or 'Not specified'}",
-                type='error'
-            )
-            # 2. To Previous Approvers
-            prev_approver_ids = AuditLog.objects.filter(
-                model_name=obj.__class__.__name__,
-                object_id=str(obj.pk),
-                action='APPROVE'
-            ).values_list('user', flat=True).distinct()
-
-            for app_id in prev_approver_ids:
-                if app_id and app_id != user.id:
-                    try:
-                        app_user = User.objects.get(id=app_id)
-                        Notification.objects.create(
-                            user=app_user,
-                            title=f"{request_type} Rejected by {user.name}",
-                            message=f"{requester.name}'s {request_type} ({obj_id}) which you approved has been rejected. Reason: {reason or 'Not specified'}",
-                            type='warning'
-                        )
-                    except User.DoesNotExist: continue
 
         # Security Check: Only current_approver or assigned role can perform actions
         user_role = user.role.name.lower() if user.role else ''
@@ -993,49 +988,16 @@ class ApprovalsView(APIView):
             return Response({"message": "Transfer completed and phase closed."})
 
         if action == 'RejectByFinance':
-            reason = data.get('remarks', 'No reason provided') if data else ""
             obj.status = 'Rejected by Finance'
-            obj.rejection_reason = reason
-            obj.rejected_by = user
+            reason = data.get('remarks', 'No reason provided') if data else ""
             if hasattr(obj, 'finance_remarks'): obj.finance_remarks = reason
             obj.save()
-
-            # Record in AuditLog
-            from core.models import AuditLog
-            AuditLog.objects.create(
-                user=user, action='REJECT', model_name=obj.__class__.__name__,
-                object_id=str(obj.pk), object_repr=str(obj),
-                details={'reason': reason}
-            )
-
-            # --- Notifications ---
-            obj_id = getattr(obj, 'trip_id', str(obj.pk))
-            # 1. To Requester
             Notification.objects.create(
                 user=requester,
                 title="Finance: Request Rejected",
-                message=f"Your {request_type} ({obj_id}) was rejected by Finance ({user.name}). Reason: {reason}",
+                message=f"Your {request_type} was rejected by Finance. Reason: {reason}",
                 type='error'
             )
-            # 2. To Previous Approvers
-            prev_approver_ids = AuditLog.objects.filter(
-                model_name=obj.__class__.__name__,
-                object_id=str(obj.pk),
-                action='APPROVE'
-            ).values_list('user', flat=True).distinct()
-
-            for app_id in prev_approver_ids:
-                if app_id and app_id != user.id:
-                    try:
-                        app_user = User.objects.get(id=app_id)
-                        Notification.objects.create(
-                            user=app_user,
-                            title=f"{request_type} Rejected by Finance",
-                            message=f"{requester.name}'s {request_type} ({obj_id}) which you approved has been rejected by {user.name}. Reason: {reason}",
-                            type='warning'
-                        )
-                    except User.DoesNotExist: continue
-
             return Response({"message": "Rejected by Finance"})
 
 class ExpenseViewSet(viewsets.ModelViewSet):
@@ -1049,10 +1011,23 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         if not user:
             return Expense.objects.none()
             
-        is_admin = hasattr(user, 'role') and user.role.name.lower() in ['admin', 'superuser']
+        role_name = user.role.name.lower() if hasattr(user, 'role') else ''
+        is_admin = role_name in ['admin', 'superuser']
+        is_finance = 'finance' in role_name or role_name == 'cfo'
+        is_manager = role_name == 'reporting_authority'
         
-        if is_admin:
+        if is_admin or is_finance:
             queryset = self.queryset
+        elif is_manager:
+            # Allow managers to see their own expenses OR expenses for trips they are/were responsible for
+            # We use snapshot names for efficient filtering as dynamic hierarchy lookup is too slow for list views
+            queryset = self.queryset.filter(
+                Q(trip__user=user) | 
+                Q(trip__current_approver=user) |
+                Q(trip__reporting_manager_name=user.name) |
+                Q(trip__senior_manager_name=user.name) |
+                Q(trip__hod_director_name=user.name)
+            )
         else:
             queryset = self.queryset.filter(trip__user=user)
             
@@ -1377,11 +1352,11 @@ class DashboardStatsView(APIView):
                     status__in=['Manager Approved', 'Approved']
                 ).exclude(room_bookings__isnull=False).distinct().count()
         
-        total_expenses = float(base_expenses.aggregate(Sum('amount'))['amount__sum'] or 0)
+        total_expenses = base_expenses.aggregate(Sum('amount'))['amount__sum'] or 0
         
-        approved_expenses = float(base_expenses.filter(
+        approved_expenses = base_expenses.filter(
             trip__claim__status__in=['Approved', 'Paid']
-        ).aggregate(Sum('amount'))['amount__sum'] or 0)
+        ).aggregate(Sum('amount'))['amount__sum'] or 0
         
         categories = base_expenses.values('category').annotate(total=Sum('amount'))
         
@@ -1389,7 +1364,7 @@ class DashboardStatsView(APIView):
         recent_data = [{
             "id": t.trip_id,
             "title": f"Trip to {t.destination}",
-            "subtitle": f"{t.user_name or t.user.employee_id} - {t.purpose}" if (is_admin or is_gh_manager) and t.user else t.purpose,
+            "subtitle": f"{t.user.name} - {t.purpose}" if (is_admin or is_gh_manager) and t.user else t.purpose,
             "status": t.status,
             "amount": t.cost_estimate
         } for t in recent_trips]
@@ -1421,8 +1396,8 @@ class DashboardStatsView(APIView):
             "expenditure_mix": [
                 { 
                     "type": dict(Expense.CATEGORY_CHOICES).get(cat['category'], cat['category']), 
-                    "amount": float(cat['total'] or 0), 
-                    "percentage": (float(cat['total'] or 0) / total_expenses * 100) if total_expenses > 0 else 0 
+                    "amount": float(cat['total']), 
+                    "percentage": (float(cat['total']) / float(total_expenses) * 100) if total_expenses > 0 else 0 
                 }
                 for cat in categories
             ],
@@ -1651,3 +1626,406 @@ class CFOWarRoomView(APIView):
             "aging": aging_data,
             "anomalies": anomalies
         })
+
+import json
+
+class BulkActivityBatchViewSet(viewsets.ModelViewSet):
+    queryset = BulkActivityBatch.objects.all()
+    serializer_class = BulkActivityBatchSerializer
+    permission_classes = [IsCustomAuthenticated]
+
+    def get_queryset(self):
+        user = getattr(self.request, 'custom_user', None)
+        if not user: return BulkActivityBatch.objects.none()
+        
+        role_name = (user.role.name if user.role else '').lower()
+        
+        # Admins/Finance/COO see all
+        if any(kw in role_name for kw in ['admin', 'finance', 'cfo', 'coo']):
+            return self.queryset
+        
+        # Allow any user to see batches they submitted OR batches they need to approve.
+        # This ensures that managers (like a COO) can see and approve their team's uploads 
+        # even if their system role is simply 'Employee'.
+        return self.queryset.filter(Q(user=user) | Q(current_approver=user)).order_by('-created_at')
+
+    @action(detail=False, methods=['get'])
+    def template(self, request):
+        # Create a template Excel file
+        df = pd.DataFrame(columns=[
+            'Date (YYYY-MM-DD)', 
+            'Movement Mode (Car/Cab, 2 Wheeler, etc.)', 
+            'Vehicle Type (Own, Service)', 
+            'Route (Origin -> Destination)', 
+            'Visit Intent / Purpose',
+            'Internal Remarks'
+        ])
+        
+        # Add a sample row
+        df.loc[0] = ['2026-03-01', 'Car / Cab', 'Own Car', 'Office -> Client Site', 'Site Inspection', 'Regular weekly visit']
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Monthly Activities')
+            
+        output.seek(0)
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="bulk_activity_template.xlsx"'
+        return response
+
+    @action(detail=False, methods=['post'])
+    def upload(self, request):
+        file = request.FILES.get('file')
+        trip_id = request.data.get('trip_id') # Selected by user in UI
+        
+        if not file:
+            return Response({"error": "No file uploaded"}, status=400)
+            
+        try:
+            df = pd.read_excel(file)
+            # Map columns to internal JSON
+            rows = []
+            for _, row in df.iterrows():
+                rows.append({
+                    "date": str(row.get('Date (YYYY-MM-DD)', '')),
+                    "odo_start": 0,  # Initialize to 0, to be filled by user later
+                    "odo_end": 0,    # Initialize to 0, to be filled by user later
+                    "mode": str(row.get('Movement Mode (Car/Cab, 2 Wheeler, etc.)', '')),
+                    "vehicle": str(row.get('Vehicle Type (Own, Service)', '')),
+                    "route": str(row.get('Route (Origin -> Destination)', '')),
+                    "purpose": str(row.get('Visit Intent / Purpose', '')),
+                    "remarks": str(row.get('Internal Remarks', ''))
+                })
+            
+            user = request.custom_user
+            
+            # Find the first valid approver in the management hierarchy
+            from core.models import User
+            def is_management_role(u):
+                if not u or not u.role: return False
+                return u.role.name.lower() in ['admin', 'it-admin', 'superuser', 'it admin', 'system administrator']
+
+            rm = user.reporting_manager
+            sm = user.senior_manager
+            hod = user.hod_director
+            
+            current_approver = rm if not is_management_role(rm) else None
+            h_level = 1
+            
+            if not current_approver:
+                current_approver = sm if not is_management_role(sm) else None
+                h_level = 2
+            
+            if not current_approver:
+                current_approver = hod if not is_management_role(hod) else None
+                h_level = 3
+                
+            if not current_approver:
+                 # Final fallback to HR Head
+                 from .views import get_hr_head
+                 current_approver = get_hr_head(user)
+                 h_level = 1
+
+            batch = BulkActivityBatch.objects.create(
+                user=user,
+                trip_id=trip_id,
+                file_name=file.name,
+                data_json=rows,
+                status='Submitted',
+                current_approver=current_approver,
+                hierarchy_level=h_level
+            )
+            
+            if current_approver:
+                Notification.objects.create(
+                    user=current_approver,
+                    title="New Bulk Activity Batch",
+                    message=f"{user.name} submitted a bulk travel log for approval.",
+                    type='info'
+                )
+            
+            return Response(BulkActivityBatchSerializer(batch).data)
+        except Exception as e:
+            return Response({"error": f"Failed to parse Excel: {str(e)}"}, status=400)
+
+    @action(detail=True, methods=['post'], url_path='approve')
+    def approve_batch(self, request, pk=None):
+        batch = self.get_object()
+        user = getattr(request, 'custom_user', None)
+        
+        if batch.status != 'Submitted':
+            return Response({"error": "Batch is not in Submitted status"}, status=400)
+            
+        if batch.current_approver != user:
+             return Response({"error": "Unauthorized: You are not the designated approver."}, status=403)
+            
+        # --- Hierarchy Progression Logic ---
+        # Look for the next manager in the chain
+        next_approver = None
+        next_level = batch.hierarchy_level
+        
+        # Determine roles/managers
+        requester = batch.user
+        rm = requester.reporting_manager
+        sm = requester.senior_manager
+        hod = requester.hod_director
+        
+        if batch.hierarchy_level == 1:
+            next_approver = sm if sm and sm != user else hod
+            next_level = 2 if next_approver == sm else 3
+        elif batch.hierarchy_level == 2:
+            next_approver = hod if hod and hod != user else None
+            next_level = 3
+
+        # If there's a next approver, forward it instead of final approval
+        if next_approver and next_approver != user:
+            batch.current_approver = next_approver
+            batch.hierarchy_level = next_level
+            batch.save()
+            
+            Notification.objects.create(
+                user=next_approver,
+                title="Management Approved: Bulk Log",
+                message=f"{batch.user.name}'s activity log has been approved by {user.name} and forwarded to you for level {next_level} review.",
+                type='info'
+            )
+            return Response({"message": f"Batch approved and forwarded to {next_approver.name}."})
+
+        # --- Final Approval Side Effects ---
+        # Create Expenses (Activities) for each row only when the final manager approves
+        created_ids = []
+        for row in batch.data_json:
+            # 1. Parse route: "Origin -> Destination" or "Origin - Destination"
+            route = str(row.get('route', ''))
+            origin = ""
+            destination = ""
+            if "->" in route:
+                parts = route.split("->")
+                origin = parts[0].strip()
+                destination = parts[1].strip() if len(parts) > 1 else ""
+            elif "-" in route:
+                parts = route.split("-")
+                origin = parts[0].strip()
+                destination = parts[1].strip() if len(parts) > 1 else ""
+            else:
+                origin = route
+
+            # 2. Map mode and subType to match DynamicExpenseGrid's expected options
+            excel_mode = str(row.get('mode', '')).lower()
+            excel_vehicle = str(row.get('vehicle', '')).lower()
+            
+            mapped_mode = "Car / Cab"
+            mapped_subType = "Own Car"
+            
+            if 'bike' in excel_mode or '2 wheeler' in excel_mode:
+                mapped_mode = "Bike"
+                mapped_subType = "Own Bike" if 'own' in excel_vehicle else "Ride Bike"
+            elif 'bus' in excel_mode or 'metro' in excel_mode or 'public' in excel_mode:
+                mapped_mode = "Public Transport"
+                if 'metro' in excel_mode: mapped_subType = "Metro"
+                elif 'bus' in excel_mode: mapped_subType = "Local Bus"
+                else: mapped_subType = "Auto" # Default for PT
+            else: # Car / Cab / Taxi
+                mapped_mode = "Car / Cab"
+                if 'own' in excel_vehicle: mapped_subType = "Own Car"
+                elif 'company' in excel_vehicle: mapped_subType = "Company Car"
+                elif 'ride' in excel_vehicle or 'uber' in excel_vehicle or 'ola' in excel_vehicle or 'taxi' in excel_mode: 
+                    mapped_subType = "Ride Hailing"
+                else: mapped_subType = "Own Car"
+
+            # Construct the JSON description for the grid
+            desc_json = {
+                "natureOfVisit": row.get('purpose'),
+                "remarks": row.get('remarks'),
+                "from_bulk_upload": True,
+                "origin": origin,
+                "destination": destination,
+                "mode": mapped_mode,
+                "subType": mapped_subType,
+                "odoStart": row.get('odo_start', 0),
+                "odoEnd": row.get('odo_end', 0),
+                "time": {
+                    "boardingDate": row.get('date'),
+                    "boardingTime": "09:00",
+                    "actualTime": "18:00"
+                }
+            }
+            
+            expense = Expense.objects.create(
+                trip=batch.trip,
+                date=row.get('date'),
+                category='Fuel', 
+                amount=0,       
+                paid_by='Self (Out of Pocket)',
+                description=json.dumps(desc_json),
+                status='Approved', 
+                odo_start=row.get('odo_start', 0),
+                odo_end=row.get('odo_end', 0),
+                distance=max(0, float(row.get('odo_end', 0)) - float(row.get('odo_start', 0))),
+                travel_mode=mapped_mode,
+                vehicle_type=mapped_subType,
+                latitude=0, longitude=0
+            )
+            created_ids.append(expense.id)
+            
+        batch.status = 'Approved'
+        batch.created_expenses = created_ids
+        batch.save()
+        
+        # Notify user
+        Notification.objects.create(
+            user=batch.user,
+            title="Bulk Activities Approved",
+            message=f"Your travel log from {batch.file_name} has been approved and added to your report.",
+            type='success'
+        )
+        
+        return Response({"message": "Batch approved and activities created"})
+
+    @action(detail=True, methods=['post'], url_path='reject')
+    def reject_batch(self, request, pk=None):
+        batch = self.get_object()
+        user = getattr(request, 'custom_user', None)
+        
+        if batch.current_approver != user:
+             return Response({"error": "Unauthorized"}, status=403)
+             
+        batch.status = 'Rejected'
+        batch.remarks = request.data.get('remarks', 'Rejected by Manager')
+        batch.save()
+        
+        # Notify user
+        Notification.objects.create(
+            user=batch.user,
+            title="Bulk Activities Rejected",
+            message=f"Your travel log {batch.file_name} was rejected. Reason: {batch.remarks}",
+            type='error'
+        )
+        return Response({"message": "Batch rejected"})
+
+# --- MASTER VIEWSETS ---
+
+class TravelModeMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = TravelModeMaster.objects.all()
+    serializer_class = TravelModeMasterSerializer
+
+class BookingTypeMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = BookingTypeMaster.objects.all()
+    serializer_class = BookingTypeMasterSerializer
+
+class AirlineMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = AirlineMaster.objects.all()
+    serializer_class = AirlineMasterSerializer
+
+class FlightClassMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = FlightClassMaster.objects.all()
+    serializer_class = FlightClassMasterSerializer
+
+class TrainClassMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = TrainClassMaster.objects.all()
+    serializer_class = TrainClassMasterSerializer
+
+class BusOperatorMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = BusOperatorMaster.objects.all()
+    serializer_class = BusOperatorMasterSerializer
+
+class BusTypeMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = BusTypeMaster.objects.all()
+    serializer_class = BusTypeMasterSerializer
+
+class IntercityCabVehicleMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = IntercityCabVehicleMaster.objects.all()
+    serializer_class = IntercityCabVehicleMasterSerializer
+
+class TravelProviderMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = TravelProviderMaster.objects.all()
+    serializer_class = TravelProviderMasterSerializer
+
+class TrainProviderMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = TrainProviderMaster.objects.all()
+    serializer_class = TrainProviderMasterSerializer
+
+class BusProviderMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = BusProviderMaster.objects.all()
+    serializer_class = BusProviderMasterSerializer
+
+class IntercityCabProviderMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = IntercityCabProviderMaster.objects.all()
+    serializer_class = IntercityCabProviderMasterSerializer
+
+class LocalTravelModeMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = LocalTravelModeMaster.objects.all()
+    serializer_class = LocalTravelModeMasterSerializer
+
+class LocalCarSubTypeMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = LocalCarSubTypeMaster.objects.all()
+    serializer_class = LocalCarSubTypeMasterSerializer
+
+class LocalBikeSubTypeMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = LocalBikeSubTypeMaster.objects.all()
+    serializer_class = LocalBikeSubTypeMasterSerializer
+
+class LocalProviderMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = LocalProviderMaster.objects.all()
+    serializer_class = LocalProviderMasterSerializer
+
+class StayTypeMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = StayTypeMaster.objects.all()
+    serializer_class = StayTypeMasterSerializer
+
+class RoomTypeMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = RoomTypeMaster.objects.all()
+    serializer_class = RoomTypeMasterSerializer
+
+class MealCategoryMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = MealCategoryMaster.objects.all()
+    serializer_class = MealCategoryMasterSerializer
+
+class MealTypeMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = MealTypeMaster.objects.all()
+    serializer_class = MealTypeMasterSerializer
+
+class IncidentalTypeMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = IncidentalTypeMaster.objects.all()
+    serializer_class = IncidentalTypeMasterSerializer
+
+class MasterModuleViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = MasterModule.objects.all()
+    serializer_class = MasterModuleSerializer
+
+class CustomMasterDefinitionViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = CustomMasterDefinition.objects.all()
+    serializer_class = CustomMasterDefinitionSerializer
+
+class CustomMasterValueViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = CustomMasterValue.objects.all()
+    serializer_class = CustomMasterValueSerializer
+    filterset_fields = ['definition']
+

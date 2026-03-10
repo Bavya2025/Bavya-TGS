@@ -42,28 +42,22 @@ const NATURE_OPTIONS = [
     { value: 'Review', label: 'Final Review', icon: <CheckCircle2 size={14} /> }
 ];
 
-const TRAVEL_MODES = ['Flight', 'Train', 'Intercity Bus', 'Intercity Cab'];
-const BOOKED_BY_OPTIONS = ['Self Booked', 'Company Booked'];
-const LOCAL_TRAVEL_MODES = ['Car / Cab', 'Bike', 'Public Transport'];
-const LOCAL_CAR_SUBTYPES = ['Own Car', 'Company Car', 'Rented Car (With Driver)', 'Self Drive Rental', 'Ride Hailing', 'Pool Vehicle'];
-const LOCAL_BIKE_SUBTYPES = ['Own Bike', 'Rental Bike', 'Ride Bike'];
-const LOCAL_PT_SUBTYPES = ['Auto', 'Metro', 'Local Bus'];
-const LOCAL_PURPOSES = ['Official', 'Client Visit', 'Field Work', 'Internal Movement'];
-const MEAL_CATEGORIES = ['Self Meal', 'Working Meal', 'Client Hosted'];
-const SELF_MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Coffee', 'Tea'];
-const WORKING_MEAL_TYPES = ['Working Breakfast', 'Working Lunch', 'Official Dinner'];
-const CLIENT_HOSTED_TYPES = ['Hosted by Employee', 'Hosted by Client'];
-const ACCOM_TYPES = ['Hotel Stay', 'Bavya Guest House', 'Client Provided', 'Self Stay', 'No Stay'];
-const ROOM_TYPES = ['Standard', 'Deluxe', 'Executive', 'Suite', 'Guest House'];
-const FLIGHT_CLASSES = ['Economy', 'Premium Economy', 'Business', 'First'];
-const TRAIN_CLASSES = ['Sleeper', '3AC', '2AC', '1AC', 'Chair Car', 'General'];
-const BUS_SEAT_TYPES = ['Sleeper', 'Semi Sleeper', 'AC', 'Non-AC', 'Volvo', 'Seater'];
-const INTERCITY_CAB_VEHICLE_TYPES = ['Sedan', 'SUV', 'MUV', 'Hatchback'];
-const VEHICLE_TYPES = ['Own Car', 'Company Car', 'Rental Car (With Driver)', 'Self Drive Rental', 'Ride Hailing', 'Pool Vehicle'];
-const TRAVEL_PURPOSES = ['Official', 'Client Visit', 'Audit', 'Training'];
+// Constants below are used as fallbacks if Master API fails or is empty
+const FALLBACK_TRAVEL_MODES = ['Flight', 'Train', 'Intercity Bus', 'Intercity Cab'];
+const FALLBACK_BOOKED_BY_OPTIONS = ['Self Booked', 'Company Booked'];
+const FALLBACK_LOCAL_TRAVEL_MODES = ['Car / Cab', 'Bike', 'Public Transport'];
+const FALLBACK_LOCAL_CAR_SUBTYPES = ['Own Car', 'Company Car', 'Rented Car (With Driver)', 'Self Drive Rental', 'Ride Hailing', 'Pool Vehicle'];
+const FALLBACK_LOCAL_BIKE_SUBTYPES = ['Own Bike', 'Rental Bike', 'Ride Bike'];
+const FALLBACK_LOCAL_PT_SUBTYPES = ['Auto', 'Metro', 'Local Bus'];
+const FALLBACK_ACCOM_TYPES = ['Hotel Stay', 'Bavya Guest House', 'Client Provided', 'Self Stay', 'No Stay'];
+const FALLBACK_ROOM_TYPES = ['Standard', 'Deluxe', 'Executive', 'Suite', 'Guest House'];
+const FALLBACK_FLIGHT_CLASSES = ['Economy', 'Premium Economy', 'Business', 'First'];
+const FALLBACK_TRAIN_CLASSES = ['Sleeper', '3AC', '2AC', '1AC', 'Chair Car', 'General'];
+const FALLBACK_BUS_SEAT_TYPES = ['Sleeper', 'Semi Sleeper', 'AC', 'Non-AC', 'Volvo', 'Seater'];
+const FALLBACK_INCIDENTAL_TYPES = ['Parking Charges', 'Toll Charges', 'Fuel (Own Vehicle)', 'Luggage Charges', 'Porter Charges', 'Internet / WiFi', 'Others'];
+
 const TRAVEL_STATUSES = ['Completed', 'Cancelled', 'Rescheduled'];
 const LOCAL_TRAVEL_STATUSES = ['Completed', 'Cancelled', 'No-Show'];
-const INCIDENTAL_TYPES = ['Parking Charges', 'Toll Charges', 'Fuel (Own Vehicle)', 'Luggage Charges', 'Porter Charges', 'Internet / WiFi', 'Others'];
 
 const MOCK_DATA = [
     {
@@ -124,6 +118,37 @@ const MOCK_DATA = [
 ];
 
 const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], totalAdvance = 0, onUpdate, tripStatus, claimStatus }) => {
+    // Master data states
+    const [travelModes, setTravelModes] = useState(FALLBACK_TRAVEL_MODES);
+    const [bookedByOptions, setBookedByOptions] = useState(FALLBACK_BOOKED_BY_OPTIONS);
+    const [flightClasses, setFlightClasses] = useState(FALLBACK_FLIGHT_CLASSES);
+    const [trainClasses, setTrainClasses] = useState(FALLBACK_TRAIN_CLASSES);
+    const [busSeatTypes, setBusSeatTypes] = useState(FALLBACK_BUS_SEAT_TYPES);
+    const [intercityCabVehicleTypes, setIntercityCabVehicleTypes] = useState(['Sedan', 'SUV', 'MUV', 'Hatchback']);
+    const [airlines, setAirlines] = useState([]);
+    const [busOperators, setBusOperators] = useState([]);
+    const [travelProviders, setTravelProviders] = useState([]);
+    const [trainProviders, setTrainProviders] = useState([]);
+    const [busProviders, setBusProviders] = useState([]);
+    const [cabProviders, setCabProviders] = useState([]);
+
+    // Local Masters
+    const [localTravelModes, setLocalTravelModes] = useState(FALLBACK_LOCAL_TRAVEL_MODES);
+    const [localCarSubTypes, setLocalCarSubTypes] = useState(FALLBACK_LOCAL_CAR_SUBTYPES);
+    const [localBikeSubTypes, setLocalBikeSubTypes] = useState(FALLBACK_LOCAL_BIKE_SUBTYPES);
+    const [localProviders, setLocalProviders] = useState([]);
+
+    // Stay Masters
+    const [stayTypes, setStayTypes] = useState(FALLBACK_ACCOM_TYPES);
+    const [roomTypes, setRoomTypes] = useState(FALLBACK_ROOM_TYPES);
+
+    // Food Masters
+    const [mealCategories, setMealCategories] = useState(['Self Meal', 'Working Meal', 'Client Hosted']);
+    const [mealTypes, setMealTypes] = useState([]);
+
+    // Incidental Masters
+    const [incidentalTypes, setIncidentalTypes] = useState(FALLBACK_INCIDENTAL_TYPES);
+
     const [rows, setRows] = useState([]);
     const [errors, setErrors] = useState({}); // { rowId: { fieldKey: message } }
     const [activeCategory, setActiveCategory] = useState('Travel'); // Default selection
@@ -142,6 +167,82 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
     const [reviewFilter, setReviewFilter] = useState('All');
     const [focusedInput, setFocusedInput] = useState(null); // { rowId: string, field: 'amount' }
 
+    // Bulk Upload State
+    const [bulkModal, setBulkModal] = useState({ visible: false, file: null, uploading: false });
+
+    useEffect(() => {
+        const fetchMasters = async () => {
+            try {
+                const [
+                    modesRes, bookedByRes, fClassesRes, tClassesRes, busTypesRes,
+                    cabVehiclesRes, airlinesRes, busOpsRes, travProvRes,
+                    locModesRes, carSubRes, bikeSubRes, locProvRes,
+                    stayTypeRes, roomTypeRes,
+                    mealCatRes, mealTypeRes,
+                    incTypeRes,
+                    trainProvRes, busProvRes, cabProvRes
+                ] = await Promise.all([
+                    api.get('/api/travel-mode-masters/'),
+                    api.get('/api/booking-type-masters/'),
+                    api.get('/api/flight-class-masters/'),
+                    api.get('/api/train-class-masters/'),
+                    api.get('/api/bus-type-masters/'),
+                    api.get('/api/intercity-cab-vehicle-masters/'),
+                    api.get('/api/airline-masters/'),
+                    api.get('/api/bus-operator-masters/'),
+                    api.get('/api/travel-provider-masters/'),
+                    api.get('/api/local-travel-mode-masters/'),
+                    api.get('/api/local-car-subtype-masters/'),
+                    api.get('/api/local-bike-subtype-masters/'),
+                    api.get('/api/local-provider-masters/'),
+                    api.get('/api/stay-type-masters/'),
+                    api.get('/api/room-type-masters/'),
+                    api.get('/api/meal-category-masters/'),
+                    api.get('/api/meal-type-masters/'),
+                    api.get('/api/incidental-type-masters/'),
+                    api.get('/api/train-provider-masters/'),
+                    api.get('/api/bus-provider-masters/'),
+                    api.get('/api/intercity-cab-provider-masters/')
+                ]);
+
+                // Populate Travel
+                if (modesRes.data.length > 0) setTravelModes(modesRes.data.filter(m => m.status).map(m => m.mode_name));
+                if (bookedByRes.data.length > 0) setBookedByOptions(bookedByRes.data.filter(m => m.status).map(m => m.booking_type));
+                if (fClassesRes.data.length > 0) setFlightClasses(fClassesRes.data.filter(m => m.status).map(m => m.class_name));
+                if (tClassesRes.data.length > 0) setTrainClasses(tClassesRes.data.filter(m => m.status).map(m => m.class_name));
+                if (busTypesRes.data.length > 0) setBusSeatTypes(busTypesRes.data.filter(m => m.status).map(m => m.bus_type));
+                if (cabVehiclesRes.data.length > 0) setIntercityCabVehicleTypes(cabVehiclesRes.data.filter(m => m.status).map(m => m.vehicle_type));
+                if (airlinesRes.data.length > 0) setAirlines(airlinesRes.data.filter(m => m.status).map(m => m.airline_name));
+                if (busOpsRes.data.length > 0) setBusOperators(busOpsRes.data.filter(m => m.status).map(m => m.operator_name));
+                if (travProvRes.data.length > 0) setTravelProviders(travProvRes.data.filter(m => m.status).map(m => m.provider_name));
+                if (trainProvRes.data.length > 0) setTrainProviders(trainProvRes.data.filter(m => m.status).map(m => m.provider_name));
+                if (busProvRes.data.length > 0) setBusProviders(busProvRes.data.filter(m => m.status).map(m => m.provider_name));
+                if (cabProvRes.data.length > 0) setCabProviders(cabProvRes.data.map(m => m.provider_name));
+
+                // Populate Local
+                if (locModesRes.data.length > 0) setLocalTravelModes(locModesRes.data.filter(m => m.status).map(m => m.mode_name));
+                if (carSubRes.data.length > 0) setLocalCarSubTypes(carSubRes.data.filter(m => m.status).map(m => m.sub_type));
+                if (bikeSubRes.data.length > 0) setLocalBikeSubTypes(bikeSubRes.data.filter(m => m.status).map(m => m.sub_type));
+                if (locProvRes.data.length > 0) setLocalProviders(locProvRes.data.filter(m => m.status).map(m => m.provider_name));
+
+                // Populate Stay
+                if (stayTypeRes.data.length > 0) setStayTypes(stayTypeRes.data.filter(m => m.status).map(m => m.stay_type));
+                if (roomTypeRes.data.length > 0) setRoomTypes(roomTypeRes.data.filter(m => m.status).map(m => m.room_type));
+
+                // Populate Food
+                if (mealCatRes.data.length > 0) setMealCategories(mealCatRes.data.filter(m => m.status).map(m => m.category_name));
+                if (mealTypeRes.data.length > 0) setMealTypes(mealTypeRes.data.filter(m => m.status).map(m => m.meal_type));
+
+                // Populate Incidental
+                if (incTypeRes.data.length > 0) setIncidentalTypes(incTypeRes.data.filter(m => m.status).map(m => m.expense_type));
+
+            } catch (error) {
+                console.error("Failed to fetch masters:", error);
+            }
+        };
+        fetchMasters();
+    }, []);
+
     // --- DATE RANGE CONSTRAINTS ---
     const getMinDate = () => {
         if (!startDate) return undefined;
@@ -149,7 +250,7 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
             const d = new Date(startDate);
             d.setDate(d.getDate() - 1);
             return d.toISOString().split('T')[0];
-        } catch(e) { return undefined; }
+        } catch (e) { return undefined; }
     };
 
     const getMaxDate = () => {
@@ -158,7 +259,7 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
             const d = new Date(endDate);
             d.setDate(d.getDate() + 1);
             return d.toISOString().split('T')[0];
-        } catch(e) { return undefined; }
+        } catch (e) { return undefined; }
     };
 
     const minDate = getMinDate();
@@ -299,7 +400,7 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                 return false;
             }
             // TODO: compare against company policy limit if available
-            
+
 
             if (row.nature === 'Travel') {
                 const { mode, origin, destination, travelStatus, bookedBy, provider, ticketNo, pnr, travelNo, depDate, arrDate } = row.details;
@@ -354,11 +455,11 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                 const depDateObj = new Date(depDate || row.date);
                 const arrDateObj = new Date(arrDate || row.date);
                 if (depDateObj < bookDateObj) {
-                    setRowError(row.id,'depDate','Departure Date cannot be before Booking Date.');
+                    setRowError(row.id, 'depDate', 'Departure Date cannot be before Booking Date.');
                     return false;
                 }
                 if (arrDateObj < depDateObj) {
-                    setRowError(row.id,'arrDate','Arrival Date cannot be before Departure Date.');
+                    setRowError(row.id, 'arrDate', 'Arrival Date cannot be before Departure Date.');
                     return false;
                 }
 
@@ -371,33 +472,33 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                 }
 
                 if (mode === 'Flight') {
-                    if (!provider) { setRowError(row.id,'provider','Airline Name is mandatory.'); return false; }
-                    if (!ticketNo) { setRowError(row.id,'ticketNo','Ticket Number is mandatory.'); return false; }
-                    if (!pnr) { setRowError(row.id,'pnr','PNR is mandatory.'); return false; }
-                    if (!row.details.classType) { setRowError(row.id,'classType','Class is mandatory for Flight.'); return false; }
-                    if (!travelNo) { setRowError(row.id,'travelNo','Flight Number is mandatory.'); return false; }
-                    if (!row.timeDetails.boardingTime || !row.timeDetails.actualTime) { setRowError(row.id,'time','Departure and Arrival times are mandatory.'); return false; }
+                    if (!provider) { setRowError(row.id, 'provider', 'Airline Name is mandatory.'); return false; }
+                    if (!ticketNo) { setRowError(row.id, 'ticketNo', 'Ticket Number is mandatory.'); return false; }
+                    if (!pnr) { setRowError(row.id, 'pnr', 'PNR is mandatory.'); return false; }
+                    if (!row.details.classType) { setRowError(row.id, 'classType', 'Class is mandatory for Flight.'); return false; }
+                    if (!travelNo) { setRowError(row.id, 'travelNo', 'Flight Number is mandatory.'); return false; }
+                    if (!row.timeDetails.boardingTime || !row.timeDetails.actualTime) { setRowError(row.id, 'time', 'Departure and Arrival times are mandatory.'); return false; }
                     // format/length validations
                     const alnum = /^[A-Za-z0-9]+$/;
-                    if (!alnum.test(ticketNo)) { setRowError(row.id,'ticketNo','Ticket Number may only contain letters and numbers.'); return false; }
-                    if (ticketNo.length > 25) { setRowError(row.id,'ticketNo','Ticket Number cannot exceed 25 characters.'); return false; }
-                    if (!alnum.test(pnr)) { setRowError(row.id,'pnr','PNR may only contain letters and numbers.'); return false; }
-                    if (pnr.length < 5 || pnr.length > 15) { setRowError(row.id,'pnr','PNR must be 5-15 characters long.'); return false; }
+                    if (!alnum.test(ticketNo)) { setRowError(row.id, 'ticketNo', 'Ticket Number may only contain letters and numbers.'); return false; }
+                    if (ticketNo.length > 25) { setRowError(row.id, 'ticketNo', 'Ticket Number cannot exceed 25 characters.'); return false; }
+                    if (!alnum.test(pnr)) { setRowError(row.id, 'pnr', 'PNR may only contain letters and numbers.'); return false; }
+                    if (pnr.length < 5 || pnr.length > 15) { setRowError(row.id, 'pnr', 'PNR must be 5-15 characters long.'); return false; }
                 } else if (mode === 'Train') {
-                    if (!ticketNo) { setRowError(row.id,'ticketNo','Ticket Number is mandatory for Train.'); return false; }
-                    if (!pnr) { setRowError(row.id,'pnr','PNR is mandatory for Train.'); return false; }
-                    if (!row.details.carrier) { setRowError(row.id,'carrier','Train Name is mandatory.'); return false; }
-                    if (!row.details.classType) { setRowError(row.id,'classType','Class is mandatory for Train.'); return false; }
+                    if (!ticketNo) { setRowError(row.id, 'ticketNo', 'Ticket Number is mandatory for Train.'); return false; }
+                    if (!pnr) { setRowError(row.id, 'pnr', 'PNR is mandatory for Train.'); return false; }
+                    if (!row.details.carrier) { setRowError(row.id, 'carrier', 'Train Name is mandatory.'); return false; }
+                    if (!row.details.classType) { setRowError(row.id, 'classType', 'Class is mandatory for Train.'); return false; }
                     const alnum = /^[A-Za-z0-9]+$/;
-                    if (!alnum.test(ticketNo)) { setRowError(row.id,'ticketNo','Ticket Number may only contain letters and numbers.'); return false; }
-                    if (ticketNo.length > 25) { setRowError(row.id,'ticketNo','Ticket Number cannot exceed 25 characters.'); return false; }
-                    if (!alnum.test(pnr)) { setRowError(row.id,'pnr','PNR may only contain letters and numbers.'); return false; }
-                    if (pnr.length < 5 || pnr.length > 15) { setRowError(row.id,'pnr','PNR must be 5-15 characters long.'); return false; }
+                    if (!alnum.test(ticketNo)) { setRowError(row.id, 'ticketNo', 'Ticket Number may only contain letters and numbers.'); return false; }
+                    if (ticketNo.length > 25) { setRowError(row.id, 'ticketNo', 'Ticket Number cannot exceed 25 characters.'); return false; }
+                    if (!alnum.test(pnr)) { setRowError(row.id, 'pnr', 'PNR may only contain letters and numbers.'); return false; }
+                    if (pnr.length < 5 || pnr.length > 15) { setRowError(row.id, 'pnr', 'PNR must be 5-15 characters long.'); return false; }
                 } else if (mode === 'Intercity Bus') {
-                    if (!row.details.carrier) { setRowError(row.id,'carrier','Bus Operator is mandatory.'); return false; }
+                    if (!row.details.carrier) { setRowError(row.id, 'carrier', 'Bus Operator is mandatory.'); return false; }
                 } else if (mode === 'Intercity Cab') {
-                    if (!provider) { setRowError(row.id,'provider','Provider / Vendor (Ola/Uber etc) is mandatory.'); return false; }
-                    if (!row.timeDetails.boardingTime || !row.timeDetails.actualTime) { setRowError(row.id,'time','Departure and Arrival times are mandatory for Cab.'); return false; }
+                    if (!provider) { setRowError(row.id, 'provider', 'Provider / Vendor (Ola/Uber etc) is mandatory.'); return false; }
+                    if (!row.timeDetails.boardingTime || !row.timeDetails.actualTime) { setRowError(row.id, 'time', 'Departure and Arrival times are mandatory for Cab.'); return false; }
                 }
 
                 if (isSelfBooked) {
@@ -448,7 +549,7 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
             }
 
             if (row.nature === 'Local Travel') {
-                const { mode, subType, odoStart, odoEnd, fromLocation, toLocation } = row.details;
+                const { mode, subType, odoStart, odoEnd, origin, destination } = row.details;
 
                 // Prevent during active long distance travel
                 const localStart = new Date(row.date + 'T' + (row.timeDetails.boardingTime || '00:00'));
@@ -492,7 +593,7 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                 }
 
                 // location cross-check
-                if (fromLocation && toLocation && fromLocation.trim().toLowerCase() === toLocation.trim().toLowerCase()) {
+                if (origin && destination && origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
                     showToast(`Item #${rowNum}: From and To locations cannot be the same.`, "error");
                     return false;
                 }
@@ -513,7 +614,7 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                         showToast(`Item #${rowNum}: Walk mode cannot have an associated cost.`, "error");
                         return false;
                     }
-                    if (!fromLocation || !toLocation) {
+                    if (!origin || !destination) {
                         showToast(`Item #${rowNum}: From and To locations are required for Walk entries.`, "error");
                         return false;
                     }
@@ -534,6 +635,7 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                     }
                     // require photos for both start and end readings
                     if (!row.details.odoStartImg || !row.details.odoEndImg) {
+                        showToast(`Item #${rowNum}: Please capture both start and end odometer photos.`, "error");
                         if (!row.details.odoStartImg) setRowError(row.id, 'odoStartImg', 'Start odometer photo required.');
                         if (!row.details.odoEndImg) setRowError(row.id, 'odoEndImg', 'End odometer photo required.');
                         return false;
@@ -836,13 +938,15 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
             date: new Date().toISOString().split('T')[0],
             endDate: new Date().toISOString().split('T')[0],
             nature: targetNature,
+            remarks: '',
             details: {
                 segmentId: `SEG-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
                 auditTrail: [],
                 bookedBy: 'Self Booked', // Default
                 travelStatus: 'Completed',
                 checkInTime: '',
-                checkOutTime: ''
+                checkOutTime: '',
+                selfies: [] // Added for Local Travel
             },
             timeDetails: {
                 boardingDate: new Date().toISOString().split('T')[0],
@@ -1094,8 +1198,27 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
             reader.onloadend = () => {
                 const id = activeRowRef.current;
                 const field = activeFieldRef.current;
-                updateDetails(id, `${field}Img`, reader.result);
-                showToast("Odometer photo captured", "success");
+
+                if (field === 'selfie') {
+                    setRows(prevRows => prevRows.map(row => {
+                        if (row.id === id) {
+                            const currentSelfies = row.details.selfies || [];
+                            return {
+                                ...row,
+                                details: {
+                                    ...row.details,
+                                    selfies: [...currentSelfies, reader.result]
+                                },
+                                isSaved: false
+                            };
+                        }
+                        return row;
+                    }));
+                    showToast("Selfie captured successfully", "success");
+                } else {
+                    updateDetails(id, `${field}Img`, reader.result);
+                    showToast("Odometer photo captured", "success");
+                }
             };
             reader.readAsDataURL(file);
         }
@@ -1149,6 +1272,66 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
         newWindow.document.write(`<img src="${bill}" style="max-width:100%; height:auto;" />`);
     };
 
+    const handleSelfieCapture = (id) => {
+        activeRowRef.current = id;
+        activeFieldRef.current = 'selfie';
+        fileInputRef.current?.click();
+    };
+
+    const removeSelfie = (rowId, index) => {
+        setRows(prevRows => prevRows.map(row => {
+            if (row.id === rowId) {
+                const newSelfies = [...(row.details.selfies || [])];
+                newSelfies.splice(index, 1);
+                return { ...row, details: { ...row.details, selfies: newSelfies }, isSaved: false };
+            }
+            return row;
+        }));
+    };
+
+    // --- BULK UPLOAD HANDLERS ---
+    const handleDownloadTemplate = async () => {
+        try {
+            const response = await api.get('/api/bulk-activities/template/', { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'bulk_local_travel_template.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+        } catch (error) {
+            console.error('Download error:', error);
+            showToast("Failed to download template. Please try again.", "error");
+        }
+    };
+
+    const handleBulkUpload = async () => {
+        if (!bulkModal.file) {
+            showToast("Please select a file first", "error");
+            return;
+        }
+
+        setBulkModal(prev => ({ ...prev, uploading: true }));
+        const formData = new FormData();
+        formData.append('file', bulkModal.file);
+        formData.append('trip_id', tripId);
+
+        try {
+            await api.post('/api/bulk-activities/upload/', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            showToast("Bulk activities submitted for batch approval successfully!", "success");
+            setBulkModal({ visible: false, file: null, uploading: false });
+            // Let the main window know of update 
+            if (onUpdate) onUpdate();
+        } catch (error) {
+            console.error('Upload error:', error);
+            showToast(error.response?.data?.error || "Error uploading file", "error");
+            setBulkModal(prev => ({ ...prev, uploading: false }));
+        }
+    };
+
     const isLocked = claimStatus && !['Draft', 'Rejected'].includes(claimStatus);
 
     const renderCategoryTable = (nature, title, icon) => {
@@ -1172,7 +1355,7 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                         {icon}
                         <h4>{title}</h4>
                         <span className="cat-count">{categoryRows.length} Items</span>
-                        
+
                         {nature === 'Incidental' && (
                             <div className="header-actions-extra ml-4" style={{ marginLeft: '2rem', display: 'flex', alignItems: 'center' }}>
                                 <label className="toggle-switch-mini">
@@ -1184,10 +1367,18 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                         )}
                     </div>
                     {!isLocked && (
-                        <button className="add-cat-row-btn" onClick={() => addRow(nature)}>
-                            <Plus size={14} />
-                            <span>Add {title}</span>
-                        </button>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            {nature === 'Local Travel' && (
+                                <button className="add-cat-row-btn" style={{ background: '#10b981', color: 'white', borderColor: '#10b981' }} onClick={() => setBulkModal(prev => ({ ...prev, visible: true }))}>
+                                    <Upload size={14} />
+                                    <span>Bulk Upload (Excel)</span>
+                                </button>
+                            )}
+                            <button className="add-cat-row-btn" onClick={() => addRow(nature)}>
+                                <Plus size={14} />
+                                <span>Add {title}</span>
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -1273,10 +1464,10 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                             </div>
                                                             {errors[row.id]?.date && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].date}</div>}
                                                         </div>
-                                                        {['Flight','Train','Intercity Bus','Intercity Cab'].includes(row.details.mode) && row.date && row.details.depDate && new Date(row.date) > new Date(row.details.depDate) && (
+                                                        {['Flight', 'Train', 'Intercity Bus', 'Intercity Cab'].includes(row.details.mode) && row.date && row.details.depDate && new Date(row.date) > new Date(row.details.depDate) && (
                                                             <div className="text-danger" style={{ fontSize: '0.55rem', fontWeight: 700, marginTop: '2px', textTransform: 'uppercase' }}>⚠️ Booking Date &gt; Departure Date</div>
                                                         )}
-                                                        {['Flight','Train','Intercity Bus','Intercity Cab'].includes(row.details.mode) && row.details.depDate && row.details.arrDate && new Date(row.details.depDate) > new Date(row.details.arrDate) && (
+                                                        {['Flight', 'Train', 'Intercity Bus', 'Intercity Cab'].includes(row.details.mode) && row.details.depDate && row.details.arrDate && new Date(row.details.depDate) > new Date(row.details.arrDate) && (
                                                             <div className="text-danger" style={{ fontSize: '0.55rem', fontWeight: 700, marginTop: '2px', textTransform: 'uppercase' }}>⚠️ Dep Date &gt; Arr Date</div>
                                                         )}
                                                     </div>
@@ -1316,20 +1507,20 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                     <td>
                                                         <div className="row-fields">
                                                             <div style={{ flex: 1 }}>
-                                                            <select className="cat-input" value={row.details.mode || ''} onChange={e => {
-                                                                updateDetails(row.id, 'mode', e.target.value);
-                                                                if (e.target.value === 'Intercity Cab') {
-                                                                    updateDetails(row.id, 'cancellationDate', null);
-                                                                    updateDetails(row.id, 'refundAmount', 0);
-                                                                }
-                                                            }}>
-                                                                <option value="">Mode</option>
-                                                                {TRAVEL_MODES.map(m => <option key={m} value={m}>{m}</option>)}
-                                                            </select>
-                                                            {errors[row.id]?.mode && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].mode}</div>}
-                                                        </div>
+                                                                <select className="cat-input" value={row.details.mode || ''} onChange={e => {
+                                                                    updateDetails(row.id, 'mode', e.target.value);
+                                                                    if (e.target.value === 'Intercity Cab') {
+                                                                        updateDetails(row.id, 'cancellationDate', null);
+                                                                        updateDetails(row.id, 'refundAmount', 0);
+                                                                    }
+                                                                }}>
+                                                                    <option value="">Mode</option>
+                                                                    {travelModes.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                </select>
+                                                                {errors[row.id]?.mode && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].mode}</div>}
+                                                            </div>
                                                             <select className="cat-input mt-1" value={row.details.bookedBy || 'Self Booked'} onChange={e => updateDetails(row.id, 'bookedBy', e.target.value)}>
-                                                                {BOOKED_BY_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
+                                                                {bookedByOptions.map(b => <option key={b} value={b}>{b}</option>)}
                                                             </select>
                                                         </div>
                                                     </td>
@@ -1342,38 +1533,38 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                                 <>
                                                                     <div className="field-group">
                                                                         <div style={{ flex: 1 }}>
-                                                                        <input type="text" placeholder="From Airport" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} style={{ flex: 1 }} />
-                                                                        {errors[row.id]?.origin && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].origin}</div>}
-                                                                    </div>
-                                                                    <div style={{ flex: 1 }}>
-                                                                        <input type="text" placeholder="To Airport" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} style={{ flex: 1 }} />
-                                                                        {errors[row.id]?.destination && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].destination}</div>}
-                                                                    </div>
-                                                                    </div>
-                                                                    <div className="field-group mt-1">
-                                                                        <div style={{ flex: 1.5 }}>
-                                                                        <input type="text" placeholder="Airline Name" value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} style={{ flex: 1.5 }} />
-                                                                        {errors[row.id]?.provider && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].provider}</div>}
-                                                                    </div>
-                                                                    <div style={{ flex: 1 }}>
-                                                                        <input type="text" placeholder="Flight No." value={row.details.travelNo || ''} onChange={e => updateDetails(row.id, 'travelNo', e.target.value)} style={{ flex: 1 }} />
-                                                                        {errors[row.id]?.travelNo && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].travelNo}</div>}
-                                                                    </div>
+                                                                            <input type="text" placeholder="From Airport" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} style={{ flex: 1 }} />
+                                                                            {errors[row.id]?.origin && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].origin}</div>}
+                                                                        </div>
+                                                                        <div style={{ flex: 1 }}>
+                                                                            <input type="text" placeholder="To Airport" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} style={{ flex: 1 }} />
+                                                                            {errors[row.id]?.destination && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].destination}</div>}
+                                                                        </div>
                                                                     </div>
                                                                     <div className="field-group mt-1">
                                                                         <div style={{ flex: 1.5 }}>
-                                                                        <input type="text" placeholder="Ticket Number" value={row.details.ticketNo || ''} onChange={e => updateDetails(row.id, 'ticketNo', e.target.value)} style={{ flex: 1.5 }} />
-                                                                        {errors[row.id]?.ticketNo && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].ticketNo}</div>}
+                                                                            <input type="text" placeholder="Airline Name" value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} style={{ flex: 1.5 }} />
+                                                                            {errors[row.id]?.provider && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].provider}</div>}
+                                                                        </div>
+                                                                        <div style={{ flex: 1 }}>
+                                                                            <input type="text" placeholder="Flight No." value={row.details.travelNo || ''} onChange={e => updateDetails(row.id, 'travelNo', e.target.value)} style={{ flex: 1 }} />
+                                                                            {errors[row.id]?.travelNo && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].travelNo}</div>}
+                                                                        </div>
                                                                     </div>
-                                                                    <div style={{ flex: 1 }}>
-                                                                        <input type="text" placeholder="PNR" value={row.details.pnr || ''} onChange={e => updateDetails(row.id, 'pnr', e.target.value)} style={{ flex: 1 }} />
-                                                                        {errors[row.id]?.pnr && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].pnr}</div>}
-                                                                    </div>
+                                                                    <div className="field-group mt-1">
+                                                                        <div style={{ flex: 1.5 }}>
+                                                                            <input type="text" placeholder="Ticket Number" value={row.details.ticketNo || ''} onChange={e => updateDetails(row.id, 'ticketNo', e.target.value)} style={{ flex: 1.5 }} />
+                                                                            {errors[row.id]?.ticketNo && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].ticketNo}</div>}
+                                                                        </div>
+                                                                        <div style={{ flex: 1 }}>
+                                                                            <input type="text" placeholder="PNR" value={row.details.pnr || ''} onChange={e => updateDetails(row.id, 'pnr', e.target.value)} style={{ flex: 1 }} />
+                                                                            {errors[row.id]?.pnr && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].pnr}</div>}
+                                                                        </div>
                                                                     </div>
                                                                     <div className="field-group mt-1">
                                                                         <select style={{ width: '100%' }} value={row.details.classType || ''} onChange={e => updateDetails(row.id, 'classType', e.target.value)}>
                                                                             <option value="">Travel Class</option>
-                                                                            {FLIGHT_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                                                                            {flightClasses.map(c => <option key={c} value={c}>{c}</option>)}
                                                                         </select>
                                                                     </div>
                                                                 </>
@@ -1385,12 +1576,12 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                                     </div>
                                                                     <div className="field-group mt-1">
                                                                         <input type="text" placeholder="Provider / Vendor" value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} style={{ flex: 1.5 }} />
-                                                                        
+
                                                                     </div>
                                                                     <div className="field-group mt-1">
                                                                         <select value={row.details.vehicleType || ''} onChange={e => updateDetails(row.id, 'vehicleType', e.target.value)} style={{ flex: 1.5 }}>
                                                                             <option value="">Vehicle Type</option>
-                                                                            {INTERCITY_CAB_VEHICLE_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
+                                                                            {intercityCabVehicleTypes.map(v => <option key={v} value={v}>{v}</option>)}
                                                                         </select>
                                                                         <input type="text" placeholder="Driver Name" value={row.details.driverName || ''} onChange={e => updateDetails(row.id, 'driverName', e.target.value)} style={{ flex: 1 }} />
                                                                     </div>
@@ -1400,20 +1591,20 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                                     {/* Default (Train, Intercity Bus, Intercity Car etc.) */}
                                                                     <div className="field-group">
                                                                         <div style={{ flex: 1 }}>
-                                                                        <input type="text" placeholder="From" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} style={{ flex: 1 }} />
-                                                                        {errors[row.id]?.origin && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].origin}</div>}
-                                                                    </div>
-                                                                    <div style={{ flex: 1 }}>
-                                                                        <input type="text" placeholder="To" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} style={{ flex: 1 }} />
-                                                                        {errors[row.id]?.destination && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].destination}</div>}
-                                                                    </div>
+                                                                            <input type="text" placeholder="From" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} style={{ flex: 1 }} />
+                                                                            {errors[row.id]?.origin && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].origin}</div>}
+                                                                        </div>
+                                                                        <div style={{ flex: 1 }}>
+                                                                            <input type="text" placeholder="To" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} style={{ flex: 1 }} />
+                                                                            {errors[row.id]?.destination && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].destination}</div>}
+                                                                        </div>
                                                                         {row.details.mode === 'Intercity Bus' && (
                                                                             <input type="text" placeholder="Boarding Point" value={row.details.boardingPoint || ''} onChange={e => updateDetails(row.id, 'boardingPoint', e.target.value)} style={{ flex: 1 }} className="ml-1" />
                                                                         )}
                                                                     </div>
                                                                     <div className="field-group mt-1">
                                                                         <input type="text" placeholder={row.details.mode === 'Intercity Bus' ? "Provider / Agent" : "Provider/Agent"} value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} style={{ flex: 1.5 }} />
-                                                                        
+
                                                                     </div>
                                                                     <div className="field-group mt-1">
                                                                         <input type="text" placeholder="Ticket No." value={row.details.ticketNo || ''} onChange={e => updateDetails(row.id, 'ticketNo', e.target.value)} style={{ flex: 1.5 }} />
@@ -1428,8 +1619,8 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                                     <div className="field-group mt-1">
                                                                         <select value={row.details.classType || ''} onChange={e => updateDetails(row.id, 'classType', e.target.value)}>
                                                                             <option value="">{row.details.mode === 'Intercity Bus' ? 'Bus Type' : 'Cls'}</option>
-                                                                            {row.details.mode === 'Train' && TRAIN_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
-                                                                            {row.details.mode === 'Intercity Bus' && BUS_SEAT_TYPES.map(c => <option key={c} value={c}>{c}</option>)}
+                                                                            {row.details.mode === 'Train' && trainClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                                                            {row.details.mode === 'Intercity Bus' && busSeatTypes.map(c => <option key={c} value={c}>{c}</option>)}
                                                                         </select>
                                                                         {row.details.mode === 'Train' && (
                                                                             <label className="checkbox-item mini ml-2" style={{ whiteSpace: 'nowrap' }}>
@@ -1525,31 +1716,31 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                         <div className="row-fields">
                                                             <select className="cat-input" value={row.details.mode || ''} onChange={e => { updateDetails(row.id, 'mode', e.target.value); updateDetails(row.id, 'subType', ''); }}>
                                                                 <option value="">Select Mode</option>
-                                                                {LOCAL_TRAVEL_MODES.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                {localTravelModes.map(m => <option key={m} value={m}>{m}</option>)}
                                                             </select>
 
                                                             {row.details.mode === 'Car / Cab' && (
                                                                 <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => updateDetails(row.id, 'subType', e.target.value)}>
                                                                     <option value="">Select Sub-Type</option>
-                                                                    {LOCAL_CAR_SUBTYPES.map(s => <option key={s} value={s}>{s}</option>)}
+                                                                    {localCarSubTypes.map(s => <option key={s} value={s}>{s}</option>)}
                                                                 </select>
                                                             )}
 
                                                             {row.details.mode === 'Bike' && (
                                                                 <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => updateDetails(row.id, 'subType', e.target.value)}>
                                                                     <option value="">Select Sub-Type</option>
-                                                                    {LOCAL_BIKE_SUBTYPES.map(s => <option key={s} value={s}>{s}</option>)}
+                                                                    {localBikeSubTypes.map(s => <option key={s} value={s}>{s}</option>)}
                                                                 </select>
                                                             )}
 
                                                             {row.details.mode === 'Public Transport' && (
                                                                 <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => updateDetails(row.id, 'subType', e.target.value)}>
                                                                     <option value="">Select Sub-Type</option>
-                                                                    {LOCAL_PT_SUBTYPES.map(s => <option key={s} value={s}>{s}</option>)}
+                                                                    {localProviders.map(s => <option key={s} value={s}>{s}</option>)}
                                                                 </select>
                                                             )}
                                                             <select className="cat-input mt-1" value={row.details.bookedBy || 'Self Booked'} onChange={e => updateDetails(row.id, 'bookedBy', e.target.value)}>
-                                                                {BOOKED_BY_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
+                                                                {bookedByOptions.map(b => <option key={b} value={b}>{b}</option>)}
                                                             </select>
                                                         </div>
                                                     </td>
@@ -1573,44 +1764,69 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                                 <input type="time" value={row.timeDetails.actualTime || ''} onChange={e => updateTimeDetails(row.id, 'actualTime', e.target.value)} />
                                                             </div>
 
-                                                            {['Own Car', 'Company Car', 'Own Bike', 'Self Drive Rental'].includes(row.details.subType) ? (
-                                                                <div className="odo-tracking mt-2" style={{ gridColumn: '1 / -1' }}>
-                                                                    <div className="odo-row">
+                                                            <div className="odo-tracking mt-2" style={{ gridColumn: '1 / -1' }}>
+                                                                {['Own Car', 'Company Car', 'Own Bike', 'Self Drive Rental'].includes(row.details.subType) && (
+                                                                    <div className="odo-row mb-2">
                                                                         <span className="odo-label">Start</span>
-                                                                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                                                                        <input
-                                                                            type="number"
-                                                                            placeholder="0"
-                                                                            value={row.details.odoStart || ''}
-                                                                            onChange={e => updateDetails(row.id, 'odoStart', e.target.value)}
-                                                                            className={errors[row.id]?.odoStart ? 'error' : ''}
-                                                                        />
-                                                                        <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoStart')}>
-                                                                            {row.details.odoStartImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
-                                                                        </button>
-                                                                    </div>
-                                                                    {errors[row.id]?.odoStart && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].odoStart}</div>}
-                                                                    {errors[row.id]?.odoStartImg && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].odoStartImg}</div>}
+                                                                        <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
+                                                                            <input
+                                                                                type="number"
+                                                                                placeholder="0"
+                                                                                value={row.details.odoStart || ''}
+                                                                                onChange={e => updateDetails(row.id, 'odoStart', e.target.value)}
+                                                                                className={errors[row.id]?.odoStart ? 'error' : ''}
+                                                                                style={{ paddingRight: '50px', width: '100%' }}
+                                                                            />
+                                                                            <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoStart')}>
+                                                                                {row.details.odoStartImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
+                                                                            </button>
+                                                                        </div>
                                                                         <span className="odo-label">End</span>
-                                                                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                                                                        <input
-                                                                            type="number"
-                                                                            placeholder="0"
-                                                                            value={row.details.odoEnd || ''}
-                                                                            onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)}
-                                                                            className={errors[row.id]?.odoEnd ? 'error' : ''}
-                                                                        />
-                                                                        <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoEnd')}>
-                                                                            {row.details.odoEndImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
-                                                                        </button>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
+                                                                            <input
+                                                                                type="number"
+                                                                                placeholder="0"
+                                                                                value={row.details.odoEnd || ''}
+                                                                                onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)}
+                                                                                className={errors[row.id]?.odoEnd ? 'error' : ''}
+                                                                                style={{ paddingRight: '50px', width: '100%' }}
+                                                                            />
+                                                                            <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoEnd')}>
+                                                                                {row.details.odoEndImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
+                                                                            </button>
+                                                                        </div>
                                                                     </div>
-                                                                    {errors[row.id]?.odoEnd && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].odoEnd}</div>}
-                                                                    {errors[row.id]?.odoEndImg && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].odoEndImg}</div>}
+                                                                )}
+
+                                                                {/* Selfie Capture Section */}
+                                                                <div className="selfie-capture-section">
+                                                                    <label className="odo-label" style={{ display: 'block', marginBottom: '8px' }}>Selfie Proofs ({(row.details.selfies || []).length})</label>
+                                                                    <div className="selfie-list" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                                        {(row.details.selfies || []).map((s, idx) => (
+                                                                            <div key={idx} className="selfie-thumb" style={{ position: 'relative', width: '40px', height: '40px', border: '1px solid #e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                                                                                <img src={s} alt="selfie" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onClick={() => previewBill(s)} />
+                                                                                <button onClick={() => removeSelfie(row.id, idx)} style={{ position: 'absolute', top: 0, right: 0, background: 'rgba(239, 68, 68, 0.8)', color: 'white', border: 'none', borderRadius: '50%', width: '14px', height: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                                                                    <X size={10} />
+                                                                                </button>
+                                                                            </div>
+                                                                        ))}
+                                                                        <button className="add-selfie-btn" onClick={() => handleSelfieCapture(row.id)} style={{ width: '40px', height: '40px', border: '1px dashed #cbd5e1', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', color: '#64748b' }}>
+                                                                            <Camera size={16} />
+                                                                        </button>
                                                                     </div>
                                                                 </div>
-                                                            ) : (
-                                                                <div className="nights-badge mt-1" style={{ background: '#f8fafc', color: '#94a3b8', gridColumn: '1 / -1' }}>No ODO Tracking</div>
-                                                            )}
+
+                                                                {/* Remarks Field for Local Travel */}
+                                                                <div className="mt-2">
+                                                                    <textarea
+                                                                        className="cat-input"
+                                                                        placeholder="Job Description / Remarks"
+                                                                        style={{ width: '100%', fontSize: '0.7rem', minHeight: '40px' }}
+                                                                        value={row.remarks || ''}
+                                                                        onChange={e => updateRow(row.id, 'remarks', e.target.value)}
+                                                                    />
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </td>
                                                 </>
@@ -1639,15 +1855,15 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                                 }
                                                             }}>
                                                                 <option value="">Meal Category</option>
-                                                                {MEAL_CATEGORIES.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                {mealCategories.map(m => <option key={m} value={m}>{m}</option>)}
                                                             </select>
                                                             {row.details.mealCategory && (
                                                                 <>
                                                                     <select className="cat-input mt-1" value={row.details.mealType || ''} onChange={e => updateDetails(row.id, 'mealType', e.target.value)} disabled={row.details.mealCategory !== 'Self Meal'}>
                                                                         <option value="">Meal Type</option>
-                                                                        {row.details.mealCategory === 'Self Meal' && SELF_MEAL_TYPES.map(m => <option key={m} value={m}>{m}</option>)}
-                                                                        {row.details.mealCategory === 'Working Meal' && WORKING_MEAL_TYPES.map(m => <option key={m} value={m}>{m}</option>)}
-                                                                        {row.details.mealCategory === 'Client Hosted' && CLIENT_HOSTED_TYPES.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                        {row.details.mealCategory === 'Self Meal' && mealTypes.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                        {row.details.mealCategory === 'Working Meal' && mealTypes.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                        {row.details.mealCategory === 'Client Hosted' && mealTypes.map(m => <option key={m} value={m}>{m}</option>)}
                                                                     </select>
                                                                     {row.details.mealCategory === 'Self Meal' && (
                                                                         <div className="input-with-label-mini mt-1">
@@ -1693,7 +1909,7 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                                 disabled={isSameDayTrip()}
                                                             >
                                                                 <option value="">Stay Type</option>
-                                                                {ACCOM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                                                {stayTypes.map(t => <option key={t} value={t}>{t}</option>)}
                                                             </select>
                                                             <input
                                                                 type="text"
@@ -1712,7 +1928,7 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                                         className={isSameDayTrip() ? "opacity-50" : ""}
                                                                     >
                                                                         <option value="">Room</option>
-                                                                        {ROOM_TYPES.map(r => <option key={r} value={r}>{r}</option>)}
+                                                                        {roomTypes.map(r => <option key={r} value={r}>{r}</option>)}
                                                                     </select>
                                                                 )}
                                                                 <div className="nights-badge ml-auto">{row.details.nights || 0}N</div>
@@ -1738,11 +1954,11 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                                 <label>EXPENSE TYPE</label>
                                                                 <select className="cat-input" value={row.details.incidentalType || ''} onChange={e => updateDetails(row.id, 'incidentalType', e.target.value)}>
                                                                     <option value="">Select Type</option>
-                                                                    {INCIDENTAL_TYPES.filter(t => t !== 'Porter Charges' || carryingLuggage).map(t => (
+                                                                    {incidentalTypes.filter(t => t !== 'Porter Charges' || carryingLuggage).map(t => (
                                                                         <option key={t} value={t}>{t}</option>
                                                                     ))}
                                                                 </select>
-                                                                </div>
+                                                            </div>
                                                             <div className="input-with-label-mini mt-1">
                                                                 <label>LOCATION</label>
                                                                 <input type="text" placeholder="Where occurred" value={row.details.location || ''} onChange={e => updateDetails(row.id, 'location', e.target.value)} />
@@ -2462,6 +2678,73 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                     </div>
                 )}
             </div>
+
+            {/* Bulk Upload Modal */}
+            {bulkModal.visible && (
+                <div className="modal-overlay">
+                    <div className="modal-body bulk-upload-modal">
+                        <button className="modal-close" onClick={() => setBulkModal({ visible: false, file: null, uploading: false })}>
+                            <X size={24} />
+                        </button>
+                        <div className="modal-header">
+                            <Upload className="modal-icon text-primary" />
+                            <h2>Bulk Activity Upload</h2>
+                            <p className="text-secondary">Upload multiple daily local travel logs for this trip via Excel.</p>
+                        </div>
+                        <div className="modal-content">
+                            <div className="upload-steps">
+                                <div className="step-card">
+                                    <div className="step-number">1</div>
+                                    <div className="step-details">
+                                        <h4>Download Template</h4>
+                                        <p>Get the standard Excel format for daily entries.</p>
+                                        <button className="btn-outline-primary mt-2" onClick={handleDownloadTemplate} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', borderRadius: '4px', border: '1px solid #3b82f6', color: '#3b82f6', background: 'transparent', cursor: 'pointer' }}>
+                                            <FileText size={18} /> Download Excel
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="step-card mt-3">
+                                    <div className="step-number">2</div>
+                                    <div className="step-details">
+                                        <h4>Upload Filled File</h4>
+                                        <p>Select your completed template for this trip.</p>
+                                        <div className="file-upload-wrapper mt-2">
+                                            <input
+                                                type="file"
+                                                accept=".xlsx, .xls"
+                                                id="bulkFile"
+                                                onChange={(e) => setBulkModal(prev => ({ ...prev, file: e.target.files[0] }))}
+                                                style={{ display: 'none' }}
+                                            />
+                                            <label htmlFor="bulkFile" className={`file-upload-label ${bulkModal.file ? 'has-file' : ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '20px', border: '2px dashed #cbd5e1', borderRadius: '8px', cursor: 'pointer', background: bulkModal.file ? '#f0fdf4' : '#f8fafc', color: bulkModal.file ? '#166534' : '#64748b' }}>
+                                                <Upload size={24} />
+                                                <span>{bulkModal.file ? bulkModal.file.name : 'Click to Browse File'}</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="modal-actions mt-4" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                                <button className="btn-secondary" onClick={() => setBulkModal({ visible: false, file: null, uploading: false })} style={{ flex: 1, padding: '10px', border: '1px solid #cbd5e1', borderRadius: '4px', background: 'transparent', cursor: 'pointer' }}>
+                                    Cancel
+                                </button>
+                                <button
+                                    className={`btn-primary ${(!bulkModal.file || bulkModal.uploading) ? 'btn-disabled' : ''}`}
+                                    onClick={handleBulkUpload}
+                                    disabled={!bulkModal.file || bulkModal.uploading}
+                                    style={{ flex: 1, padding: '10px', background: 'var(--magenta)', color: 'white', border: 'none', borderRadius: '4px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: (!bulkModal.file || bulkModal.uploading) ? 'not-allowed' : 'pointer', opacity: (!bulkModal.file || bulkModal.uploading) ? 0.6 : 1 }}
+                                >
+                                    {bulkModal.uploading ? (
+                                        <><Clock className="animate-spin" size={18} /> Uploading...</>
+                                    ) : (
+                                        <>Submit for Approval</>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -3,7 +3,7 @@ from rest_framework import permissions
 class IsCustomAuthenticated(permissions.BasePermission):
 
     def has_permission(self, request, view):
-        return bool(getattr(request, 'custom_user', None))
+        return bool(getattr(request, 'custom_user', None)) or getattr(request, 'is_api_key_authenticated', False)
 class IsAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         user = getattr(request, 'custom_user', None)
