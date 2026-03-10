@@ -2,29 +2,53 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
-import { Search, Filter, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Filter, ShieldCheck, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 const LoginHistory = () => {
     const { user } = useAuth();
     const [logs, setLogs] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [expandedRow, setExpandedRow] = useState(null);
+    const [pagination, setPagination] = useState({
+        count: 0,
+        next: null,
+        previous: null,
+        currentPage: 1
+    });
     const [filters, setFilters] = useState({
         search: '',
     });
 
     useEffect(() => {
-        fetchLogs();
+        fetchLogs(1);
     }, [filters]);
 
-    const fetchLogs = async () => {
+    const fetchLogs = async (page = 1) => {
         setIsLoading(true);
         try {
-            const params = {};
+            const params = { page };
             if (filters.search) params.search = filters.search;
             
             const response = await api.get('/api/login-history/', { params });
-            setLogs(response.data.results || response.data);
+            const data = response.data;
+            
+            if (data.results) {
+                setLogs(data.results);
+                setPagination({
+                    count: data.count,
+                    next: data.next,
+                    previous: data.previous,
+                    currentPage: page
+                });
+            } else {
+                setLogs(data);
+                setPagination({
+                    count: data.length,
+                    next: null,
+                    previous: null,
+                    currentPage: 1
+                });
+            }
         } catch (error) {
             console.error("Failed to fetch login history:", error);
         } finally {
@@ -35,6 +59,8 @@ const LoginHistory = () => {
     const handleSearchChange = (e) => {
         setFilters(prev => ({ ...prev, search: e.target.value }));
     };
+
+    const totalPages = Math.ceil(pagination.count / 20);
 
     return (
         <div className="page-container animate-fade-in">
@@ -159,6 +185,49 @@ const LoginHistory = () => {
                     </tbody>
                 </table>
             </div>
+
+            {pagination.count > 0 && (
+                <div className="pagination-bar">
+                    <div className="pagination-info">
+                        Showing {logs.length} of {pagination.count} records (Page {pagination.currentPage} of {totalPages})
+                    </div>
+                    <div className="pagination-controls">
+                        <button 
+                            className="pagination-btn" 
+                            onClick={() => fetchLogs(1)} 
+                            disabled={pagination.currentPage === 1 || isLoading}
+                            title="First Page"
+                        >
+                            <ChevronsLeft size={18} />
+                        </button>
+                        <button 
+                            className="pagination-btn" 
+                            onClick={() => fetchLogs(pagination.currentPage - 1)} 
+                            disabled={!pagination.previous || isLoading}
+                            title="Previous Page"
+                        >
+                            <ChevronLeft size={18} />
+                        </button>
+                        <div className="page-number">{pagination.currentPage}</div>
+                        <button 
+                            className="pagination-btn" 
+                            onClick={() => fetchLogs(pagination.currentPage + 1)} 
+                            disabled={!pagination.next || isLoading}
+                            title="Next Page"
+                        >
+                            <ChevronRight size={18} />
+                        </button>
+                        <button 
+                            className="pagination-btn" 
+                            onClick={() => fetchLogs(totalPages)} 
+                            disabled={pagination.currentPage === totalPages || isLoading}
+                            title="Last Page"
+                        >
+                            <ChevronsRight size={18} />
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

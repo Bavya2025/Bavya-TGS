@@ -1666,6 +1666,69 @@ tr:hover td {
   background: #fcfcfc;
 }
 
+/* Pagination Styles */
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  background: white;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  margin-top: -1px; /* Align with table border */
+}
+
+.pagination-info {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pagination-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 1.5px solid #f1f5f9;
+  color: var(--text-main);
+  transition: var(--transition);
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary-light);
+  transform: translateY(-2px);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-number {
+  min-width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary);
+  color: white;
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: 0.875rem;
+  box-shadow: 0 4px 10px rgba(187, 6, 51, 0.2);
+}
+
 /* FINANCE DASHBOARD ENHANCEMENTS */
 .finance-actions {
   display: flex;

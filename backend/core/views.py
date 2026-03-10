@@ -6,14 +6,20 @@ from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework import status, generics, viewsets
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny
 
 from .models import User, Session, LoginHistory, AuditLog, Notification
 from .permissions import IsCustomAuthenticated, IsAdmin
 from .serializers import NotificationSerializer, AuditLogSerializer, LoginHistorySerializer
 from django.db.models import Q
-from rest_framework import filters
+import rest_framework.filters as filters
 from django_filters.rest_framework import DjangoFilterBackend
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -233,7 +239,8 @@ class AuditLogView(generics.ListAPIView):
 class LoginHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = LoginHistory.objects.all().select_related('user')
     serializer_class = LoginHistorySerializer
-    permission_classes = [IsCustomAuthenticated]
+    permission_classes = [IsAdmin]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_fields = ['user', 'ip_address']
     search_fields = ['user__employee_id', 'ip_address']
@@ -241,17 +248,13 @@ class LoginHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-login_time']
 
     def get_queryset(self):
-        user = self.request.custom_user
-        role_name = (user.role.name if user.role else '').lower()
-            
-        if role_name in ['admin', 'cfo', 'hr', 'finance']:
-             return LoginHistory.objects.all().select_related('user')
-        return LoginHistory.objects.filter(user=user).select_related('user')
+        return LoginHistory.objects.all().select_related('user')
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.all().select_related('user')
     serializer_class = AuditLogSerializer
-    permission_classes = [IsCustomAuthenticated]
+    permission_classes = [IsAdmin]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_fields = ['user', 'action', 'model_name']
     search_fields = ['user__employee_id', 'object_repr', 'details']
@@ -259,12 +262,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-timestamp']
 
     def get_queryset(self):
-        user = self.request.custom_user
-        role_name = (user.role.name if user.role else '').lower()
- 
-        if role_name in ['admin', 'cfo', 'finance']:
-             return AuditLog.objects.exclude(action='PAGE_ACCESS').select_related('user')
-        return AuditLog.objects.filter(user=user).exclude(action='PAGE_ACCESS').select_related('user')
+        return AuditLog.objects.exclude(action='PAGE_ACCESS').select_related('user')
 
 @api_view(['POST'])
 @permission_classes([IsCustomAuthenticated])

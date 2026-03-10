@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
-import { Search, Eye, ArrowRight, FileText, User, Box, Activity } from 'lucide-react';
+import { Search, Eye, ArrowRight, FileText, User, Box, Activity, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import Modal from '../components/Modal';
 
 const AuditLogs = () => {
@@ -10,6 +10,12 @@ const AuditLogs = () => {
     const [logs, setLogs] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedLog, setSelectedLog] = useState(null);
+    const [pagination, setPagination] = useState({
+        count: 0,
+        next: null,
+        previous: null,
+        currentPage: 1
+    });
     const [filters, setFilters] = useState({
         search: '',
         model: '',
@@ -17,19 +23,37 @@ const AuditLogs = () => {
     });
 
     useEffect(() => {
-        fetchLogs();
+        fetchLogs(1);
     }, [filters]);
 
-    const fetchLogs = async () => {
+    const fetchLogs = async (page = 1) => {
         setIsLoading(true);
         try {
-            const params = {};
+            const params = { page };
             if (filters.search) params.search = filters.search;
             if (filters.model) params.model_name = filters.model;
             if (filters.action) params.action = filters.action;
             
             const response = await api.get('/api/audit-logs/', { params });
-            setLogs(response.data.results || response.data);
+            const data = response.data;
+
+            if (data.results) {
+                setLogs(data.results);
+                setPagination({
+                    count: data.count,
+                    next: data.next,
+                    previous: data.previous,
+                    currentPage: page
+                });
+            } else {
+                setLogs(data);
+                setPagination({
+                    count: data.length,
+                    next: null,
+                    previous: null,
+                    currentPage: 1
+                });
+            }
         } catch (error) {
             console.error("Failed to fetch audit logs:", error);
         } finally {
@@ -103,6 +127,8 @@ const AuditLogs = () => {
             </div>
         );
     };
+
+    const totalPages = Math.ceil(pagination.count / 20);
 
     return (
         <div className="page-container animate-fade-in">
@@ -179,6 +205,49 @@ const AuditLogs = () => {
                     </tbody>
                 </table>
             </div>
+
+            {pagination.count > 0 && (
+                <div className="pagination-bar">
+                    <div className="pagination-info">
+                        Showing {logs.length} of {pagination.count} records (Page {pagination.currentPage} of {totalPages})
+                    </div>
+                    <div className="pagination-controls">
+                        <button 
+                            className="pagination-btn" 
+                            onClick={() => fetchLogs(1)} 
+                            disabled={pagination.currentPage === 1 || isLoading}
+                            title="First Page"
+                        >
+                            <ChevronsLeft size={18} />
+                        </button>
+                        <button 
+                            className="pagination-btn" 
+                            onClick={() => fetchLogs(pagination.currentPage - 1)} 
+                            disabled={!pagination.previous || isLoading}
+                            title="Previous Page"
+                        >
+                            <ChevronLeft size={18} />
+                        </button>
+                        <div className="page-number">{pagination.currentPage}</div>
+                        <button 
+                            className="pagination-btn" 
+                            onClick={() => fetchLogs(pagination.currentPage + 1)} 
+                            disabled={!pagination.next || isLoading}
+                            title="Next Page"
+                        >
+                            <ChevronRight size={18} />
+                        </button>
+                        <button 
+                            className="pagination-btn" 
+                            onClick={() => fetchLogs(totalPages)} 
+                            disabled={pagination.currentPage === totalPages || isLoading}
+                            title="Last Page"
+                        >
+                            <ChevronsRight size={18} />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <Modal
                 isOpen={!!selectedLog}
