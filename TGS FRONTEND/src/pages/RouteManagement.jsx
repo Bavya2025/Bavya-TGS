@@ -231,6 +231,16 @@ const findHierarchyPath = (data, targetId) => {
     return traverse(data);
 };
 
+const VEHICLE_CATEGORIES = [
+    'Car / Jeep / Van',
+    'LCV (Light Commercial Vehicle)',
+    'Bus / Truck (2 Axle)',
+    '3-Axle Commercial',
+    'MAV (Multi-Axle Vehicle 4-6)',
+    'Oversized Vehicle (7+ Axle)'
+];
+const JOURNEY_TYPES = ['UP', 'DOWN', 'TO_AND_FRO'];
+
 const RouteManagement = () => {
     const { showToast, confirm } = useToast();
     const [activeTab, setActiveTab] = useState('routes');
@@ -303,9 +313,10 @@ const RouteManagement = () => {
     // Form States
     const [newRoute, setNewRoute] = useState({ source: '', destination: '' });
     const [newToll, setNewToll] = useState({
-        name: '', gate_code: '', location: '', rates: [
-            { travel_mode: '4 Wheeler', rate: 0 }
-        ]
+        name: '', gate_code: '', registered_id: '', location: '', rates: 
+            VEHICLE_CATEGORIES.flatMap(vc => 
+                JOURNEY_TYPES.map(jt => ({ travel_mode: vc, journey_type: jt, rate: 0 }))
+            )
     });
     const [newPath, setNewPath] = useState({
         path_name: '',
@@ -1027,8 +1038,14 @@ const RouteManagement = () => {
         setNewToll({
             name: toll.name,
             gate_code: toll.gate_code || '',
+            registered_id: toll.registered_id || '',
             location: locId,
-            rates: toll.rates?.length ? toll.rates : [{ travel_mode: '4 Wheeler', rate: 0 }]
+            rates: VEHICLE_CATEGORIES.flatMap(vc => 
+                JOURNEY_TYPES.map(jt => {
+                    const existing = toll.rates?.find(r => r.travel_mode === vc && r.journey_type === jt);
+                    return existing ? { ...existing } : { travel_mode: vc, journey_type: jt, rate: 0 };
+                })
+            )
         });
         setTollFilter({ continent: '', country: '', state: '', district: '', mandal: '', cluster: '' });
         setIsTollModalOpen(true);
@@ -1069,6 +1086,7 @@ const RouteManagement = () => {
             if (editingId) {
                 await api.put(`/api/masters/toll-gates/${editingId}/`, {
                     name: trimmedName,
+                    registered_id: newToll.registered_id,
                     location: newToll.location
                 });
                 const oldRates = (await api.get(`/api/masters/toll-rates/?toll_gate=${editingId}`)).data;
@@ -1076,6 +1094,7 @@ const RouteManagement = () => {
             } else {
                 const tollRes = await api.post('/api/masters/toll-gates/', {
                     name: trimmedName,
+                    registered_id: newToll.registered_id,
                     location: newToll.location
                 });
                 tollId = tollRes.data.id;
@@ -1086,6 +1105,7 @@ const RouteManagement = () => {
                 api.post('/api/masters/toll-rates/', {
                     toll_gate: tollId,
                     travel_mode: r.travel_mode,
+                    journey_type: r.journey_type,
                     rate: r.rate
                 })
             ));
@@ -1093,9 +1113,10 @@ const RouteManagement = () => {
             setIsTollModalOpen(false);
             setEditingId(null);
             setNewToll({
-                name: '', gate_code: '', location: '', rates: [
-                    { travel_mode: '4 Wheeler', rate: 0 }
-                ]
+                name: '', gate_code: '', registered_id: '', location: '', rates: 
+                    VEHICLE_CATEGORIES.flatMap(vc => 
+                        JOURNEY_TYPES.map(jt => ({ travel_mode: vc, journey_type: jt, rate: 0 }))
+                    )
             });
             setTollFilter({ continent: '', country: '', state: '', district: '', mandal: '', cluster: '', local: '' });
             fetchData();
@@ -1224,7 +1245,7 @@ const RouteManagement = () => {
                     </button>
                     <button className="btn-primary h-16 px-10 flex items-center gap-3" onClick={() => setIsRouteModalOpen(true)}>
                         <PlusCircle size={22} />
-                        <span>Define Route</span>
+                        <span>Define New Route</span>
                     </button>
                 </div>
             </div>
@@ -1416,7 +1437,9 @@ const RouteManagement = () => {
                         setNewToll({
                             name: '',
                             location: '',
-                            rates: [{ travel_mode: '4 Wheeler', rate: 0 }]
+                            rates: VEHICLE_CATEGORIES.flatMap(vc => 
+                                JOURNEY_TYPES.map(jt => ({ travel_mode: vc, journey_type: jt, rate: 0 }))
+                            )
                         });
                         setTollFilter({ continent: '', country: '', state: '', district: '', mandal: '', cluster: '' });
                         setIsTollModalOpen(true);
@@ -1430,10 +1453,12 @@ const RouteManagement = () => {
             <div className="table-wrapper">                <table className="admin-table">
                     <thead>
                         <tr>
-                            <th className="!pl-10">Gate ID</th>
+                            <th className="!pl-10">Gate Code</th>
+                            <th>Registered ID</th>
                             <th>Toll Gate Identity</th>
                             <th>Site Location</th>
-                            <th>Vehicle Class</th>
+                            <th>Vehicle Category</th>
+                            <th>Journey Type</th>
                             <th>Trip Fare</th>
                             <th className="text-right !pr-10">Manage</th>
                         </tr>
@@ -1447,6 +1472,9 @@ const RouteManagement = () => {
                                             <>
                                                 <td rowSpan={toll.rates.length} className="!pl-10">
                                                     <span className="text-[11px] font-black text-slate-400 font-mono tracking-tighter uppercase">{toll.gate_code}</span>
+                                                </td>
+                                                <td rowSpan={toll.rates.length}>
+                                                    <span className="text-[11px] font-black text-primary font-mono tracking-tighter uppercase">{toll.registered_id || '---'}</span>
                                                 </td>
                                                 <td rowSpan={toll.rates.length}>
                                                     <div className="flex items-center gap-3">
@@ -1466,6 +1494,9 @@ const RouteManagement = () => {
                                         )}
                                         <td>
                                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-lg border border-slate-200">{rate.travel_mode}</span>
+                                        </td>
+                                        <td>
+                                            <span className="text-[10px] font-black text-primary/70 uppercase tracking-tighter">{rate.journey_type?.replace(/_/g, ' ') || 'UP'}</span>
                                         </td>
                                         <td>
                                             <span className="text-base font-black text-primary">₹{formatIndianCurrency(rate.rate)}</span>
@@ -1496,6 +1527,9 @@ const RouteManagement = () => {
                                             <span className="text-[11px] font-black text-slate-400 font-mono tracking-tighter uppercase">{toll.gate_code}</span>
                                         </td>
                                         <td>
+                                            <span className="text-[11px] font-black text-primary font-mono tracking-tighter uppercase">{toll.registered_id || '---'}</span>
+                                        </td>
+                                        <td>
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-2xl bg-primary/5 flex items-center justify-center border border-primary/10">
                                                     <Milestone size={18} className="text-primary" />
@@ -1509,7 +1543,7 @@ const RouteManagement = () => {
                                                 <span className="text-slate-600 text-sm font-black">{toll.location_name || 'Global Terminal'}</span>
                                             </div>
                                         </td>
-                                        <td colSpan={2}>
+                                        <td colSpan={3}>
                                             <span className="text-slate-400 text-xs italic">No rates configured</span>
                                         </td>
                                         <td className="!pr-10 text-right">
@@ -1747,7 +1781,6 @@ const RouteManagement = () => {
             <div className="dashboard-header-row">
                 <div>
                     <h1 className="welcome-text">Route & Toll Master</h1>
-                    <p className="current-date">Logistics Framework & Automated Toll Computation</p>
                 </div>
                 <div className="flex gap-4">
 
@@ -2170,7 +2203,7 @@ const RouteManagement = () => {
             <Modal
                 isOpen={isRouteModalOpen}
                 onClose={() => { setIsRouteModalOpen(false); setEditingId(null); }}
-                title={editingId ? "Modify Route Frame" : "Route Frame"}
+                title={editingId ? "Modify Route" : "Define New Route"}
                 size="xl"
                 actions={
                     <>
@@ -2180,7 +2213,7 @@ const RouteManagement = () => {
                             onClick={handleCreateRoute}
                             disabled={!newRoute.source || !newRoute.destination || newRoute.source === newRoute.destination}
                         >
-                            {editingId ? "Update Route Frame" : "Commit New Frame"}
+                            {editingId ? "Update Route" : "Define New Route"}
                         </button>
                     </>
                 }
@@ -2192,10 +2225,10 @@ const RouteManagement = () => {
                             <div className="premium-field-group" style={{ zIndex: 2 }}>
                                 <div className="premium-headline-step">
                                     <div className="premium-number-badge">1</div>
-                                    <label className="premium-label-text">Select Frame</label>
+                                    <label className="premium-label-text">SELECT ROUTE TYPE</label>
                                 </div>
                                 <SearchableSelect
-                                    placeholder="Select Frame"
+                                    placeholder="Select Route Type"
                                     options={[
                                         { id: 'normal', name: 'LONG ROUTE' },
                                         { id: 'local', name: 'LOCAL ROUTE' }
@@ -2214,10 +2247,10 @@ const RouteManagement = () => {
                                 <div className="premium-field-group animate-fade-in" style={{ zIndex: 1 }}>
                                     <div className="premium-headline-step">
                                         <div className="premium-number-badge accent">2</div>
-                                        <label className="premium-label-text">Protocol</label>
+                                        <label className="premium-label-text">SELECT MODE</label>
                                     </div>
                                     <SearchableSelect
-                                        placeholder="Select Protocol"
+                                        placeholder="Select Mode"
                                         value={selectionMode === 'drilldown' ? 'SMART HIERARCHY' : selectionMode === 'code' ? 'SMART CODE' : ''}
                                         options={[
                                             { id: 'drilldown', name: 'SMART HIERARCHY' },
@@ -2383,7 +2416,7 @@ const RouteManagement = () => {
                                                 })()
                                             ) : (
                                                 <SearchableSelect
-                                                    placeholder={selectionMode === 'drilldown' && !sourceFilter.mandal ? 'Waiting for protocol...' : 'Select Origin'}
+                                                    placeholder={selectionMode === 'drilldown' && !sourceFilter.mandal ? 'Waiting for mode...' : 'Select Origin'}
                                                     disabled={selectionMode === 'drilldown' && !sourceFilter.mandal}
                                                     searchByCodeOnly={selectionMode === 'code'}
                                                     options={sourcePool}
@@ -2434,7 +2467,7 @@ const RouteManagement = () => {
                                                 })()
                                             ) : (
                                                 <SearchableSelect
-                                                    placeholder={selectionMode === 'drilldown' && !destFilter.mandal ? 'Waiting for protocol...' : 'Select Destination'}
+                                                    placeholder={selectionMode === 'drilldown' && !destFilter.mandal ? 'Waiting for mode...' : 'Select Destination'}
                                                     disabled={selectionMode === 'drilldown' && !destFilter.mandal}
                                                     searchByCodeOnly={selectionMode === 'code'}
                                                     options={destPool}
@@ -2460,7 +2493,11 @@ const RouteManagement = () => {
                 onClose={() => {
                     setIsTollModalOpen(false);
                     setEditingId(null);
-                    setNewToll({ name: '', gate_code: '', location: '', rates: [{ travel_mode: '4 Wheeler', rate: 0 }] });
+                    setNewToll({ name: '', gate_code: '', registered_id: '', location: '', rates: 
+                        VEHICLE_CATEGORIES.flatMap(vc => 
+                            JOURNEY_TYPES.map(jt => ({ travel_mode: vc, journey_type: jt, rate: 0 }))
+                        )
+                    });
                     setTollFilter({ continent: '', country: '', state: '', district: '', mandal: '', cluster: '', local: '' });
                 }}
                 title={editingId ? "Modify Toll Hub Registration" : "Register New Toll Gate"}
@@ -2470,7 +2507,11 @@ const RouteManagement = () => {
                         <button className="btn-premium-action btn-premium-secondary" onClick={() => {
                             setIsTollModalOpen(false);
                             setEditingId(null);
-                            setNewToll({ name: '', gate_code: '', location: '', rates: [{ travel_mode: '4 Wheeler', rate: 0 }] });
+                            setNewToll({ name: '', gate_code: '', registered_id: '', location: '', rates: 
+                                VEHICLE_CATEGORIES.flatMap(vc => 
+                                    JOURNEY_TYPES.map(jt => ({ travel_mode: vc, journey_type: jt, rate: 0 }))
+                                )
+                            });
                             setTollFilter({ continent: '', country: '', state: '', district: '', mandal: '', cluster: '', local: '' });
                         }}>Cancel</button>
                         <button
@@ -2514,6 +2555,19 @@ const RouteManagement = () => {
                                 </div>
                             </div>
                             <div className="premium-field-group">
+                                <label className="premium-field-label">Registered ID</label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        className="premium-select-input"
+                                        placeholder="Enter Registered ID"
+                                        value={newToll.registered_id || ''}
+                                        onChange={(e) => setNewToll({ ...newToll, registered_id: e.target.value })}
+                                        style={{ fontFamily: 'monospace', fontWeight: 700 }}
+                                    />
+                                </div>
+                            </div>
+                            <div className="premium-field-group">
                                 <label className="premium-field-label">Registry Name</label>
                                 <div className="relative">
                                     <input
@@ -2533,7 +2587,7 @@ const RouteManagement = () => {
                         </div>
 
                         <div className="premium-input-grid" style={{ marginTop: '2rem', paddingTop: '2rem', borderTop: '1px solid #e2e8f0' }}>
-                            {[
+                            { [
                                 { label: 'Continent', key: 'continent' },
                                 { label: 'Country', key: 'country', depends: 'continent' },
                                 { label: 'State', key: 'state', depends: 'country' },
@@ -2541,7 +2595,7 @@ const RouteManagement = () => {
                                 { label: 'Mandal', key: 'mandal', depends: 'district' },
                                 { label: 'Cluster', key: 'cluster', depends: 'mandal' }
                             ].map((f, i) => (
-                                <div key={i} className="premium-field-group">
+                                <div key={i} className="premium-field-group" style={{ zIndex: 100 - i }}>
                                     <label className="premium-field-label">{f.label}</label>
                                     <SearchableSelect
                                         placeholder={f.label}
@@ -2562,7 +2616,7 @@ const RouteManagement = () => {
                                         }}
                                     />
                                 </div>
-                            ))}
+                            )) }
 
                             <div className="premium-field-group">
                                 <label className="premium-field-label" style={{ color: 'var(--primary)' }}>Final Authority Site</label>
@@ -2590,22 +2644,43 @@ const RouteManagement = () => {
                             </div>
                             <div>
                                 <h4 className="premium-card-title">Rate Configuration</h4>
-                                <p className="premium-card-subtitle">Single journey tariff settings</p>
+                                <p className="premium-card-subtitle">Vehicle & Journey specific tariff settings</p>
                             </div>
                         </div>
 
-                        <div className="premium-input-grid">
-                            {newToll.rates.map((rate, idx) => (
-                                <div key={idx} className="premium-field-group">
-                                    <label className="premium-field-label">{rate.travel_mode}</label>
-                                    <IndianCurrencyInput
-                                        value={rate.rate}
-                                        onChange={(val) => {
-                                            const updatedRates = [...newToll.rates];
-                                            updatedRates[idx].rate = val;
-                                            setNewToll({ ...newToll, rates: updatedRates });
-                                        }}
-                                    />
+                        <div className="flex flex-col gap-8 mt-6">
+                            {VEHICLE_CATEGORIES.map((vc) => (
+                                <div key={vc} className="premium-vehicle-group p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="w-2 h-6 bg-primary rounded-full"></div>
+                                        <h5 className="font-black text-slate-800 text-sm uppercase tracking-wider">{vc}</h5>
+                                    </div>
+                                    <div className="premium-grid-3 gap-4" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                                        {JOURNEY_TYPES.map((jt) => {
+                                            const rateObj = newToll.rates.find(r => r.travel_mode === vc && r.journey_type === jt) || { rate: 0, journey_type: jt, travel_mode: vc };
+                                            return (
+                                                <div key={jt} className="premium-field-group">
+                                                    <label className="premium-field-label text-primary/70 font-black" style={{ fontSize: '9px' }}>
+                                                        {jt.replace(/_/g, ' ')}
+                                                    </label>
+                                                    <IndianCurrencyInput
+                                                        value={rateObj.rate}
+                                                        onChange={(val) => {
+                                                            const updatedRates = [...newToll.rates];
+                                                            const idx = updatedRates.findIndex(r => r.travel_mode === vc && r.journey_type === jt);
+                                                            if (idx !== -1) {
+                                                                updatedRates[idx].rate = val;
+                                                                setNewToll({ ...newToll, rates: updatedRates });
+                                                            } else {
+                                                                updatedRates.push({ travel_mode: vc, journey_type: jt, rate: val });
+                                                                setNewToll({ ...newToll, rates: updatedRates });
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             ))}
                         </div>
