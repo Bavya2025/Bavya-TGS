@@ -1172,10 +1172,8 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   }
 
   Widget _buildWalletDisplay() {
-    final balance =
-        _dashboardStats?['wallet_balance'] ??
-        _dashboardStats?['advance_balance'] ??
-        0.0;
+    // show only the advance balance (wallet removed per request)
+    final advance = _dashboardStats?['advance_balance'] ?? 0.0;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -1221,7 +1219,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                 ),
               ),
               Text(
-                "₹${NumberFormat('#,###').format(balance)}",
+                "₹${NumberFormat('#,###').format(advance)}",
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 14,
                   fontWeight: FontWeight.w900,

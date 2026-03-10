@@ -37,10 +37,27 @@ class _TripApprovalsScreenState extends State<TripApprovalsScreen> {
   Future<void> _handleAction(String id, String action) async {
     try {
       await _tripService.performApproval(id, action);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Trip $action successful'), backgroundColor: Colors.green));
+      String verb;
+      switch (action.toLowerCase()) {
+        case 'approve':
+          verb = 'approved';
+          break;
+        case 'reject':
+          verb = 'rejected';
+          break;
+        default:
+          verb = '${action.toLowerCase()}ed';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Trip $verb successfully'), backgroundColor: Colors.green),
+      );
       _fetchTasks();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Action failed: $e'), backgroundColor: Colors.red));
+      String message = e.toString();
+      if (e is Map && e.containsKey('error')) message = e['error'].toString();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Action failed: $message'), backgroundColor: Colors.red),
+      );
     }
   }
 
