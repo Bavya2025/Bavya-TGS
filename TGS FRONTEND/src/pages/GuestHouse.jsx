@@ -30,6 +30,7 @@ import {
     Mail
 } from 'lucide-react';
 import Modal from '../components/Modal';
+import SearchableSelect from '../components/SearchableSelect';
 
 const GuestHouse = () => {
     const { showToast } = useToast();
@@ -252,6 +253,21 @@ const GuestHouse = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
     const [editingItemId, setEditingItemId] = useState(null);
+    const [bookingTab, setBookingTab] = useState('Official');
+    const [isLoadingTrips, setIsLoadingTrips] = useState(false);
+
+    // --- GEO HIERARCHY STATES ---
+    const [fullHierarchy, setFullHierarchy] = useState([]);
+    const [geoLoading, setGeoLoading] = useState(false);
+    const [geoError, setGeoError] = useState(null);
+
+    const [continents, setContinents] = useState([]);
+    const [countries, setCountries] = useState([]);
+    const [states, setStates] = useState([]);
+    const [districts, setDistricts] = useState([]);
+    const [mandals, setMandals] = useState([]);
+    const [clusters, setClusters] = useState([]);
+    const [visitingLocations, setVisitingLocations] = useState([]);
 
     const [ghFormData, setGhFormData] = useState({
         name: '',
@@ -261,8 +277,15 @@ const GuestHouse = () => {
         isActive: true,
         latitude: '',
         longitude: '',
-        image: '',
-        description: ''
+        image: null,
+        description: '',
+        continent_id: '',
+        country_id: '',
+        state_id: '',
+        district_id: '',
+        mandal_id: '',
+        cluster_id: '',
+        visiting_location_id: ''
     });
 
     const [itemFormData, setItemFormData] = useState({
@@ -279,11 +302,9 @@ const GuestHouse = () => {
     const [formErrors, setFormErrors] = useState({});
 
     const [showBookingModal, setShowBookingModal] = useState(false);
-    const [bookingTab, setBookingTab] = useState('Official');
     const [tripSearch, setTripSearch] = useState('');
     const [showTripResults, setShowTripResults] = useState(false);
     const [trips, setTrips] = useState([]);
-    const [isLoadingTrips, setIsLoadingTrips] = useState(false);
     const inputRef = useRef(null);
 
     useEffect(() => {
@@ -319,6 +340,115 @@ const GuestHouse = () => {
         const timer = setTimeout(fetchTrips, 300);
         return () => clearTimeout(timer);
     }, [tripSearch, showTripResults]);
+
+    // --- GEO HIERARCHY LOGIC ---
+    const API_URL = "/api/masters/locations/live_hierarchy/";
+
+    const fetchFullHierarchy = async (forceRefetch = false) => {
+        if (fullHierarchy.length > 0 && !geoError && !forceRefetch) return;
+
+        setGeoLoading(true);
+        setGeoError(null);
+        try {
+            const res = await api.get(API_URL);
+            const data = res.data.results || res.data.data || res.data;
+            if (res.data.error) throw new Error(res.data.error);
+            setFullHierarchy(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error("Error fetching full hierarchy:", err);
+            setGeoError(err.message || "Unable to connect to Geocoding Server.");
+        } finally {
+            setGeoLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (showGHModal) {
+            fetchFullHierarchy();
+        }
+    }, [showGHModal]);
+
+    useEffect(() => {
+        if (fullHierarchy.length > 0) {
+            setContinents(fullHierarchy.map(c => ({ id: c.id, name: c.name })));
+        }
+    }, [fullHierarchy]);
+
+    const getFilterName = (val) => {
+        if (!val) return '';
+        if (typeof val === 'object') return (val.name || '').trim().toLowerCase();
+        return String(val).trim().toLowerCase();
+    };
+
+    const getChildren = (type, filters) => {
+        if (!fullHierarchy || !fullHierarchy.length) return [];
+        let data = fullHierarchy;
+
+        if (type === 'continent') return data;
+
+        const continent = data.find(c => (c.name || '').trim().toLowerCase() === getFilterName(filters.continent_name));
+        const countries = continent?.children || continent?.countries || [];
+        if (type === 'country') return countries;
+
+        const country = countries.find(c => (c.name || '').trim().toLowerCase() === getFilterName(filters.country_name));
+        const states = country?.states || country?.state || country?.children || [];
+        if (type === 'state') return states;
+
+        const state = states.find(s => (s.name || '').trim().toLowerCase() === getFilterName(filters.state_name));
+        const districts = state?.districts || state?.district || state?.children || [];
+        if (type === 'district') return districts;
+
+        const district = districts.find(d => (d.name || '').trim().toLowerCase() === getFilterName(filters.district_name));
+        const mandals = district?.mandals || district?.mandal || district?.children || [];
+        if (type === 'mandal') return mandals;
+
+        const mandal = mandals.find(m => (m.name || '').trim().toLowerCase() === getFilterName(filters.mandal_name));
+        const clusters = [
+            ...(mandal?.clusters || []), 
+            ...(mandal?.metro_polyten_cities || []),
+            ...(mandal?.cities || []),
+            ...(mandal?.towns || []),
+            ...(mandal?.villages || []),
+            ...(mandal?.children || [])
+        ];
+        if (type === 'cluster') return clusters;
+
+        const cluster = clusters.find(c => (c.name || '').trim().toLowerCase() === getFilterName(filters.cluster_name));
+        const visitingLocations = cluster?.visiting_locations || cluster?.locations || [];
+        if (type === 'visitingLocation') return visitingLocations;
+
+        return [];
+    };
+
+    useEffect(() => {
+        if (!showGHModal) return;
+
+        const filters = {
+            continent_name: continents.find(c => c.id === ghFormData.continent_id)?.name,
+            country_name: countries.find(c => c.id === ghFormData.country_id)?.name,
+            state_name: states.find(s => s.id === ghFormData.state_id)?.name,
+            district_name: districts.find(d => d.id === ghFormData.district_id)?.name,
+            mandal_name: mandals.find(m => m.id === ghFormData.mandal_id)?.name,
+            cluster_name: clusters.find(c => c.id === ghFormData.cluster_id)?.name,
+        };
+
+        setCountries(getChildren('country', filters));
+        setStates(getChildren('state', filters));
+        setDistricts(getChildren('district', filters));
+        setMandals(getChildren('mandal', filters));
+        setClusters(getChildren('cluster', filters));
+        setVisitingLocations(getChildren('visitingLocation', filters));
+
+    }, [
+        ghFormData.continent_id, 
+        ghFormData.country_id, 
+        ghFormData.state_id, 
+        ghFormData.district_id, 
+        ghFormData.mandal_id, 
+        ghFormData.cluster_id, 
+        continents, 
+        fullHierarchy
+    ]);
 
     const dropdownRef = useRef(null);
     useEffect(() => {
@@ -407,28 +537,101 @@ const GuestHouse = () => {
         r.readAsDataURL(file);
     };
 
+    const handleLocationSelect = (type, selectedOpt) => {
+        const idMap = {
+            continent: 'continent_id',
+            country: 'country_id',
+            state: 'state_id',
+            district: 'district_id',
+            mandal: 'mandal_id',
+            cluster: 'cluster_id',
+            visiting_location: 'visiting_location_id'
+        };
+
+        const fieldName = idMap[type];
+        const selectedValue = selectedOpt ? (selectedOpt.id || '') : '';
+
+        setGhFormData(prev => {
+            const newState = { ...prev, [fieldName]: selectedValue };
+            
+            // Cascading reset
+            if (type === 'continent') { 
+                newState.country_id = ''; newState.state_id = ''; newState.district_id = ''; 
+                newState.mandal_id = ''; newState.cluster_id = ''; newState.visiting_location_id = ''; 
+            }
+            if (type === 'country') { 
+                newState.state_id = ''; newState.district_id = ''; newState.mandal_id = ''; 
+                newState.cluster_id = ''; newState.visiting_location_id = ''; 
+            }
+            if (type === 'state') { 
+                newState.district_id = ''; newState.mandal_id = ''; newState.cluster_id = ''; 
+                newState.visiting_location_id = ''; 
+            }
+            if (type === 'district') { 
+                newState.mandal_id = ''; newState.cluster_id = ''; newState.visiting_location_id = ''; 
+            }
+            if (type === 'mandal') { 
+                newState.cluster_id = ''; newState.visiting_location_id = ''; 
+            }
+            if (type === 'cluster') { 
+                newState.visiting_location_id = ''; 
+            }
+
+            // Sync legacy location field if visiting location is selected
+            if (type === 'visiting_location' && selectedOpt) {
+                newState.location = selectedOpt.name;
+            }
+
+            return newState;
+        });
+    };
+
     const handleRemoveGhImage = () => {
         setGhFormData(prev => ({ ...prev, image: '' }));
         if (ghImageInputRef.current) ghImageInputRef.current.value = '';
     };
 
     const handleAddNewGh = () => {
-        setGhFormData({ name: '', address: '', location: '', pincode: '', isActive: true, latitude: '', longitude: '', image: '', description: '' });
+        setGhFormData({
+            name: '',
+            address: '',
+            location: '',
+            pincode: '',
+            isActive: true,
+            latitude: '',
+            longitude: '',
+            image: '',
+            description: '',
+            continent_id: '',
+            country_id: '',
+            state_id: '',
+            district_id: '',
+            mandal_id: '',
+            cluster_id: '',
+            visiting_location_id: ''
+        });
         setEditingId(null);
         setShowGHModal(true);
     };
 
     const handleEditGh = (gh) => {
         setGhFormData({
-            name: gh.name,
-            address: gh.address,
+            name: gh.name || '',
+            address: gh.address || '',
             location: gh.location || '',
-            pincode: gh.pincode,
-            isActive: gh.isActive,
+            pincode: gh.pincode || '',
+            isActive: gh.isActive ?? true,
             latitude: gh.latitude || '',
             longitude: gh.longitude || '',
             image: gh.image || '',
-            description: gh.description || ''
+            description: gh.description || '',
+            continent_id: gh.continent_id || '',
+            country_id: gh.country_id || '',
+            state_id: gh.state_id || '',
+            district_id: gh.district_id || '',
+            mandal_id: gh.mandal_id || '',
+            cluster_id: gh.cluster_id || '',
+            visiting_location_id: gh.visiting_location_id || ''
         });
         setEditingId(gh.id);
         setShowGHModal(true);
@@ -454,6 +657,13 @@ const GuestHouse = () => {
         longitude: data.longitude || null,
         image: data.image || null,
         description: data.description || '',
+        continent_id: data.continent_id,
+        country_id: data.country_id,
+        state_id: data.state_id,
+        district_id: data.district_id,
+        mandal_id: data.mandal_id,
+        cluster_id: data.cluster_id,
+        visiting_location_id: data.visiting_location_id,
         rooms: (data.rooms || []).map(r => ({
             number: r.number || r.name,
             room_type: (r.type || r.room_type || 'single').toLowerCase(),
@@ -1020,7 +1230,6 @@ const GuestHouse = () => {
                                 <div className="modal-header">
                                     <div className="modal-title-group">
                                         <h2>{editingId ? 'Edit' : 'Add'} Guest House</h2>
-                                        <p className="modal-subtitle">Enter property details and location</p>
                                     </div>
                                     <button onClick={() => setShowGHModal(false)} className="close-btn"><X size={24} /></button>
                                 </div>
@@ -1032,17 +1241,84 @@ const GuestHouse = () => {
                                                 <label>Property Name*</label>
                                                 <input className="input-field" name="name" placeholder="e.g. TGS Corporate House - Mumbai" value={ghFormData.name} onChange={handleGhInputChange} />
                                             </div>
+
+                                            <div className="form-group" style={{ zIndex: 20 }}>
+                                                <label>Continent</label>
+                                                <SearchableSelect 
+                                                    placeholder="Continent"
+                                                    options={continents}
+                                                    value={continents.find(c => c.id === ghFormData.continent_id)}
+                                                    onChange={(val) => handleLocationSelect('continent', val)}
+                                                    loading={geoLoading}
+                                                />
+                                            </div>
+                                            <div className="form-group" style={{ zIndex: 19 }}>
+                                                <label>Country</label>
+                                                <SearchableSelect 
+                                                    placeholder="Country"
+                                                    options={countries}
+                                                    value={countries.find(c => c.id === ghFormData.country_id)}
+                                                    onChange={(val) => handleLocationSelect('country', val)}
+                                                    disabled={!ghFormData.continent_id}
+                                                />
+                                            </div>
+                                            <div className="form-group" style={{ zIndex: 18 }}>
+                                                <label>State</label>
+                                                <SearchableSelect 
+                                                    placeholder="State"
+                                                    options={states}
+                                                    value={states.find(s => s.id === ghFormData.state_id)}
+                                                    onChange={(val) => handleLocationSelect('state', val)}
+                                                    disabled={!ghFormData.country_id}
+                                                />
+                                            </div>
+                                            <div className="form-group" style={{ zIndex: 17 }}>
+                                                <label>District</label>
+                                                <SearchableSelect 
+                                                    placeholder="District"
+                                                    options={districts}
+                                                    value={districts.find(d => d.id === ghFormData.district_id)}
+                                                    onChange={(val) => handleLocationSelect('district', val)}
+                                                    disabled={!ghFormData.state_id}
+                                                />
+                                            </div>
+                                            <div className="form-group" style={{ zIndex: 16 }}>
+                                                <label>Mandal</label>
+                                                <SearchableSelect 
+                                                    placeholder="Mandal"
+                                                    options={mandals}
+                                                    value={mandals.find(m => m.id === ghFormData.mandal_id)}
+                                                    onChange={(val) => handleLocationSelect('mandal', val)}
+                                                    disabled={!ghFormData.district_id}
+                                                />
+                                            </div>
+                                            <div className="form-group" style={{ zIndex: 15 }}>
+                                                <label>City / Cluster</label>
+                                                <SearchableSelect 
+                                                    placeholder="Cluster"
+                                                    options={clusters}
+                                                    value={clusters.find(c => c.id === ghFormData.cluster_id)}
+                                                    onChange={(val) => handleLocationSelect('cluster', val)}
+                                                    disabled={!ghFormData.mandal_id}
+                                                />
+                                            </div>
+                                            <div className="form-group" style={{ zIndex: 14 }}>
+                                                <label>Visiting Location</label>
+                                                <SearchableSelect 
+                                                    placeholder="Visiting Location"
+                                                    options={visitingLocations}
+                                                    value={visitingLocations.find(l => l.id === ghFormData.visiting_location_id)}
+                                                    onChange={(val) => handleLocationSelect('visiting_location', val)}
+                                                    disabled={!ghFormData.cluster_id}
+                                                />
+                                            </div>
+                                            <div className="form-group" style={{ zIndex: 1 }}>
+                                                <label>Pincode*</label>
+                                                <input className="input-field" name="pincode" placeholder="e.g. 400069" value={ghFormData.pincode} onChange={handleGhInputChange} />
+                                            </div>
                                             <div className="form-group gh-form-section-full">
                                                 <label>Full Address*</label>
                                                 <textarea className="input-field" name="address" rows="2" placeholder="Street, landmark, etc." value={ghFormData.address} onChange={handleGhInputChange}></textarea>
-                                            </div>
-                                            <div className="form-group">
-                                                <label>City / Location</label>
-                                                <input className="input-field" name="location" placeholder="e.g. Andheri East" value={ghFormData.location} onChange={handleGhInputChange} />
-                                            </div>
-                                            <div className="form-group">
-                                                <label>Pincode*</label>
-                                                <input className="input-field" name="pincode" placeholder="e.g. 400069" value={ghFormData.pincode} onChange={handleGhInputChange} />
                                             </div>
                                         </div>
                                     </div>
@@ -1064,13 +1340,17 @@ const GuestHouse = () => {
                                     <div className="form-section">
                                         <h4 className="section-title">Status & Description</h4>
                                         <div className="form-grid gh-form-grid-1col">
-                                            <div className="form-group">
+                                            <div className="form-group gh-status-group">
                                                 <label>Operational Status</label>
-                                                <label className="toggle-switch">
-                                                    <input type="checkbox" name="isActive" checked={ghFormData.isActive} onChange={handleGhInputChange} />
-                                                    <span className="toggle-slider"></span>
-                                                    <span className="toggle-label">{ghFormData.isActive ? 'Active (Open for bookings)' : 'Inactive (Under maintenance)'}</span>
-                                                </label>
+                                                <div className="status-toggle-container">
+                                                    <label className="toggle-switch">
+                                                        <input type="checkbox" name="isActive" checked={ghFormData.isActive} onChange={handleGhInputChange} />
+                                                        <span className="toggle-slider"></span>
+                                                    </label>
+                                                    <span className={`status-text-label ${ghFormData.isActive ? 'active' : 'inactive'}`}>
+                                                        {ghFormData.isActive ? 'Active (Open for bookings)' : 'Inactive (Under maintenance)'}
+                                                    </span>
+                                                </div>
                                             </div>
                                             <div className="form-group">
                                                 <label>Notes / Description</label>
