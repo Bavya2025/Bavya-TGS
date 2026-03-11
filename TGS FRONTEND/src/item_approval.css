@@ -1,0 +1,72 @@
+/* Approval Table Row Actions */
+.row-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.row-action-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    background: white;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.row-action-btn:hover {
+    background: #f8fafc;
+}
+
+.row-action-btn.approve.active {
+    background: #10b981;
+    color: white;
+    border-color: #10b981;
+}
+
+.row-action-btn.reject.active {
+    background: #ef4444;
+    color: white;
+    border-color: #ef4444;
+}
+
+.row-rejected td {
+    background: #fef2f2 !important;
+    color: #b91c1c;
+}
+
+.row-rejected .cat-pill {
+    opacity: 0.6;
+}
+
+.status-pill.approved {
+    background: #ecfdf5;
+    color: #059669;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+}
+
+.status-pill.rejected {
+    background: #fef2f2;
+    color: #dc2626;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+}
+
+.status-pill.pending {
+    background: #f8fafc;
+    color: #64748b;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+}

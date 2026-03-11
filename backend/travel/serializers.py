@@ -1,6 +1,138 @@
 from rest_framework import serializers
-from .models import Trip, TripOdometer, Expense, TravelClaim, TravelAdvance, Dispute, PolicyDocument
+from .models import (
+    Trip, TripOdometer, Expense, TravelClaim, TravelAdvance, Dispute, PolicyDocument, BulkActivityBatch,
+    TravelModeMaster, BookingTypeMaster, AirlineMaster, FlightClassMaster, TrainClassMaster,
+    BusOperatorMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
+    TrainProviderMaster, BusProviderMaster, IntercityCabProviderMaster,
+    LocalTravelModeMaster, LocalCarSubTypeMaster, LocalBikeSubTypeMaster, LocalProviderMaster,
+    StayTypeMaster, RoomTypeMaster, MealCategoryMaster, MealTypeMaster, IncidentalTypeMaster,
+    CustomMasterDefinition, CustomMasterValue, MasterModule
+)
 from api_management.utils import encrypt_key, decrypt_key
+
+# --- MASTER SERIALIZERS ---
+
+class TravelModeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TravelModeMaster
+        fields = '__all__'
+
+class BookingTypeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BookingTypeMaster
+        fields = '__all__'
+
+class AirlineMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AirlineMaster
+        fields = '__all__'
+
+class FlightClassMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FlightClassMaster
+        fields = '__all__'
+
+class TrainClassMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TrainClassMaster
+        fields = '__all__'
+
+class BusOperatorMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BusOperatorMaster
+        fields = '__all__'
+
+class BusTypeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BusTypeMaster
+        fields = '__all__'
+
+class IntercityCabVehicleMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IntercityCabVehicleMaster
+        fields = '__all__'
+
+class TravelProviderMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TravelProviderMaster
+        fields = '__all__'
+
+class TrainProviderMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TrainProviderMaster
+        fields = '__all__'
+
+class BusProviderMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BusProviderMaster
+        fields = '__all__'
+
+class IntercityCabProviderMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IntercityCabProviderMaster
+        fields = '__all__'
+
+class LocalTravelModeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LocalTravelModeMaster
+        fields = '__all__'
+
+class LocalCarSubTypeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LocalCarSubTypeMaster
+        fields = '__all__'
+
+class LocalBikeSubTypeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LocalBikeSubTypeMaster
+        fields = '__all__'
+
+class LocalProviderMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LocalProviderMaster
+        fields = '__all__'
+
+class StayTypeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StayTypeMaster
+        fields = '__all__'
+
+class RoomTypeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RoomTypeMaster
+        fields = '__all__'
+
+class MealCategoryMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MealCategoryMaster
+        fields = '__all__'
+
+class MealTypeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MealTypeMaster
+        fields = '__all__'
+
+class IncidentalTypeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IncidentalTypeMaster
+        fields = '__all__'
+
+class MasterModuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MasterModule
+        fields = '__all__'
+
+class CustomMasterDefinitionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomMasterDefinition
+        fields = '__all__'
+
+class CustomMasterValueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomMasterValue
+        fields = '__all__'
+
+# --- CORE SERIALIZERS ---
 
 class PolicyDocumentSerializer(serializers.ModelSerializer):
     uploaded_by_name = serializers.ReadOnlyField(source='uploaded_by.name')
@@ -14,6 +146,11 @@ class PolicyDocumentSerializer(serializers.ModelSerializer):
             'file_name_hi', 'file_size_hi',
             'file_content_en', 'file_content_te', 'file_content_hi'
         ]
+        extra_kwargs = {
+            'file_content_en': {'write_only': True},
+            'file_content_te': {'write_only': True},
+            'file_content_hi': {'write_only': True}
+        }
 
 class PolicyDocumentDetailSerializer(serializers.ModelSerializer):
     class Meta:
@@ -45,6 +182,9 @@ class TripOdometerSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
 class ExpenseSerializer(serializers.ModelSerializer):
+    user_name = serializers.ReadOnlyField(source='trip.user.name')
+    trip_user_id = serializers.ReadOnlyField(source='trip.user.employee_id')
+
     class Meta:
         model = Expense
         fields = '__all__'
@@ -88,7 +228,7 @@ class TravelAdvanceSerializer(serializers.ModelSerializer):
         return obj.user_name or (obj.trip.user.name if obj.trip and obj.trip.user else 'Unknown User')
 
     def get_reporting_manager_name(self, obj):
-        return obj.reporting_manager_name or (obj.trip.user.reporting_manager.name if obj.trip and obj.trip.user and obj.trip.user.reporting_manager else None)
+        return obj.reporting_manager_name or (obj.trip.user.reporting_manager.name if obj.trip and obj.trip.user and obj.user.reporting_manager else None)
 
 class DisputeSerializer(serializers.ModelSerializer):
     trip_id_display = serializers.CharField(source='trip.trip_id', read_only=True)
@@ -128,7 +268,8 @@ class TripSerializer(serializers.ModelSerializer):
             'trip_leader', 'en_route', 'route_path', 'route_path_name', 'project_code', 'consider_as_local', 'accommodation_requests',
             'vehicle_type', 'members', 'lifecycle_events', 'created_at', 'updated_at',
             'advances', 'expenses', 'odometer', 'claim', 'reporting_manager_name',
-            'current_approver', 'total_approved_advance', 'total_expenses', 'wallet_balance', 'has_gh_booking', 'has_vehicle_booking'
+            'current_approver', 'total_approved_advance', 'total_expenses', 'wallet_balance', 'has_gh_booking', 'has_vehicle_booking',
+            'rejection_reason', 'rejected_by'
         ]
         read_only_fields = ('trip_id', 'user', 'user_name', 'user_emp_id', 'status', 'cost_estimate', 'created_at', 'updated_at', 'lifecycle_events')
 
@@ -187,3 +328,18 @@ class AuditLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuditLog
         fields = ['id', 'user', 'user_name', 'action', 'model_name', 'object_id', 'object_repr', 'timestamp', 'details', 'ip_address']
+
+class BulkActivityBatchSerializer(serializers.ModelSerializer):
+    user_name = serializers.SerializerMethodField()
+    reporting_manager_name = serializers.SerializerMethodField()
+    trip_id_display = serializers.CharField(source='trip.trip_id', read_only=True)
+
+    class Meta:
+        model = BulkActivityBatch
+        fields = '__all__'
+
+    def get_user_name(self, obj):
+        return obj.user.name if obj.user else 'Unknown'
+
+    def get_reporting_manager_name(self, obj):
+        return obj.user.reporting_manager.name if obj.user and obj.user.reporting_manager else 'N/A'

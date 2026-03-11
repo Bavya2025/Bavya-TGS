@@ -22,6 +22,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "api_management.middleware.APILoggingMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -30,7 +31,6 @@ MIDDLEWARE = [
     "core.middleware.CustomAuthMiddleware",
     "core.middleware.ThreadLocalMiddleware",
     "travel.middleware.PageAccessMiddleware",
-    "api_management.middleware.APILoggingMiddleware",
 ]
 
 ROOT_URLCONF = "tgs_backend.urls"

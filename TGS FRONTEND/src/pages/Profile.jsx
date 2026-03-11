@@ -13,10 +13,37 @@ const Profile = () => {
 
     useEffect(() => {
         const fetchProfile = async () => {
+            const apiKey = sessionStorage.getItem('company_api_key');
+
+            if (!apiKey) {
+                setApiKeyMissing(true);
+                console.warn("API Key missing in local storage. Attempting fetch with Bearer token only.");
+            }
+
             try {
-                // Use the new dedicated profile endpoint
-                const response = await api.get('/api/employees/profile/');
-                setProfileData(response.data);
+                const empCodeForFilter = user?.employee_code || user?.username || user?.employee_id || '';
+                const response = await api.get(`/api/employees/?employee_code=${empCodeForFilter}`);
+
+                const employees = response.data.results || [];
+
+                const matchedEmployee = employees.find(emp => {
+                    const userCode = String(empCodeForFilter).toLowerCase();
+                    const userName = String(user?.name || '').toLowerCase();
+
+                    const empCode = String(emp.employee_code || emp.employee?.employee_code || '').toLowerCase();
+                    const empName = String(emp.name || emp.employee?.name || '').toLowerCase();
+
+                    return (
+                        (userCode && empCode && empCode === userCode) ||
+                        (userName && empName && empName === userName)
+                    );
+                });
+
+                if (matchedEmployee) {
+                    setProfileData(matchedEmployee);
+                } else {
+                    console.warn("User not found in employee list for code:", user?.username);
+                }
             } catch (err) {
                 console.error("Error fetching profile:", err);
                 setError('Failed to load detailed profile data.');
@@ -34,28 +61,61 @@ const Profile = () => {
         return <div className="loading-state">Please log in to view your profile.</div>;
     }
 
-    const displayData = {
+    if (apiKeyMissing) {
+        console.warn("API Key missing, displaying basic profile info from auth context.");
+    }
+
+    const displayData = profileData ? {
         employee: {
-            name: profileData?.employee?.name || user?.name || '',
-            employee_code: profileData?.employee?.employee_code || user?.username || '',
-            phone: profileData?.employee?.phone || user?.phone || '',
-            email: profileData?.employee?.email || user?.email || '',
-            photo: profileData?.employee?.photo || null
+            name: profileData.name || profileData.employee?.name || user?.name || '',
+            employee_code: profileData.employee_code || profileData.employee?.employee_code || user?.username || '',
+            phone: profileData.phone || profileData.employee?.phone || user?.phone || '',
+            email: profileData.email || profileData.employee?.email || user?.email || '',
+            photo: profileData.photo || profileData.employee?.photo || null
         },
         position: {
-            name: profileData?.position?.name || user?.role || '',
-            department: profileData?.position?.department || 'N/A',
-            section: profileData?.position?.section || 'N/A',
-            reporting_to: profileData?.position?.reporting_to || []
+            name: profileData.role || profileData.position?.name || user?.role || '',
+            department: profileData.department || profileData.position?.department || '',
+            section: profileData.section || profileData.position?.section || '',
+            reporting_to: (profileData.positions_details && profileData.positions_details[0]?.reporting_to) || 
+                          profileData.reporting_to || 
+                          profileData.position?.reporting_to || []
         },
         project: {
-            name: profileData?.project?.name || 'N/A',
-            code: profileData?.project?.code || 'N/A'
+            name: profileData.project?.name || '',
+            code: profileData.project?.code || ''
         },
         office: {
-            name: profileData?.office?.name || 'Head Office',
-            level: profileData?.office?.level || '3',
-            geo_location: profileData?.office?.geo_location || {
+            name: profileData.office?.name || '',
+            level: profileData.office?.level || '',
+            geo_location: profileData.office?.geo_location || {
+                district: '',
+                state: '',
+                country: ''
+            }
+        }
+    } : {
+        employee: {
+            name: user?.name || '',
+            employee_code: user?.username || user?.employee_id || '',
+            phone: user?.phone || '',
+            email: user?.email || '',
+            photo: null
+        },
+        position: {
+            name: user?.role || '',
+            department: '',
+            section: '',
+            reporting_to: []
+        },
+        project: {
+            name: '',
+            code: ''
+        },
+        office: {
+            name: '',
+            level: '',
+            geo_location: {
                 district: '',
                 state: '',
                 country: ''
