@@ -20,11 +20,11 @@ const SearchableSelect = ({ options, value, onChange, placeholder, loading, erro
         const optName = typeof opt === 'string' ? opt : (opt.name || opt.id || '');
         const optCode = typeof opt === 'object' && opt !== null ? (opt.code || opt.location_code || opt.external_id || '') : '';
         const searchStr = search.toLowerCase();
-        
+
         if (searchByCodeOnly) {
             return String(optCode).toLowerCase().includes(searchStr);
         }
-        
+
         return String(optName).toLowerCase().includes(searchStr) || String(optCode).toLowerCase().includes(searchStr);
     });
 
@@ -45,7 +45,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, loading, erro
                 <div className="select-trigger-inner">
                     {loading && <RefreshCw size={12} className="animate-spin text-primary" />}
                     <span className="select-trigger-selected">
-                        {typeof value === 'object' && value !== null 
+                        {typeof value === 'object' && value !== null
                             ? (
                                 <div className="select-trigger-selected">
                                     {(value.code || value.location_code || value.external_id) && (
@@ -55,7 +55,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, loading, erro
                                     )}
                                     <span>{value.name || value.id}</span>
                                 </div>
-                            ) 
+                            )
                             : (value || placeholder)}
                     </span>
                 </div>
@@ -75,7 +75,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, loading, erro
                             className="searchable-select-input"
                         />
                     </div>
-                    
+
                     <div className="searchable-select-list no-scrollbar">
                         <button
                             type="button"
@@ -112,8 +112,8 @@ const SearchableSelect = ({ options, value, onChange, placeholder, loading, erro
                                                 </span>
                                             )}
                                             <span className="select-name-text">
-                                                {optName.startsWith(opt.code || opt.location_code || opt.external_id || 'NEVER_MATCH') 
-                                                    ? optName.replace(opt.code || opt.location_code || opt.external_id, '').trim() 
+                                                {optName.startsWith(opt.code || opt.location_code || opt.external_id || 'NEVER_MATCH')
+                                                    ? optName.replace(opt.code || opt.location_code || opt.external_id, '').trim()
                                                     : optName}
                                             </span>
                                         </div>
