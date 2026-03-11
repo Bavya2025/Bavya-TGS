@@ -6,11 +6,16 @@ from .models import (
     TrainProviderMaster, BusProviderMaster, IntercityCabProviderMaster,
     LocalTravelModeMaster, LocalCarSubTypeMaster, LocalBikeSubTypeMaster, LocalProviderMaster,
     StayTypeMaster, RoomTypeMaster, MealCategoryMaster, MealTypeMaster, IncidentalTypeMaster,
-    CustomMasterDefinition, CustomMasterValue, MasterModule
+    CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking
 )
 from api_management.utils import encrypt_key, decrypt_key
 
 # --- MASTER SERIALIZERS ---
+
+class TripTrackingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TripTracking
+        fields = ['id', 'trip', 'latitude', 'longitude', 'timestamp', 'accuracy', 'speed']
 
 class TravelModeMasterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -269,7 +274,7 @@ class TripSerializer(serializers.ModelSerializer):
             'vehicle_type', 'members', 'lifecycle_events', 'created_at', 'updated_at',
             'advances', 'expenses', 'odometer', 'claim', 'reporting_manager_name',
             'current_approver', 'total_approved_advance', 'total_expenses', 'wallet_balance', 'has_gh_booking', 'has_vehicle_booking',
-            'rejection_reason', 'rejected_by'
+            'rejection_reason', 'rejected_by', 'fuel_rate_snapshot'
         ]
         read_only_fields = ('trip_id', 'user', 'user_name', 'user_emp_id', 'status', 'cost_estimate', 'created_at', 'updated_at', 'lifecycle_events')
 

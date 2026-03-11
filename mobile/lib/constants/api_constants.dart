@@ -8,7 +8,11 @@ class ApiConstants {
 
   // Using 10.0.2.2 for emulator support by default.
   // Change to your machine IP if testing on a physical device.
+<<<<<<< HEAD
   static const String baseUrl = 'http://192.168.1.135:4567';
+=======
+  static const String baseUrl = 'http://192.168.1.138:6784';
+>>>>>>> 0d12741 ( updated mobile)
   // static const String baseUrl = 'http://10.0.2.2:4567';
 
   // Authentication Endpoints

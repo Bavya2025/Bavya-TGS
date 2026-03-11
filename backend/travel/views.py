@@ -9,7 +9,7 @@ from .models import (
     TrainProviderMaster, BusProviderMaster, IntercityCabProviderMaster,
     LocalTravelModeMaster, LocalCarSubTypeMaster, LocalBikeSubTypeMaster, LocalProviderMaster,
     StayTypeMaster, RoomTypeMaster, MealCategoryMaster, MealTypeMaster, IncidentalTypeMaster,
-    CustomMasterDefinition, CustomMasterValue, MasterModule
+    CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking
 )
 from .serializers import (
     TripSerializer, ExpenseSerializer, TravelClaimSerializer, TravelAdvanceSerializer,
@@ -21,18 +21,13 @@ from .serializers import (
     LocalTravelModeMasterSerializer, LocalCarSubTypeMasterSerializer, LocalBikeSubTypeMasterSerializer,
     LocalProviderMasterSerializer, StayTypeMasterSerializer, RoomTypeMasterSerializer,
     MealCategoryMasterSerializer, MealTypeMasterSerializer, IncidentalTypeMasterSerializer,
-    CustomMasterDefinitionSerializer, CustomMasterValueSerializer, MasterModuleSerializer
+    CustomMasterDefinitionSerializer, CustomMasterValueSerializer, MasterModuleSerializer,
+    TripTrackingSerializer
 )
 import io
 import json
 import pandas as pd
 from django.http import HttpResponse
-from .models import Trip, Expense, TravelClaim, TravelAdvance, TripOdometer, Dispute, PolicyDocument, BulkActivityBatch
-from .serializers import (
-    TripSerializer, ExpenseSerializer, TravelClaimSerializer, 
-    TravelAdvanceSerializer, TripOdometerSerializer, DisputeSerializer,
-    PolicyDocumentSerializer, PolicyDocumentDetailSerializer, BulkActivityBatchSerializer
-)
 from rest_framework.permissions import AllowAny
 from django.db.models import Q
 import base64
@@ -54,7 +49,7 @@ def decode_id(encoded_id):
         
     try:
         # Check if it's already a numeric-looking ID or doesn't look like base64
-        if encoded_id.isdigit():
+        if encoded_id.isdigit() or encoded_id.startswith('TRP-'):
             return encoded_id
             
         padding = 4 - (len(encoded_id) % 4)
@@ -168,17 +163,6 @@ def update_trip_lifecycle(trip, title, description):
         trip.lifecycle_events = events
         trip.save(update_fields=['lifecycle_events'])
 
-def decode_id(value):
-    if not value:
-        return value
-    try:
-        standard_base64 = value.replace('-', '+').replace('_', '/')
-        missing_padding = len(standard_base64) % 4
-        if missing_padding:
-            standard_base64 += '=' * (4 - missing_padding)
-        return base64.b64decode(standard_base64).decode('utf-8')
-    except (binascii.Error, UnicodeDecodeError, ValueError):
-        return value
 
 
 
@@ -196,8 +180,16 @@ class TripListCreateView(generics.ListCreateAPIView):
         all_trips = self.request.query_params.get('all') == 'true'
         user_role = user.role.name.lower() if user.role else ''
         
-        if all_trips and user_role in ['admin', 'guesthousemanager']:
-            return Trip.objects.all().order_by('-created_at')
+        if all_trips:
+            if user_role in ['admin', 'guesthousemanager', 'finance', 'cfo']:
+                return Trip.objects.all().order_by('-created_at')
+            
+            # Managers/Approvers should see trips they are involved in
+            from django.db.models import Q
+            return Trip.objects.filter(
+                Q(user=user) | 
+                Q(current_approver=user)
+            ).distinct().order_by('-created_at')
             
         return Trip.objects.filter(user=user).order_by('-created_at')
 
@@ -384,6 +376,70 @@ class TripDetailView(generics.RetrieveUpdateDestroyAPIView):
              self.permission_denied(self.request, message="Not authorized to view this trip details")
              
         return obj
+
+class TripTrackingView(APIView):
+    permission_classes = [IsCustomAuthenticated]
+
+    def get(self, request, trip_id):
+        print(f"DEBUG: TripTrackingView.get called for trip_id: {trip_id}")
+        real_trip_id = decode_id(trip_id)
+        # Verify trip exists and user has access
+        try:
+            trip = Trip.objects.get(trip_id=real_trip_id)
+        except Trip.DoesNotExist:
+            print(f"DEBUG: Trip {real_trip_id} not found")
+            return Response({"error": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Basic access check: requester or manager or finance or admin
+        user = getattr(request, 'custom_user', None)
+        print(f"DEBUG: Requester: {user.employee_id if user else 'Anonymous'}")
+        
+        # ... existing logic ...
+        is_owner = (trip.user == user)
+        is_manager = False
+        if user:
+            is_manager = user in [trip.user.reporting_manager, trip.user.senior_manager, trip.user.hod_director, trip.current_approver]
+        
+        user_role = user.role.name.lower() if user and user.role else ''
+        is_privileged = user_role in ['admin', 'finance', 'cfo', 'guesthousemanager']
+
+        if not (is_owner or is_manager or is_privileged):
+            print(f"DEBUG: Unauthorized access attempt to trip {real_trip_id}")
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        tracking_data = TripTracking.objects.filter(trip=trip).order_by('timestamp')
+        print(f"DEBUG: Returning {tracking_data.count()} points")
+        serializer = TripTrackingSerializer(tracking_data, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, trip_id):
+        print(f"DEBUG: TripTrackingView.post called for trip_id: {trip_id}")
+        real_trip_id = decode_id(trip_id)
+        try:
+            trip = Trip.objects.get(trip_id=real_trip_id)
+        except Trip.DoesNotExist:
+            print(f"DEBUG: Trip {real_trip_id} not found for POST")
+            return Response({"error": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Only trip owner can post tracking points
+        user = getattr(request, 'custom_user', None)
+        print(f"DEBUG: POST Requester: {user.employee_id if user else 'Anonymous'}")
+        
+        if not user or trip.user != user:
+            print(f"DEBUG: POST Unauthorized for user {user.employee_id if user else 'None'}")
+            return Response({"error": "Only trip owner can submit tracking data"}, status=status.HTTP_403_FORBIDDEN)
+
+        data = request.data.copy()
+        data['trip'] = trip.trip_id
+        
+        serializer = TripTrackingSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            print("DEBUG: Tracking point saved successfully")
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        print(f"DEBUG: Serializer errors: {serializer.errors}")
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ApprovalCountView(APIView):
     permission_classes = [IsCustomAuthenticated]
