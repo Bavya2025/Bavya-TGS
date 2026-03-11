@@ -33,7 +33,6 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
   // Travel details state
   String _travelMode = 'Airways';
   String _vehicleType = 'Own';
-  bool _isEditingTravelDetails = false;
 
   // Odometer state
   late TextEditingController _startOdometerController;
@@ -43,6 +42,10 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
   bool _isEditingOdometer = false;
   bool _isSavingOdometer = false;
   final ImagePicker _imagePicker = ImagePicker();
+  
+  // Additional Luggage state
+  String _luggageWeight = '';
+  String _luggageRemarks = '';
 
   @override
   void initState() {
@@ -413,7 +416,6 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Travel details updated successfully')),
         );
-        setState(() => _isEditingTravelDetails = false);
         _fetchTripStory();
       }
     } catch (e) {
@@ -866,28 +868,14 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
                 const SizedBox(height: 30),
                 _buildCoreDetails(),
                 const SizedBox(height: 30),
-                if (_trip?.members != null && _trip!.members.length > 1) ...[
-                  _buildTeamSection(),
-                  const SizedBox(height: 30),
-                ],
-                if (_trip?.accommodationRequests != null &&
-                    _trip!.accommodationRequests!.isNotEmpty) ...[
-                  _buildAccommodationSection(),
-                  const SizedBox(height: 30),
-                ],
                 _buildFinancialSummary(),
+                const SizedBox(height: 30),
+                _buildExpenseRegistry(),
                 const SizedBox(height: 30),
                 if (_shouldShowOdometerSection()) ...[
                   _buildOdometerSection(),
                   const SizedBox(height: 30),
                 ],
-                if (_trip?.lifecycleEvents != null &&
-                    _trip!.lifecycleEvents.isNotEmpty) ...[
-                  _buildJourneyHistory(),
-                  const SizedBox(height: 30),
-                ],
-                _buildExpenseRegistry(),
-                const SizedBox(height: 30),
                 _buildSettlementLifecycle(),
                 const SizedBox(height: 30),
               ],
@@ -920,114 +908,6 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
     );
   }
 
-  Widget _buildJourneyHistory() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(Icons.history_rounded, 'Journey Status History'),
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFF1F5F9)),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10),
-            ],
-          ),
-          child: Column(
-            children: _trip!.lifecycleEvents.map((event) {
-              final e = _safe(event);
-              final isLast =
-                  _trip!.lifecycleEvents.indexOf(event) ==
-                  _trip!.lifecycleEvents.length - 1;
-              final Color statusColor =
-                  e['status']?.toString().toLowerCase() == 'completed'
-                  ? const Color(0xFF10B981)
-                  : const Color(0xFF3B82F6);
-
-              return IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Column(
-                      children: [
-                        Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: statusColor,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: statusColor.withOpacity(0.3),
-                                blurRadius: 4,
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (!isLast)
-                          Expanded(
-                            child: Container(
-                              width: 2,
-                              color: const Color(0xFFF1F5F9),
-                              margin: const EdgeInsets.symmetric(vertical: 4),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.only(bottom: isLast ? 0 : 20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  e['title'] ?? 'Update',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w900,
-                                    color: const Color(0xFF0F172A),
-                                  ),
-                                ),
-                                Text(
-                                  e['date'] ?? '',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF94A3B8),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              e['description'] ?? '',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: const Color(0xFF64748B),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildCoreDetails() {
     // PERSONNEL LOGIC matching web app precisely
@@ -1097,28 +977,64 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
               ),
             ),
           ),
-        if (_trip?.userBankName != null && _trip!.userBankName!.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _bankInfoRow(
-                  Icons.account_balance_rounded,
-                  _trip!.userBankName!,
-                ),
-                if (_trip?.userAccountNo != null)
-                  _bankInfoRow(Icons.numbers_rounded, _trip!.userAccountNo!),
+                if (_trip?.userBankName != null && _trip!.userBankName!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _bankInfoRow(
+                          Icons.account_balance_rounded,
+                          _trip!.userBankName!,
+                        ),
+                        if (_trip?.userAccountNo != null)
+                          _bankInfoRow(Icons.numbers_rounded, _trip!.userAccountNo!),
+                      ],
+                    ),
+                  ),
+                ],
+                if (_trip?.members != null && _trip!.members.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'TEAM MEMBERS',
+                    style: GoogleFonts.inter(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF94A3B8),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: _trip!.members!.map((m) {
+                      final member = _safe(m);
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Text(
+                          member['name'] ?? member['username'] ?? 'Member',
+                          style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF475569),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
               ],
-            ),
-          ),
-        ],
-      ],
     );
 
     return Column(
@@ -1253,213 +1169,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
     return {};
   }
 
-  Widget _buildTeamSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(Icons.groups_rounded, 'Team Personnel'),
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFF1F5F9)),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10),
-            ],
-          ),
-          child: Column(
-            children: _trip!.members.map((rawM) {
-              final m = _safe(rawM);
-              final isLast =
-                  _trip!.members.indexOf(rawM) == _trip!.members.length - 1;
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: const Color(0xFFF8FAFC),
-                          child: Text(
-                            (m['name'] ?? m['username'] ?? '?')[0]
-                                .toUpperCase(),
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                m['name'] ?? m['username'] ?? 'N/A',
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF0F172A),
-                                ),
-                              ),
-                              Text(
-                                m['designation'] ?? m['role'] ?? 'Staff',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: const Color(0xFF94A3B8),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            m['employee_id'] ?? 'ID',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF64748B),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (!isLast)
-                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                ],
-              );
-            }).toList(),
-          ),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildAccommodationSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(Icons.hotel_rounded, 'Accommodation Logistics'),
-        const SizedBox(height: 18),
-        ..._trip!.accommodationRequests!.map((rawAcc) {
-          final acc = _safe(rawAcc);
-          final bool isGH =
-              acc['type']?.toString().toLowerCase() == 'guest house';
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: isGH ? const Color(0xFFF0FDFA) : Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: isGH ? const Color(0xFFCCFBF1) : const Color(0xFFF1F5F9),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          isGH ? Icons.house_rounded : Icons.hotel_rounded,
-                          size: 18,
-                          color: isGH
-                              ? const Color(0xFF0D9488)
-                              : const Color(0xFF3B82F6),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          isGH ? 'GUEST HOUSE' : 'HOTEL BOOKING',
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            color: isGH
-                                ? const Color(0xFF0D9488)
-                                : const Color(0xFF3B82F6),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        acc['status']?.toString().toUpperCase() ?? 'PENDING',
-                        style: GoogleFonts.inter(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.blueGrey,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  acc['hotel_name'] ?? acc['location'] ?? 'Location Specified',
-                  style: GoogleFonts.inter(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${acc['check_in_date'] ?? 'N/A'} to ${acc['check_out_date'] ?? 'N/A'}',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (acc['description']?.toString().isNotEmpty ?? false) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    acc['description']?.toString() ?? '',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: Colors.black45,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          );
-        }).toList(),
-      ],
-    );
-  }
 
   Widget _detailTile(
     IconData icon,
@@ -2477,6 +2187,90 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
     );
   }
 
+  Widget _additionalLuggageButton() {
+    return TextButton(
+      onPressed: _showLuggageModal,
+      style: TextButton.styleFrom(
+        backgroundColor: const Color(0xFFDB2777),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+      child: Text(
+        'Additional Luggage',
+        style: GoogleFonts.inter(
+          color: Colors.white,
+          fontSize: 9,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  void _showLuggageModal() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Additional Luggage',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w900),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              onChanged: (v) => _luggageWeight = v,
+              decoration: const InputDecoration(
+                labelText: 'Luggage Weight (kg)',
+                hintText: 'e.g. 5',
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              onChanged: (v) => _luggageRemarks = v,
+              decoration: const InputDecoration(
+                labelText: 'Remarks',
+                hintText: 'Why is this needed?',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (_luggageWeight.isEmpty || _luggageRemarks.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter both weight and remarks'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Additional Luggage info saved locally.'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDB2777),
+            ),
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildExpenseRegistry() {
     final bool isApprover =
         (_currentUser?['id']?.toString() ==
@@ -2496,40 +2290,48 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _sectionHeader(
-              Icons.description_rounded,
-              'Detailed Expense Registry',
-            ),
-            if (!isLocked)
-              TextButton.icon(
-                onPressed: () {
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => TripWalletSheet(
-                      trip: _trip!,
-                      onUpdate: _fetchTripStory,
-                      initialView: 'add_expense',
-                    ),
-                  );
-                },
-                icon: const Icon(
-                  Icons.add_rounded,
-                  size: 16,
-                  color: Color(0xFF7C1D1D),
-                ),
-                label: Text(
-                  'Add Expense',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF7C1D1D),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                  ),
-                ),
+            Expanded(
+              child: _sectionHeader(
+                Icons.description_rounded,
+                'Detailed Expense Registry',
               ),
+            ),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
+              children: [
+                _additionalLuggageButton(),
+                if (!isLocked)
+                  TextButton.icon(
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => TripWalletSheet(
+                          trip: _trip!,
+                          onUpdate: _fetchTripStory,
+                          initialView: 'add_expense',
+                        ),
+                      );
+                    },
+                    icon: const Icon(
+                      Icons.add_rounded,
+                      size: 16,
+                      color: Color(0xFF7C1D1D),
+                    ),
+                    label: Text(
+                      'Add Expense',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF7C1D1D),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -2600,11 +2402,16 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _sectionHeader(Icons.description_rounded, 'Audit Master Registry'),
-            Row(
+            Expanded(
+              child:
+                  _sectionHeader(Icons.description_rounded, 'Audit Master Registry'),
+            ),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
               children: [
+                _additionalLuggageButton(),
                 TextButton(
                   onPressed: () => _handleAuditAction('Reject'),
                   child: Text(
@@ -2612,17 +2419,16 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
                     style: GoogleFonts.inter(
                       color: Colors.red,
                       fontWeight: FontWeight.w800,
-                      fontSize: 12,
+                      fontSize: 10,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: () => _handleAuditAction('Approve'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF10B981),
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
+                      horizontal: 8,
                       vertical: 0,
                     ),
                   ),
@@ -2631,7 +2437,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
                     style: GoogleFonts.inter(
                       color: Colors.white,
                       fontWeight: FontWeight.w800,
-                      fontSize: 12,
+                      fontSize: 10,
                     ),
                   ),
                 ),

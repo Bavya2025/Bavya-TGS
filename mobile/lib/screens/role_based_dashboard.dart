@@ -468,7 +468,6 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                   )
                 else if (_dashboardStats != null) ...[
                   _buildKpiGrid(),
-                  _buildExpenditureMix(),
                 ],
 
                 // Modules will be shown in ALL SERVICES grid below instead of dedicated header buttons
@@ -1008,168 +1007,6 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
     }
   }
 
-  Widget _buildExpenditureMix() {
-    final mix = _dashboardStats?['expenditure_mix'] as List? ?? [];
-    if (mix.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 32, 20, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'EXPENDITURE MIX',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF94A3B8),
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const Icon(Icons.trending_up, color: Color(0xFF94A3B8), size: 18),
-            ],
-          ),
-        ),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.all(
-            10,
-          ), // Reduced internal padding as tracks are now in cards
-          decoration: const BoxDecoration(color: Colors.transparent),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ...mix.asMap().entries.map((entry) {
-                final index = entry.key;
-                final item = entry.value;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "${(item['type'] ?? '').toString()} (${double.tryParse((item['percentage'] ?? 0).toString())?.toStringAsFixed(0) ?? '0'}%)",
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF475569),
-                            ),
-                          ),
-                          Text(
-                            "₹${NumberFormat('#,###').format(double.tryParse((item['amount'] ?? 0).toString()) ?? 0)}",
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Stack(
-                        children: [
-                          Container(
-                            height: 6,
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          FractionallySizedBox(
-                            widthFactor:
-                                (double.tryParse(
-                                      (item['percentage'] ?? 0).toString(),
-                                    ) ??
-                                    0) /
-                                100,
-                            child: Container(
-                              height: 6,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    _getCategoryColor(index).withOpacity(0.8),
-                                    _getCategoryColor(index),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _getCategoryColor(
-                                      index,
-                                    ).withOpacity(0.15),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8.0),
-                child: Divider(color: Color(0xFFF1F5F9)),
-              ),
-              Container(
-                margin: const EdgeInsets.only(top: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFBB0633).withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: const Color(0xFFBB0633).withOpacity(0.1),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "Total Recorded Spend",
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF64748B),
-                      ),
-                    ),
-                    Text(
-                      "₹${NumberFormat('#,###').format(_dashboardStats?['total_spend'] ?? 0)}",
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: const Color(0xFFBB0633),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildWalletDisplay() {
     // show only the advance balance (wallet removed per request)
@@ -1590,17 +1427,6 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
     }
   }
 
-  Color _getCategoryColor(int index) {
-    final colors = [
-      const Color(0xFFBB0633), // Burgundy
-      const Color(0xFFD80073), // Magenta
-      const Color(0xFFFF8C00), // Orange
-      const Color(0xFFFFD700), // Yellow
-      const Color(0xFF10B981), // Success Green
-      const Color(0xFF3B82F6), // Info Blue
-    ];
-    return colors[index % colors.length];
-  }
 
   Widget _buildModulesGrid(List<NavigationModule> modules) {
     return GridView.builder(

@@ -338,7 +338,7 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
             if (row.nature === 'Travel') {
                 key = `Travel|${row.date}|${row.details.mode}|${row.details.origin}|${row.details.destination}|${row.details.pnr || ''}`;
             } else if (row.nature === 'Local Travel') {
-                key = `Local|${row.date}|${row.details.mode}|${row.details.subType}|${row.details.fromLocation}|${row.details.toLocation}`;
+                key = `Local|${row.date}|${row.details.mode || ''}|${row.details.subType || ''}|${row.details.origin || ''}|${row.details.destination || ''}`;
             } else if (row.nature === 'Food') {
                 key = `Food|${row.date}|${row.details.mealType}|${row.details.restaurant}`;
             } else if (row.nature === 'Accommodation') {
@@ -2302,7 +2302,7 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                                                             {r.nature === 'Local Travel' && (
                                                                 <>
                                                                     <strong>{r.details.mode || 'Local'} - {r.details.subType || 'No Type'}</strong>
-                                                                    <span>{r.details.fromLocation || 'Start'} → {r.details.toLocation || 'End'}</span>
+                                                                    <span>{r.details.origin || r.details.fromLocation || 'Start'} → {r.details.destination || r.details.toLocation || 'End'}</span>
                                                                 </>
                                                             )}
                                                             {r.nature === 'Food' && (

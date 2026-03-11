@@ -6,13 +6,13 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
-import 'package:image/image.dart' as img;
 import 'dart:convert';
-import 'package:geocoding/geocoding.dart';
 import 'forensic_camera.dart';
 import '../services/expense_reminder_service.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:open_filex/open_filex.dart';
+import '../services/logger_service.dart';
 
 class TripWalletSheet extends StatefulWidget {
   final Trip trip;
@@ -95,6 +95,8 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
   final _stayPurposeController = TextEditingController(); // Added for Stay
   final _mealTimeController = TextEditingController();
   final _addressController = TextEditingController();
+  
+  bool _isBulkUploading = false;
 
   String _selectedCategory = 'Travel';
   String? _selectedMode;
@@ -221,6 +223,73 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
         return 'Incidental';
       default:
         return null;
+    }
+  }
+
+  Future<void> _handleDownloadTemplate() async {
+    setState(() => _isLoading = true);
+    try {
+      final bytes = await _tripService.downloadBulkTemplate();
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/bulk_local_travel_template.xlsx');
+      await file.writeAsBytes(bytes);
+      
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Template downloaded! Opening...')),
+        );
+        await OpenFilex.open(file.path);
+      }
+    } catch (e) {
+      LoggerService.log('ERR DOWNLOADING TEMPLATE: $e', isError: true);
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download failed: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleBulkUpload() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx', 'xls'],
+      );
+
+      if (result != null && result.files.single.path != null) {
+        setState(() => _isBulkUploading = true);
+        final file = File(result.files.single.path!);
+        await _tripService.uploadBulkLocalConveyance(_tripData.id, file);
+        
+        if (mounted) {
+          setState(() {
+            _isBulkUploading = false;
+            _view = 'overview';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Bulk upload successful!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          _refreshTripData();
+          widget.onUpdate();
+        }
+      }
+    } catch (e) {
+      LoggerService.log('ERR BULK UPLOAD: $e', isError: true);
+      setState(() => _isBulkUploading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -4070,54 +4139,118 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
   }
 
   Widget _categoryPicker() {
-    return _formField(
-      'EXPENSE TYPE',
-      DropdownButtonFormField<String>(
-        isExpanded: true,
-        value: _selectedCategory,
-        items: _categories
-            .map(
-              (c) => DropdownMenuItem(
-                value: c['id'],
-                child: Text(
-                  c['label'] ?? '',
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _formField(
+          'EXPENSE TYPE',
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            value: _selectedCategory,
+            items: _categories
+                .map(
+                  (c) => DropdownMenuItem(
+                    value: c['id'],
+                    child: Text(
+                      c['label'] ?? '',
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (v) {
+              if (v != null) {
+                setState(() {
+                  _selectedCategory = v;
+                  _expenseAmountController.clear();
+                  // Reset defaults
+                  _selectedMode = null;
+                  _selectedLocalMode = null;
+                  _selectedLocalSubType = null;
+                  _bookingType = 'Self Booked';
+                  if (_selectedCategory == 'Travel') {
+                    _selectedMode = 'Flight';
+                    _selectedClass = 'Economy';
+                  } else if (_selectedCategory == 'Local') {
+                    _selectedLocalMode = 'Car / Cab';
+                  } else if (_selectedCategory == 'Food') {
+                    _mealType = 'Self Meal';
+                  } else if (_selectedCategory == 'Stay') {
+                    _roomType = 'Standard';
+                  }
+                });
+              }
+            },
+            icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Colors.black26,
+            ),
+            decoration: _inputDecoration(Icons.category_rounded, 'Select Type'),
+          ),
+        ),
+        if (_selectedCategory == 'Local') ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _handleDownloadTemplate,
+                  icon: const Icon(Icons.download_rounded, size: 16),
+                  label: Text(
+                    'TEMPLATE',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF3B82F6),
+                    side: const BorderSide(color: Color(0xFF3B82F6)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
-            )
-            .toList(),
-        onChanged: (v) {
-          if (v != null) {
-            setState(() {
-              _selectedCategory = v;
-              _expenseAmountController.clear();
-              // Reset defaults
-              _selectedMode = null;
-              _selectedLocalMode = null;
-              _selectedLocalSubType = null;
-              _bookingType = 'Self Booked';
-              if (_selectedCategory == 'Travel') {
-                _selectedMode = 'Flight';
-                _selectedClass = 'Economy';
-              } else if (_selectedCategory == 'Local') {
-                _selectedLocalMode = 'Car / Cab';
-              } else if (_selectedCategory == 'Food') {
-                _mealType = 'Self Meal';
-              } else if (_selectedCategory == 'Stay') {
-                _roomType = 'Standard';
-              }
-            });
-          }
-        },
-        icon: const Icon(
-          Icons.keyboard_arrow_down_rounded,
-          color: Colors.black26,
-        ),
-        decoration: _inputDecoration(Icons.category_rounded, 'Select Type'),
-      ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isBulkUploading ? null : _handleBulkUpload,
+                  icon: const Icon(Icons.upload_file_rounded, size: 16),
+                  label: _isBulkUploading
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.green,
+                          ),
+                        )
+                      : Text(
+                          'BULK UPLOAD',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.green,
+                    side: const BorderSide(color: Colors.green),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 

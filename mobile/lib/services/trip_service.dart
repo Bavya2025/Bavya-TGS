@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/trip_model.dart';
 import 'api_service.dart';
@@ -496,6 +497,20 @@ class TripService {
     await _apiService.post(
       ApiConstants.settlement,
       body: {'trip_id': tripId},
+      includeAuth: true,
+    );
+  }
+
+  Future<List<int>> downloadBulkTemplate() async {
+    return await _apiService.getBinary(ApiConstants.bulkTemplate);
+  }
+
+  Future<void> uploadBulkLocalConveyance(String tripId, File file) async {
+    await _apiService.postMultipart(
+      ApiConstants.bulkUpload,
+      fields: {'trip_id': tripId},
+      fileKey: 'file',
+      file: file,
       includeAuth: true,
     );
   }
