@@ -5,6 +5,7 @@ from .views import (
     TravelAdvanceViewSet, TripOdometerViewSet, DashboardStatsView,
     ApprovalsView, ApprovalCountView, TripBookingSearchView, DisputeViewSet,
     PolicyDocumentViewSet, TripSettlementView, CFOWarRoomView, BulkActivityBatchViewSet,
+    TripTrackingView,
     TravelModeMasterViewSet, BookingTypeMasterViewSet, AirlineMasterViewSet,
     FlightClassMasterSerializer, FlightClassMasterViewSet, TrainClassMasterViewSet, BusOperatorMasterViewSet, BusTypeMasterViewSet,
     IntercityCabVehicleMasterViewSet, TravelProviderMasterViewSet,
@@ -64,8 +65,10 @@ router.register(r'custom-master-values', CustomMasterValueViewSet)
 
 urlpatterns = [
     path('trips/', TripListCreateView.as_view(), name='trip-list-create'),
+    path('trips/approvals/', ApprovalsView.as_view(), name='trip-approvals-list'),
     path('trips/search/', TripBookingSearchView.as_view(), name='trip-search'),
     path('trips/<str:trip_id>/', TripDetailView.as_view(), name='trip-detail'),
+    path('trips/<str:trip_id>/tracking/', TripTrackingView.as_view(), name='trip-tracking'),
     path('trips/<str:trip_id>/export/pdf/',   ExpenseStatementPDFView.as_view(),   name='trip-export-pdf'),
     path('trips/<str:trip_id>/export/excel/', ExpenseStatementExcelView.as_view(), name='trip-export-excel'),
     path('dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
