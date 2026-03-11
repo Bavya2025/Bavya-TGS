@@ -2,7 +2,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     LocationViewSet, RouteViewSet, RoutePathViewSet, 
-    TollGateViewSet, TollRateViewSet, RoutePathTollViewSet, FuelRateMasterViewSet
+    TollGateViewSet, TollRateViewSet, RoutePathTollViewSet, FuelRateMasterViewSet,
+    EligibilityRuleViewSet, CadreViewSet
 )
 
 router = DefaultRouter()
@@ -13,6 +14,8 @@ router.register(r'toll-gates', TollGateViewSet)
 router.register(r'toll-rates', TollRateViewSet)
 router.register(r'route-path-tolls', RoutePathTollViewSet)
 router.register(r'fuel-rate-masters', FuelRateMasterViewSet)
+router.register(r'eligibility-rules', EligibilityRuleViewSet)
+router.register(r'cadres', CadreViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
