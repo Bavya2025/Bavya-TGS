@@ -22,6 +22,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "api_management.middleware.APILoggingMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -30,7 +31,6 @@ MIDDLEWARE = [
     "core.middleware.CustomAuthMiddleware",
     "core.middleware.ThreadLocalMiddleware",
     "travel.middleware.PageAccessMiddleware",
-    "api_management.middleware.APILoggingMiddleware",
 ]
 
 ROOT_URLCONF = "tgs_backend.urls"
@@ -54,9 +54,9 @@ WSGI_APPLICATION = "tgs_backend.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "tgs_b2",
+        "NAME": "TGS_nyt",
         "USER": "root",
-        "PASSWORD": "Ramprasad1819@",
+        "PASSWORD": "welcome",
         "HOST": "localhost",
         "PORT": "3306",
     }

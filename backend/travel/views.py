@@ -1,4 +1,5 @@
 from rest_framework import generics, viewsets, status, serializers
+from django.core.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from .models import (
@@ -1354,6 +1355,19 @@ class DashboardStatsView(APIView):
         
         total_expenses = base_expenses.aggregate(Sum('amount'))['amount__sum'] or 0
         
+        # compute total approved advances for the selected trips - used for wallet/advance balances
+        # mirror TripSerializer.get_total_approved_advance logic (consider executive_approved_amount when >0)
+        total_approved_advances = 0.0
+        advances_qs = TravelAdvance.objects.filter(
+            trip__in=trips,
+            status__in=['Paid', 'Transferred', 'COMPLETED']
+        )
+        for adv in advances_qs:
+            amt = float(adv.executive_approved_amount) if float(adv.executive_approved_amount) > 0 else float(adv.requested_amount)
+            total_approved_advances += amt
+        
+        wallet_balance = float(total_approved_advances) - float(total_expenses)
+        
         approved_expenses = base_expenses.filter(
             trip__claim__status__in=['Approved', 'Paid']
         ).aggregate(Sum('amount'))['amount__sum'] or 0
@@ -1401,7 +1415,11 @@ class DashboardStatsView(APIView):
                 }
                 for cat in categories
             ],
-            "total_spend": total_expenses
+            "total_spend": total_expenses,
+            # wallet_balance represents approved advances minus expenses across the user/trips
+            "wallet_balance": wallet_balance,
+            # advance_balance is simply the sum of approved advances
+            "advance_balance": float(total_approved_advances)
         })
 
 class TripSettlementView(APIView):

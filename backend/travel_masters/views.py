@@ -19,7 +19,9 @@ class LocationViewSet(viewsets.ModelViewSet):
         last_sync = getattr(self.__class__, '_last_sync_time', 0)
         if time.time() - last_sync > 60: # 1 minute cooldown
             try:
+                print(f"DEBUG AUTH: Starting Geo Sync triggered by {request.path}...")
                 sync_geo_locations()
+                print("DEBUG AUTH: Geo Sync completed.")
                 self.__class__._last_sync_time = time.time()
             except Exception as e:
                 print(f"Auto-sync failed: {e}")

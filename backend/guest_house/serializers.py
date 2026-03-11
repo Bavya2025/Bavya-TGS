@@ -53,7 +53,9 @@ class GuestHouseSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'address', 'location', 'pincode', 'is_active', 
             'latitude', 'longitude', 'image', 'description', 'created_at', 
-            'rooms', 'kitchens', 'cooks', 'laundries', 'contacts'
+            'rooms', 'kitchens', 'cooks', 'laundries', 'contacts',
+            'continent_id', 'country_id', 'state_id', 'district_id', 
+            'mandal_id', 'cluster_id', 'visiting_location_id'
         ]
         read_only_fields = ('created_at',)
 

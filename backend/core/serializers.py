@@ -43,22 +43,10 @@ class NotificationSerializer(serializers.ModelSerializer):
 class LoginHistorySerializer(serializers.ModelSerializer):
     user_name = serializers.ReadOnlyField(source='user.name')
     user_email = serializers.ReadOnlyField(source='user.email')
-    activities = serializers.SerializerMethodField()
 
     class Meta:
         model = LoginHistory
-        fields = ['id', 'user', 'user_name', 'user_email', 'login_time', 'logout_time', 'ip_address', 'user_agent', 'device_type', 'browser_type', 'status', 'failure_reason', 'activities']
-
-    def get_activities(self, obj):
-        from django.utils import timezone
-        end_time = obj.logout_time or timezone.now()
-        logs = AuditLog.objects.filter(
-            user=obj.user, 
-            timestamp__gte=obj.login_time,
-            timestamp__lte=end_time
-        ).order_by('timestamp')
-        
-        return AuditLogSerializer(logs, many=True).data
+        fields = ['id', 'user', 'user_name', 'user_email', 'login_time', 'logout_time', 'ip_address', 'user_agent', 'device_type', 'browser_type', 'status', 'failure_reason']
 
 class AuditLogSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.name', read_only=True)

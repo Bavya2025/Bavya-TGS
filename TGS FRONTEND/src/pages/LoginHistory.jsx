@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
-import { Search, Filter, ShieldCheck, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, Calendar, RefreshCcw } from 'lucide-react';
+import { 
+    Search, Filter, ShieldCheck, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, 
+    ChevronsLeft, ChevronsRight, Download, Calendar, RefreshCcw, Loader2 
+} from 'lucide-react';
 
 const LoginHistory = () => {
     const { user } = useAuth();
@@ -10,6 +13,8 @@ const LoginHistory = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isExporting, setIsExporting] = useState(false);
     const [expandedRow, setExpandedRow] = useState(null);
+    const [rowActivities, setRowActivities] = useState({});
+    const [loadingActivities, setLoadingActivities] = useState({});
     const [pagination, setPagination] = useState({
         count: 0,
         next: null,
@@ -43,7 +48,8 @@ const LoginHistory = () => {
                     count: data.count,
                     next: data.next,
                     previous: data.previous,
-                    currentPage: page
+                    currentPage: page,
+                    totalPages: data.total_pages || Math.ceil(data.count / 20)
                 });
             } else {
                 setLogs(data);
@@ -51,13 +57,37 @@ const LoginHistory = () => {
                     count: data.length,
                     next: null,
                     previous: null,
-                    currentPage: 1
+                    currentPage: 1,
+                    totalPages: 1
                 });
             }
         } catch (error) {
             console.error("Failed to fetch login history:", error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const fetchActivities = async (historyId) => {
+        if (rowActivities[historyId]) return;
+        
+        setLoadingActivities(prev => ({ ...prev, [historyId]: true }));
+        try {
+            const response = await api.get(`/api/login-history/${historyId}/activities/`);
+            setRowActivities(prev => ({ ...prev, [historyId]: response.data }));
+        } catch (error) {
+            console.error("Failed to fetch activities:", error);
+        } finally {
+            setLoadingActivities(prev => ({ ...prev, [historyId]: false }));
+        }
+    };
+
+    const toggleRow = (historyId) => {
+        if (expandedRow === historyId) {
+            setExpandedRow(null);
+        } else {
+            setExpandedRow(historyId);
+            fetchActivities(historyId);
         }
     };
 
@@ -100,7 +130,7 @@ const LoginHistory = () => {
         });
     };
 
-    const totalPages = Math.ceil(pagination.count / 20);
+    const totalPages = pagination.totalPages || Math.ceil(pagination.count / 20);
 
     return (
         <div className="page-container animate-fade-in">
@@ -122,25 +152,25 @@ const LoginHistory = () => {
             </header>
 
             <div className="filters-bar premium-shadow">
-                <div className="filters-grid">
-                    <div className="search-box">
+                <div className="flex items-center gap-4 px-6 py-4 overflow-x-auto no-scrollbar">
+                    <div className="search-box search-box-premium">
                         <Search size={18} />
                         <input
                             type="text"
                             placeholder="Search by user or IP..."
                             value={filters.search}
                             onChange={handleSearchChange}
+                            className="search-input-premium"
                         />
                     </div>
 
-                    <div className="filter-group">
+                    <div className="filter-group whitespace-nowrap">
                         <Calendar size={16} />
                         <input
                             type="date"
                             value={filters.startDate}
                             onChange={e => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
                             className="filter-date"
-                            placeholder="Start Date"
                         />
                         <span>to</span>
                         <input
@@ -148,11 +178,10 @@ const LoginHistory = () => {
                             value={filters.endDate}
                             onChange={e => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
                             className="filter-date"
-                            placeholder="End Date"
                         />
                     </div>
 
-                    <button className="text-btn text-xs font-bold uppercase text-slate-400 hover:text-burgundy" onClick={clearFilters}>
+                    <button className="text-btn text-xs font-bold uppercase text-slate-400 hover:text-burgundy whitespace-nowrap" onClick={clearFilters}>
                         Clear Filters
                     </button>
                 </div>
@@ -178,7 +207,7 @@ const LoginHistory = () => {
                         ) : (
                             logs.map(log => (
                                 <React.Fragment key={log.id}>
-                                    <tr onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)} className="cursor-pointer hover:bg-gray-50 transition-colors">
+                                    <tr onClick={() => toggleRow(log.id)} className="cursor-pointer hover:bg-gray-50 transition-colors">
                                         <td className="text-center text-muted">
                                             {expandedRow === log.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                                         </td>
@@ -210,7 +239,12 @@ const LoginHistory = () => {
                                             <td colSpan="6" className="bg-gray-50 p-4">
                                                 <div className="pl-10">
                                                     <h4 className="font-bold text-sm mb-2">Session Activity</h4>
-                                                    {log.activities && log.activities.length > 0 ? (
+                                                    {loadingActivities[log.id] ? (
+                                                        <div className="flex items-center gap-2 text-muted py-4">
+                                                            <Loader2 size={16} className="animate-spin" />
+                                                            <span>Loading activities...</span>
+                                                        </div>
+                                                    ) : rowActivities[log.id] && rowActivities[log.id].length > 0 ? (
                                                         <div className="max-h-60 overflow-y-auto border rounded bg-white">
                                                             <table className="w-full text-sm">
                                                                 <thead className="bg-gray-100 sticky top-0">
@@ -221,7 +255,7 @@ const LoginHistory = () => {
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody>
-                                                                    {log.activities.map((act, idx) => (
+                                                                    {rowActivities[log.id].map((act, idx) => (
                                                                         <tr key={idx} className="border-b last:border-0 hover:bg-gray-50">
                                                                             <td className="p-2 text-xs text-muted font-mono whitespace-nowrap">
                                                                                 {format(new Date(act.timestamp), 'HH:mm:ss')}

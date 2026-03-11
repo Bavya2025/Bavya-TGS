@@ -9,7 +9,7 @@ class LocationSerializer(serializers.ModelSerializer):
 class TollRateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TollRate
-        fields = '__all__'
+        fields = ['id', 'toll_gate', 'travel_mode', 'journey_type', 'rate']
 
 class TollGateSerializer(serializers.ModelSerializer):
     rates = TollRateSerializer(many=True, read_only=True)
@@ -22,7 +22,7 @@ class TollGateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TollGate
-        fields = '__all__'
+        fields = ['id', 'gate_code', 'registered_id', 'name', 'location', 'gps_coordinates', 'rates', 'location_name', 'location_external_id']
 
     def validate(self, attrs):
         instance = self.instance

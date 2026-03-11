@@ -1,6 +1,7 @@
 import jwt
 import datetime
 import hashlib
+import base64
 from django.conf import settings
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes, action
@@ -8,12 +9,14 @@ from rest_framework.response import Response
 from rest_framework import status, generics, viewsets
 from rest_framework.permissions import AllowAny
 
-from .models import User, Session, LoginHistory, AuditLog, Notification
+from .models import User, Session, LoginHistory, AuditLog, Notification, FaceRegistrationRequest, AttendanceFRS, PhotoUpdateRequest
 from .permissions import IsCustomAuthenticated, IsAdmin
-from .serializers import NotificationSerializer, AuditLogSerializer, LoginHistorySerializer
+from .serializers import NotificationSerializer, AuditLogSerializer, LoginHistorySerializer, UserSerializer
+from .pagination import StandardResultsSetPagination
 from django.db.models import Q
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
+from .frs_util import get_face_encoding_from_image, compare_faces, base64_to_file
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -232,6 +235,7 @@ class LoginHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = LoginHistory.objects.all().select_related('user')
     serializer_class = LoginHistorySerializer
     permission_classes = [IsCustomAuthenticated]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_fields = ['user', 'ip_address']
     search_fields = ['user__employee_id', 'ip_address', 'user__name']
@@ -240,11 +244,17 @@ class LoginHistoryViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.custom_user
-        role_name = (user.role.name if user.role else '').lower()
+        if not user or not user.role:
+            return LoginHistory.objects.none()
+            
+        role_name = user.role.name.lower()
+        # Fix: catch all admin variants and privileged roles
+        privileged_keywords = ['admin', 'superuser', 'it admin', 'it-admin', 'cfo', 'hr', 'finance']
+        is_privileged = any(kw in role_name for kw in privileged_keywords)
         
         queryset = LoginHistory.objects.all().select_related('user')
-        if role_name not in ['admin', 'cfo', 'hr', 'finance']:
-             queryset = queryset.filter(user=user)
+        if not is_privileged:
+            queryset = queryset.filter(user=user)
 
         # Date filtering
         start_date = self.request.query_params.get('start_date')
@@ -255,6 +265,21 @@ class LoginHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(login_time__date__lte=end_date)
             
         return queryset
+
+    @action(detail=True, methods=['get'])
+    def activities(self, request, pk=None):
+        login_history = self.get_object()
+        from django.utils import timezone
+        end_time = login_history.logout_time or timezone.now()
+        
+        activities = AuditLog.objects.filter(
+            user=login_history.user,
+            timestamp__gte=login_history.login_time,
+            timestamp__lte=end_time
+        ).exclude(action='PAGE_ACCESS').order_by('timestamp')
+        
+        serializer = AuditLogSerializer(activities, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='export-csv')
     def export_csv(self, request):
@@ -285,6 +310,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.all().select_related('user')
     serializer_class = AuditLogSerializer
     permission_classes = [IsCustomAuthenticated]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_fields = ['user', 'action', 'model_name']
     search_fields = ['user__employee_id', 'user__name', 'object_repr', 'details']
@@ -293,10 +319,16 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.custom_user
-        role_name = (user.role.name if user.role else '').lower()
- 
+        if not user or not user.role:
+            return AuditLog.objects.none()
+            
+        role_name = user.role.name.lower()
+        # Fix: catch all admin variants and privileged roles
+        privileged_keywords = ['admin', 'superuser', 'it admin', 'it-admin', 'cfo', 'hr', 'finance']
+        is_privileged = any(kw in role_name for kw in privileged_keywords)
+
         queryset = AuditLog.objects.exclude(action='PAGE_ACCESS').select_related('user')
-        if role_name not in ['admin', 'cfo', 'finance']:
+        if not is_privileged:
              queryset = queryset.filter(user=user)
 
         # Date filtering

@@ -484,4 +484,19 @@ class TripService {
     }
     return null;
   }
+
+  // Settlement Methods
+  Future<dynamic> fetchSettlements({String? tripId}) async {
+    String url = ApiConstants.settlement;
+    if (tripId != null) url += '?trip_id=$tripId';
+    return await _apiService.get(url);
+  }
+
+  Future<void> performSettlement(String tripId) async {
+    await _apiService.post(
+      ApiConstants.settlement,
+      body: {'trip_id': tripId},
+      includeAuth: true,
+    );
+  }
 }

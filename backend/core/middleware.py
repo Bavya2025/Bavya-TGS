@@ -12,7 +12,15 @@ class CustomAuthMiddleware:
         if request.path.startswith('/api/auth/login') or request.path.startswith('/admin'):
             return self.get_response(request)
 
+        # 1. Capture Authorization header
         auth_header = request.headers.get('Authorization')
+        has_bearer = auth_header and auth_header.startswith('Bearer ')
+
+        # 2. Skip if already authenticated (e.g. by API Key middleware) ONLY if we don't have a specific user token
+        if (getattr(request, 'custom_user', None) or getattr(request, 'is_api_key_authenticated', False)) and not has_bearer:
+            return self.get_response(request)
+
+        # auth_header already captured above in current __call__
         if not auth_header or not auth_header.startswith('Bearer '):
             request.custom_user = None
         else:

@@ -8,8 +8,8 @@ class ApiConstants {
 
   // Using 10.0.2.2 for emulator support by default.
   // Change to your machine IP if testing on a physical device.
-  static const String baseUrl = 'http://192.168.1.138:6784';
-  // static const String baseUrl = 'http://10.0.2.2:6789';
+  static const String baseUrl = 'http://192.168.1.138:4567';
+  // static const String baseUrl = 'http://10.0.2.2:4567';
 
   // Authentication Endpoints
   static const String authLogin = '$baseUrl/api/auth/login';
@@ -20,6 +20,7 @@ class ApiConstants {
   static const String trips = '$baseUrl/api/trips/';
   static const String tripDetails = '$baseUrl/api/trips/{id}/';
   static const String tripApprovals = '$baseUrl/api/trips/approvals/';
+  static const String settlement = '$baseUrl/api/settlement/';
   static const String UserAdvances = '$baseUrl/api/advances/';
   static const String geoHierarchy = '$baseUrl/api/geo/hierarchy/';
   static const String locations = '$baseUrl/api/masters/locations/';

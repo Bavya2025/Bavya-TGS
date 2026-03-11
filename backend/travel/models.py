@@ -43,9 +43,14 @@ class Trip(SoftDeleteModel):
         ('Airways', 'Airways'),
         ('Train', 'Train'),
         ('Bus', 'Bus'),
-        ('2 Wheeler', '2 Wheeler'),
-        ('3 Wheeler', '3 Wheeler'),
-        ('4 Wheeler', '4 Wheeler'),
+        ('Car / Jeep / Van', 'Car / Jeep / Van'),
+        ('LCV', 'LCV (Light Commercial Vehicle)'),
+        ('Bus / Truck (2 Axle)', 'Bus / Truck (2 Axle)'),
+        ('3-Axle Commercial', '3-Axle Commercial'),
+        ('MAV (4-6 Axle)', 'MAV (Multi-Axle Vehicle 4-6)'),
+        ('Oversized (7+ Axle)', 'Oversized Vehicle (7+ Axle)'),
+        ('2 Wheeler', '2 Wheeler (Non-Tollable)'),
+        ('3 Wheeler', '3 Wheeler (Non-Tollable)'),
     ]
 
     VEHICLE_TYPE_CHOICES = [
