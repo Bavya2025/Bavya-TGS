@@ -54,7 +54,7 @@ WSGI_APPLICATION = "tgs_backend.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "TGS_nyt",
+        "NAME": "TGS_v13",
         "USER": "root",
         "PASSWORD": "root",
         "HOST": "localhost",

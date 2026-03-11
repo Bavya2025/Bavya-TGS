@@ -13,7 +13,9 @@ class IsAdmin(permissions.BasePermission):
         role_name = user.role.name.lower() if user.role else ''
         is_superuser = getattr(user, 'is_superuser', False)
         
-        return role_name in ['admin', 'it-admin', 'superuser'] or is_superuser
+        # Fix: Robust admin check
+        is_admin = any(kw in role_name for kw in ['admin', 'it-admin', 'superuser'])
+        return is_admin or is_superuser
 
 class IsGuestHouseManager(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -24,4 +26,6 @@ class IsGuestHouseManager(permissions.BasePermission):
         role_name = user.role.name.lower() if user.role else ''
         is_superuser = getattr(user, 'is_superuser', False)
         
-        return role_name in ['admin', 'it-admin', 'superuser', 'guesthousemanager'] or is_superuser
+        # Fix: Robust check
+        is_privileged = any(kw in role_name for kw in ['admin', 'it-admin', 'superuser', 'guesthousemanager'])
+        return is_privileged or is_superuser

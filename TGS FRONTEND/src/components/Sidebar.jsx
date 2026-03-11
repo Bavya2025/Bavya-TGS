@@ -15,7 +15,8 @@ import {
     Wallet,
     MapPin,
     Car,
-    ShieldCheck
+    ShieldCheck,
+    Fuel
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/api';
@@ -89,6 +90,7 @@ const Sidebar = () => {
                 { title: 'API Management', icon: <Settings size={18} />, path: '/api-management', roles: ['admin'] },
                 { title: 'Route Masters', icon: <MapPin size={18} />, path: '/route-management', roles: ['admin'] },
                 { title: 'Master Management', icon: <Settings size={18} />, path: '/master-management', roles: ['admin'] },
+                { title: 'Fuel Rate Master', icon: <Fuel size={18} />, path: '/fuel-master', roles: ['admin'] },
             ]
         }
     ];

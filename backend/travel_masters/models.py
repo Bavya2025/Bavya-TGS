@@ -66,6 +66,7 @@ class RoutePath(SoftDeleteModel):
 
 class TollGate(SoftDeleteModel):
     gate_code = models.CharField(max_length=4, unique=True, null=True, blank=True, help_text="Auto-generated 4-digit gate code")
+    registered_id = models.CharField(max_length=50, null=True, blank=True, help_text="Manual Registered ID")
     name = models.CharField(max_length=200, unique=True)
     location = models.OneToOneField(Location, on_delete=models.SET_NULL, null=True, blank=True)
     gps_coordinates = models.CharField(max_length=100, blank=True)
@@ -97,6 +98,7 @@ class TollGate(SoftDeleteModel):
 class TollRate(SoftDeleteModel):
     toll_gate = models.ForeignKey(TollGate, on_delete=models.CASCADE, related_name='rates')
     travel_mode = models.CharField(max_length=50) # e.g. 2 Wheeler, 4 Wheeler, etc.
+    journey_type = models.CharField(max_length=20, default='UP', help_text="UP, DOWN, or TO_AND_FRO")
     rate = models.DecimalField(max_digits=10, decimal_places=2)
     
     def __str__(self):
@@ -109,3 +111,39 @@ class RoutePathToll(SoftDeleteModel):
 
     class Meta:
         ordering = ['order']
+
+class FuelRateMaster(SoftDeleteModel):
+    state = models.CharField(max_length=100)
+    vehicle_type = models.CharField(max_length=50) # '2 Wheeler' or '4 Wheeler'
+    rate_per_km = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.state} - {self.vehicle_type}: {self.rate_per_km}"
+
+    class Meta:
+        unique_together = ('state', 'vehicle_type', 'is_deleted')
+
+class Cadre(SoftDeleteModel):
+    name = models.CharField(max_length=100, unique=True, help_text="e.g. ADMINISTRATIVE, Grade A")
+    description = models.TextField(blank=True, null=True)
+    
+    def __str__(self):
+        return self.name
+        
+    class Meta:
+        ordering = ['name']
+
+class EligibilityRule(SoftDeleteModel):
+    cadre = models.ForeignKey(Cadre, on_delete=models.CASCADE, related_name='eligibility_rules')
+    category = models.CharField(max_length=50, help_text="Accommodation, Daily Allowance, Flight, Train, Bus, Local Conveyance, Mileage Rate")
+    city_type = models.CharField(max_length=50, blank=True, null=True, help_text="Metro, Non-Metro, State HQ, Districts, Others, N/A")
+    limit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Max eligible amount. 0 if not applicable.")
+    eligibility_class = models.CharField(max_length=50, blank=True, null=True, help_text="Economy, II A/c, Sleeper, N/A")
+
+    def __str__(self):
+        return f"{self.cadre.name} - {self.category} ({self.city_type or 'All'})"
+
+    class Meta:
+        unique_together = ('cadre', 'category', 'city_type', 'is_deleted')
+        ordering = ['cadre__name', 'category', 'city_type']
+

@@ -34,8 +34,9 @@ import HelpSupport from './pages/HelpSupport';
 import Fleet from './pages/Fleet';
 import RouteManagement from './pages/RouteManagement';
 import AdminMasterManagement from './pages/AdminMasterManagement';
+import FuelMaster from './pages/FuelMaster';
 import JobReport from './pages/JobReport';
-
+import AdminMasters from './pages/AdminMasters';
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
@@ -85,6 +86,8 @@ function App() {
             <Route path="/route-management" element={<ProtectedRoute><RouteManagement /></ProtectedRoute>} />
             <Route path="/master-management" element={<ProtectedRoute><AdminMasterManagement /></ProtectedRoute>} />
             <Route path="/job-report" element={<ProtectedRoute><JobReport /></ProtectedRoute>} />
+            <Route path="/fuel-master" element={<ProtectedRoute><FuelMaster /></ProtectedRoute>} />
+            <Route path="/AdminMasters" element={<ProtectedRoute><AdminMasters /></ProtectedRoute>} />
           </Routes>
         </Router>
       </AuthProvider>

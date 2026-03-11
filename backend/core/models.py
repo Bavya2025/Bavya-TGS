@@ -281,7 +281,7 @@ class AuditLog(models.Model):
     object_repr = models.CharField(max_length=255, null=True, blank=True)
     details = models.JSONField(null=True, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
-    timestamp = models.DateTimeField(auto_now_add=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ['-timestamp']
@@ -290,7 +290,7 @@ class AuditLog(models.Model):
 class AttendanceFRS(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='frs_attendance')
     photo_captured = models.ImageField(upload_to='attendance_captures/')
-    timestamp = models.DateTimeField(auto_now_add=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     is_matched = models.BooleanField(default=False)
     match_score = models.FloatField(default=0.0)
     latitude = models.FloatField(null=True, blank=True)

@@ -181,16 +181,24 @@ class _TeamTripDetailsScreenState extends State<TeamTripDetailsScreen> {
         if (mounted && point != null) {
           // Attempt reverse geocoding for a "Wow" experience
           try {
-            final placemarks = await placemarkFromCoordinates(
-              point['latitude'],
-              point['longitude'],
-            );
-            if (placemarks.isNotEmpty) {
-              final p = placemarks[0];
-              point['address'] = "${p.name}, ${p.subLocality}, ${p.locality}";
+            final lat = double.tryParse(point['latitude'].toString()) ?? 0.0;
+            final lng = double.tryParse(point['longitude'].toString()) ?? 0.0;
+            
+            if (lat != 0.0 && lng != 0.0) {
+              // Add timeout to prevent hanging the UI thread if geocoding service is unresponsive
+              final placemarks = await placemarkFromCoordinates(lat, lng)
+                  .timeout(const Duration(seconds: 5));
+              
+              if (mounted && placemarks.isNotEmpty) {
+                final p = placemarks[0];
+                setState(() {
+                  point['address'] = "${p.name}, ${p.subLocality}, ${p.locality}";
+                });
+              }
             }
           } catch (e) {
-            debugPrint('GEOCODING_ERROR: $e');
+            debugPrint('GEOCODING_ERROR for ${trip.id}: $e');
+            // If it times out or fails, just continue without address
           }
 
           setState(() {
@@ -554,7 +562,8 @@ class _TeamTripDetailsScreenState extends State<TeamTripDetailsScreen> {
                 ),
                 // debug coordinates
                 Text(
-                  'Lat: ${point['latitude']?.toStringAsFixed(4)}  Lng: ${point['longitude']?.toStringAsFixed(4)}',
+                  'Lat: ${double.tryParse(point['latitude']?.toString() ?? '0')?.toStringAsFixed(4)}  '
+                  'Lng: ${double.tryParse(point['longitude']?.toString() ?? '0')?.toStringAsFixed(4)}',
                   style: GoogleFonts.plusJakartaSans(
                     color: Colors.white70,
                     fontSize: 12,

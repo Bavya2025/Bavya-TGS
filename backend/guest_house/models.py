@@ -10,6 +10,16 @@ class GuestHouse(models.Model):
     longitude = models.DecimalField(max_digits=12, decimal_places=9, null=True, blank=True)
     image = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True)
+    
+    # Hierarchical Location Fields
+    continent_id = models.CharField(max_length=100, null=True, blank=True)
+    country_id = models.CharField(max_length=100, null=True, blank=True)
+    state_id = models.CharField(max_length=100, null=True, blank=True)
+    district_id = models.CharField(max_length=100, null=True, blank=True)
+    mandal_id = models.CharField(max_length=100, null=True, blank=True)
+    cluster_id = models.CharField(max_length=100, null=True, blank=True)
+    visiting_location_id = models.CharField(max_length=100, null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

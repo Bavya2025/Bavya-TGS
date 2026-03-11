@@ -36,6 +36,10 @@ class ApiConstants {
   static const String policies = '$baseUrl/api/policies/';
   static const String policyDetails = '$baseUrl/api/policies/{id}/';
 
+  // Bulk Activity Endpoints
+  static const String bulkTemplate = '$baseUrl/api/bulk-activities/template/';
+  static const String bulkUpload = '$baseUrl/api/bulk-activities/upload/';
+
   // Guest House Endpoints
   static const String guestHouse = '$baseUrl/api/guesthouse/';
 

@@ -43,9 +43,14 @@ class Trip(SoftDeleteModel):
         ('Airways', 'Airways'),
         ('Train', 'Train'),
         ('Bus', 'Bus'),
-        ('2 Wheeler', '2 Wheeler'),
-        ('3 Wheeler', '3 Wheeler'),
-        ('4 Wheeler', '4 Wheeler'),
+        ('Car / Jeep / Van', 'Car / Jeep / Van'),
+        ('LCV', 'LCV (Light Commercial Vehicle)'),
+        ('Bus / Truck (2 Axle)', 'Bus / Truck (2 Axle)'),
+        ('3-Axle Commercial', '3-Axle Commercial'),
+        ('MAV (4-6 Axle)', 'MAV (Multi-Axle Vehicle 4-6)'),
+        ('Oversized (7+ Axle)', 'Oversized Vehicle (7+ Axle)'),
+        ('2 Wheeler', '2 Wheeler (Non-Tollable)'),
+        ('3 Wheeler', '3 Wheeler (Non-Tollable)'),
     ]
 
     VEHICLE_TYPE_CHOICES = [
@@ -84,6 +89,7 @@ class Trip(SoftDeleteModel):
     hod_director_name = models.CharField(max_length=255, null=True, blank=True)
     rejection_reason = models.TextField(blank=True, null=True)
     rejected_by = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='rejected_trips')
+    fuel_rate_snapshot = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -137,6 +143,22 @@ class TripOdometer(SoftDeleteModel):
 
     class Meta:
         ordering = ['-created_at']
+
+class TripTracking(models.Model):
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='tracking_history')
+    latitude = models.DecimalField(max_digits=20, decimal_places=10)
+    longitude = models.DecimalField(max_digits=20, decimal_places=10)
+    timestamp = models.DateTimeField(default=timezone.now)
+    accuracy = models.FloatField(null=True, blank=True)
+    speed = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['timestamp']
+        verbose_name = "Trip Tracking"
+        verbose_name_plural = "Trip Tracking Points"
+
+    def __str__(self):
+        return f"Tracking for {self.trip_id} at {self.timestamp}"
 
 
 class Expense(SoftDeleteModel):

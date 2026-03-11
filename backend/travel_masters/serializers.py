@@ -1,5 +1,34 @@
 from rest_framework import serializers
-from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll
+from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, FuelRateMaster, Cadre, EligibilityRule
+
+class FuelRateMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FuelRateMaster
+        fields = '__all__'
+        # Disable auto-generated unique_together validator because it doesn't
+        # account for soft-deleted rows (is_deleted=True). We handle it manually below.
+        validators = []
+
+    def validate(self, attrs):
+        state = attrs.get('state')
+        vehicle_type = attrs.get('vehicle_type')
+        instance = self.instance  # None on create, existing object on update
+
+        if state and vehicle_type:
+            qs = FuelRateMaster.objects.filter(
+                state__iexact=state,
+                vehicle_type__iexact=vehicle_type,
+                is_deleted=False
+            )
+            if instance:
+                qs = qs.exclude(pk=instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError({
+                    'non_field_errors': [
+                        f"A fuel rate for '{state}' ({vehicle_type}) already exists. Please edit the existing entry instead."
+                    ]
+                })
+        return attrs
 
 class LocationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -9,7 +38,7 @@ class LocationSerializer(serializers.ModelSerializer):
 class TollRateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TollRate
-        fields = '__all__'
+        fields = ['id', 'toll_gate', 'travel_mode', 'journey_type', 'rate']
 
 class TollGateSerializer(serializers.ModelSerializer):
     rates = TollRateSerializer(many=True, read_only=True)
@@ -22,7 +51,7 @@ class TollGateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TollGate
-        fields = '__all__'
+        fields = ['id', 'gate_code', 'registered_id', 'name', 'location', 'gps_coordinates', 'rates', 'location_name', 'location_external_id']
 
     def validate(self, attrs):
         instance = self.instance
@@ -95,5 +124,20 @@ class RouteSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Route
+    class Meta:
+        model = Route
         fields = '__all__'
         extra_kwargs = {'name': {'required': False}}
+
+class CadreSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cadre
+        fields = '__all__'
+
+class EligibilityRuleSerializer(serializers.ModelSerializer):
+    cadre_name = serializers.CharField(source='cadre.name', read_only=True)
+    
+    class Meta:
+        model = EligibilityRule
+        fields = '__all__'
+

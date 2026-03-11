@@ -181,6 +181,48 @@ class ApiService {
     }
   }
 
+  /// MULTIPART POST request for file uploads
+  Future<dynamic> postMultipart(
+    String endpoint, {
+    required Map<String, String> fields,
+    required String fileKey,
+    required File file,
+    bool includeAuth = true,
+  }) async {
+    try {
+      final uri = _buildUri(endpoint);
+      LoggerService.log('API MULTIPART POST: $uri');
+
+      final request = http.MultipartRequest('POST', uri);
+      request.headers.addAll(_buildHeaders(includeAuth: includeAuth));
+      request.fields.addAll(fields);
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          fileKey,
+          file.path,
+        ),
+      );
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(milliseconds: ApiConstants.requestTimeout * 2), // Longer timeout for uploads
+        onTimeout: () => throw TimeoutException('Upload timeout'),
+      );
+
+      final response = await http.Response.fromStream(streamedResponse);
+      return _handleResponse(response);
+    } on SocketException catch (e) {
+      LoggerService.log('API MULTIPART ERR: SocketException - $e', isError: true);
+      throw NetworkException('No internet connection');
+    } on TimeoutException catch (e) {
+      LoggerService.log('API MULTIPART ERR: Timeout - $e', isError: true);
+      throw TimeoutException('Upload timeout. Please try again.');
+    } catch (e) {
+      LoggerService.log('API MULTIPART ERR: $e', isError: true);
+      rethrow;
+    }
+  }
+
   /// GET request
   Future<dynamic> get(String endpoint, {bool includeAuth = true}) async {
     try {
@@ -202,6 +244,29 @@ class ApiService {
       throw TimeoutException('Request timeout. Please try again.');
     } catch (e) {
       LoggerService.log('API GET ERR: $e', isError: true);
+      rethrow;
+    }
+  }
+
+  /// GET request for binary data
+  Future<List<int>> getBinary(String endpoint, {bool includeAuth = true}) async {
+    try {
+      final uri = _buildUri(endpoint);
+      LoggerService.log('API GET BINARY: $uri');
+      final response = await http
+          .get(uri, headers: _buildHeaders(includeAuth: includeAuth))
+          .timeout(
+            const Duration(milliseconds: ApiConstants.requestTimeout),
+            onTimeout: () => throw TimeoutException('Request timeout'),
+          );
+
+      if (response.statusCode == 200) {
+        return response.bodyBytes;
+      } else {
+        throw Exception('Failed to download file. Status: ${response.statusCode}');
+      }
+    } catch (e) {
+      LoggerService.log('API GET BINARY ERR: $e', isError: true);
       rethrow;
     }
   }

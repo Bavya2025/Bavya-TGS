@@ -304,10 +304,10 @@ const CreateTrip = () => {
 
             // Recurse into standard hierarchy levels
             ['continents', 'countries', 'states', 'districts', 'mandals',
-             'towns', 'villages', 'locations', 'visiting_locations', 'landmarks'].forEach(key => {
-                const arr = node[key];
-                if (Array.isArray(arr)) arr.forEach(walk);
-            });
+                'towns', 'villages', 'locations', 'visiting_locations', 'landmarks'].forEach(key => {
+                    const arr = node[key];
+                    if (Array.isArray(arr)) arr.forEach(walk);
+                });
         };
 
         fullHierarchy.forEach(walk);
@@ -600,7 +600,7 @@ const CreateTrip = () => {
             const requesterCode = user?.employee_id || user?.username || '';
             const response = await api.get(`/api/employees/dropdown/?page=${page}&search=${searchQuery}&requester_code=${requesterCode}`);
             const data = response.data;
-            
+
             if (data.error) {
                 setEmployeeError(data.error);
                 if (!append) setEmployees([]);
@@ -608,7 +608,7 @@ const CreateTrip = () => {
             }
 
             const results = data.results || [];
-            
+
             // Map backend dropdown results to match frontend expectations
             const mapped = results.map(item => ({
                 first_name: item.name || 'N/A',
@@ -621,7 +621,7 @@ const CreateTrip = () => {
             // Filter based on hierarchy rules
             const userRole = (user?.role || '').toLowerCase();
             const isAdmin = ['admin', 'it-admin', 'superuser', 'it admin', 'system administrator', 'system-admin', 'system setup admin'].includes(userRole);
-            
+
             // For now, let's keep it simple: if levelId/numericLevel is provided by backend, we filter.
             const userNumericLevel = parseLevel(user?.office_level || 99);
 
@@ -635,7 +635,7 @@ const CreateTrip = () => {
             } else {
                 setEmployees(filteredByLevel);
             }
-            
+
             setEmployeeHasMore(!!data.next);
             setEmployeePage(page);
         } catch (error) {
@@ -649,7 +649,7 @@ const CreateTrip = () => {
     // Debounced Search Effect
     useEffect(() => {
         if (!user) return;
-        
+
         const timeoutId = setTimeout(() => {
             fetchEmployees(1, newMember, false);
         }, 500);
@@ -743,7 +743,7 @@ const CreateTrip = () => {
             const res = await api.get('/api/policies/');
             const policies = res.data.results || res.data;
             const latest = policies?.[0];
-            
+
             if (latest) {
                 setPolicyModal({
                     isOpen: true,
@@ -815,7 +815,7 @@ const CreateTrip = () => {
             start_odometer: formData.startOdometer,
             project_code: formData.project,
             reporting_manager: formData.reportingManager,
-            members: formData.members.map(m => `${m.name.trim()} (${m.id.trim()}) - ${ (m.designation || m.level || '').trim() }`),
+            members: formData.members.map(m => `${m.name.trim()} (${m.id.trim()}) - ${(m.designation || m.level || '').trim()}`),
             trip_leader: formData.tripLeader,
             accommodation_requests: formData.accommodationRequests
         };
@@ -1293,9 +1293,9 @@ const CreateTrip = () => {
                     <label className="flex items-center gap-3 cursor-pointer group">
                         <div className={`w-6 h-6 rounded border-2 transition-all flex items-center justify-center ${policyAccepted ? 'bg-primary border-primary' : 'border-slate-300 group-hover:border-primary'}`}>
                             {policyAccepted && <Check size={16} className="text-white" />}
-                            <input 
-                                type="checkbox" 
-                                className="hidden" 
+                            <input
+                                type="checkbox"
+                                className="hidden"
                                 checked={policyAccepted}
                                 onChange={(e) => setPolicyAccepted(e.target.checked)}
                             />
@@ -1307,8 +1307,8 @@ const CreateTrip = () => {
                 </div>
 
                 <div className="form-actions">
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         className={`btn-primary ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                         disabled={isSubmitting}
                     >
@@ -1341,10 +1341,10 @@ const CreateTrip = () => {
                 <div className="policy-modal-container" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
                     <div className="policy-language-tabs mb-2 flex items-center justify-start gap-4 border-b border-slate-100 pb-2">
                         {/* tabs contents ... */}
-                        <button 
+                        <button
                             className={`lang-tab ${policyModal.currentLang === 'en' ? 'active' : ''}`}
-                            style={{ 
-                                minWidth: '120px', 
+                            style={{
+                                minWidth: '120px',
                                 border: '1px solid #e2e8f0',
                                 background: policyModal.currentLang === 'en' ? '#bb0633' : '#ffffff',
                                 color: policyModal.currentLang === 'en' ? '#ffffff' : '#64748b'
@@ -1353,9 +1353,9 @@ const CreateTrip = () => {
                         >
                             English
                         </button>
-                        <button 
+                        <button
                             className={`lang-tab ${policyModal.currentLang === 'te' ? 'active' : ''}`}
-                            style={{ 
+                            style={{
                                 minWidth: '120px',
                                 border: '1px solid #e2e8f0',
                                 background: policyModal.currentLang === 'te' ? '#bb0633' : '#ffffff',
@@ -1365,9 +1365,9 @@ const CreateTrip = () => {
                         >
                             Telugu
                         </button>
-                        <button 
+                        <button
                             className={`lang-tab ${policyModal.currentLang === 'hi' ? 'active' : ''}`}
-                            style={{ 
+                            style={{
                                 minWidth: '120px',
                                 border: '1px solid #e2e8f0',
                                 background: policyModal.currentLang === 'hi' ? '#bb0633' : '#ffffff',
@@ -1378,12 +1378,12 @@ const CreateTrip = () => {
                             Hindi
                         </button>
                     </div>
-                    
-                    <div className="policy-content" style={{ 
-                        background: '#ffffff', 
-                        borderRadius: '4px', 
-                        border: '1px solid #edf2f7', 
-                        padding: '0', 
+
+                    <div className="policy-content" style={{
+                        background: '#ffffff',
+                        borderRadius: '4px',
+                        border: '1px solid #edf2f7',
+                        padding: '0',
                         position: 'relative',
                         flex: 1,
                         display: 'flex',
@@ -1391,9 +1391,9 @@ const CreateTrip = () => {
                         height: '100%'
                     }}>
                         {policyModal.data?.[`file_content_${policyModal.currentLang}`] ? (
-                            <div className="pdf-deep-clean-container" style={{ 
-                                width: '100%', 
-                                height: '100%', 
+                            <div className="pdf-deep-clean-container" style={{
+                                width: '100%',
+                                height: '100%',
                                 overflow: 'hidden',
                                 position: 'relative',
                                 flex: 1,
@@ -1405,10 +1405,10 @@ const CreateTrip = () => {
                                     width="100%"
                                     height="calc(100% + 70px)"
                                     frameBorder="0"
-                                    style={{ 
-                                        border: 'none', 
+                                    style={{
+                                        border: 'none',
                                         display: 'block',
-                                        marginTop: '-70px', 
+                                        marginTop: '-70px',
                                         position: 'relative',
                                         flex: 1
                                     }}

@@ -132,19 +132,20 @@ class LocationTrackingService {
 
       if (activeTrip != null) {
         debugPrint(
-          'SYNC_TRACKING: Starting tracking for trip ${activeTrip.tripId}',
+          'SYNC_TRACKING: Starting tracking for trip ${activeTrip.tripId} (ID: ${activeTrip.id})',
         );
         try {
           await startTracking(activeTrip.id);
+          debugPrint('SYNC_TRACKING: startTracking() invoked successfully');
         } catch (e) {
           debugPrint('SYNC_TRACKING: startTracking failed: $e');
         }
       } else {
-        debugPrint('SYNC_TRACKING: No active trip found. Stopping service.');
+        debugPrint('SYNC_TRACKING: No active trip found among ${trips.length} trips. Stopping service.');
         stopTracking();
       }
     } catch (e) {
-      debugPrint('SYNC_TRACKING: Error syncing trips: $e');
+      debugPrint('SYNC_TRACKING: Fatal error syncing trips: $e');
     }
   }
 
@@ -222,57 +223,63 @@ void onStart(ServiceInstance service) async {
 
   // Tracking Logic - Every 30 seconds for a "Live" experience
   Timer.periodic(const Duration(seconds: 30), (timer) async {
-    if (service is AndroidServiceInstance) {
+    try {
+      // Robust location fetch: try current, then last known as fallback
+      Position? position;
       try {
-        final position = await Geolocator.getCurrentPosition(
+        position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 25),
+          timeLimit: const Duration(seconds: 20),
         );
+      } catch (e) {
+        debugPrint('BACKGROUND SERVICE: getCurrentPosition failed: $e. Trying last known...');
+        position = await Geolocator.getLastKnownPosition();
+      }
 
-        if (currentTripId != null) {
-          try {
-            // Send to backend
-            final resp = await apiService.post(
-              '/api/trips/$currentTripId/tracking/',
-              body: {
-                'latitude': position.latitude,
-                'longitude': position.longitude,
-                'timestamp': DateTime.now().toIso8601String(),
-              },
-              includeAuth: true,
+      debugPrint('BACKGROUND SERVICE: Loop Start. TripID: $currentTripId');
+      if (position != null && currentTripId != null) {
+        try {
+          final token = apiService.getToken();
+          debugPrint('BACKGROUND SERVICE: Syncing. Token present: ${token != null && token.isNotEmpty}');
+          
+          final endpoint = '/api/trips/$currentTripId/tracking/';
+          await apiService.post(
+            endpoint,
+            body: {
+              'latitude': position.latitude,
+              'longitude': position.longitude,
+              'timestamp': DateTime.now().toIso8601String(),
+              'accuracy': position.accuracy,
+              'speed': position.speed,
+            },
+            includeAuth: true,
+          );
+          debugPrint('BACKGROUND SERVICE: Sync OK for $currentTripId');
+          
+          if (service is AndroidServiceInstance) {
+            service.setForegroundNotificationInfo(
+              title: "Trip Tracking Active",
+              content: "Last Sync: ${DateFormat('HH:mm').format(DateTime.now())}",
             );
-            debugPrint(
-              'BACKGROUND SERVICE: Location sent for trip $currentTripId -> $resp',
-            );
-          } catch (e) {
-            debugPrint('BACKGROUND SERVICE: Failed to send location: $e');
-            if (e is ForbiddenException) {
-              LoggerService.log('BACKGROUND SERVICE: got 403 forbidden from server, stopping service');
-              service.stopSelf();
-            } else if (e is UnauthorizedException) {
-              LoggerService.log('BACKGROUND SERVICE: auth expired while posting location, clearing token and stopping');
-              ApiService().clearToken();
-              service.stopSelf();
-            }
+          }
+        } catch (e) {
+          debugPrint('BACKGROUND SERVICE: API Post Error: $e');
+          if (e is ForbiddenException || e is UnauthorizedException) {
+            debugPrint('BACKGROUND SERVICE: Auth failure, stopping.');
+            service.stopSelf();
           }
         }
-
+      } else {
+        debugPrint('BACKGROUND SERVICE: Missing data. Position: ${position != null}, TripID: $currentTripId');
         if (service is AndroidServiceInstance) {
           service.setForegroundNotificationInfo(
             title: "Trip Tracking Active",
-            content: "Last Sync: ${DateFormat('HH:mm').format(DateTime.now())}",
-          );
-        }
-      } catch (e) {
-        debugPrint('BACKGROUND SERVICE: Location fetch error: $e');
-        // Update notification to show error status if helpful
-        if (service is AndroidServiceInstance) {
-          service.setForegroundNotificationInfo(
-            title: "Trip Tracking Active",
-            content: "Waiting for GPS signal...",
+            content: "Searching for GPS signal...",
           );
         }
       }
+    } catch (e) {
+      debugPrint('BACKGROUND SERVICE: Fatal loop error: $e');
     }
   });
 }
