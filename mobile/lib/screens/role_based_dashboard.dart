@@ -41,7 +41,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   late List<NavigationModule> _mainModules;
   late List<NavigationModule> _managementModules;
   List<NotificationItem> _notifications = [];
-  bool _isLoadingNotifs = false;
+  bool _isLoadingNotifs = true;
   int _currentIndex = 1; // Default to Dashboard (index 1)
 
   bool _isAccLoading = false;
@@ -205,7 +205,8 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
               m.title == 'FRS Attendance' ||
               m.title == 'My Tracking' ||
               m.title == 'FRS Requests' ||
-              m.title == 'Location Tracking',
+              m.title == 'Location Tracking' ||
+              m.title == 'Job Report',
         )
         .toList();
 
@@ -217,7 +218,8 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
               m.title != 'FRS Attendance' &&
               m.title != 'My Tracking' &&
               m.title != 'Location Tracking' &&
-              m.title != 'FRS Requests',
+              m.title != 'FRS Requests' &&
+              m.title != 'Job Report',
         )
         .toList();
   }

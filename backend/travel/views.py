@@ -1672,15 +1672,13 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         # Create a template Excel file
         df = pd.DataFrame(columns=[
             'Date (YYYY-MM-DD)', 
-            'Movement Mode (Car/Cab, 2 Wheeler, etc.)', 
-            'Vehicle Type (Own, Service)', 
-            'Route (Origin -> Destination)', 
-            'Visit Intent / Purpose',
-            'Internal Remarks'
+            'origin route', 
+            'destination route', 
+            'Visit Intent / Purpose'
         ])
         
         # Add a sample row
-        df.loc[0] = ['2026-03-01', 'Car / Cab', 'Own Car', 'Office -> Client Site', 'Site Inspection', 'Regular weekly visit']
+        df.loc[0] = ['2026-03-01', 'Office', 'Client Site', 'Site Inspection']
         
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -1709,13 +1707,9 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
             for _, row in df.iterrows():
                 rows.append({
                     "date": str(row.get('Date (YYYY-MM-DD)', '')),
-                    "odo_start": 0,  # Initialize to 0, to be filled by user later
-                    "odo_end": 0,    # Initialize to 0, to be filled by user later
-                    "mode": str(row.get('Movement Mode (Car/Cab, 2 Wheeler, etc.)', '')),
-                    "vehicle": str(row.get('Vehicle Type (Own, Service)', '')),
-                    "route": str(row.get('Route (Origin -> Destination)', '')),
-                    "purpose": str(row.get('Visit Intent / Purpose', '')),
-                    "remarks": str(row.get('Internal Remarks', ''))
+                    "origin_route": str(row.get('origin route', '')),
+                    "destination_route": str(row.get('destination route', '')),
+                    "visit_intent": str(row.get('Visit Intent / Purpose', ''))
                 })
             
             user = request.custom_user

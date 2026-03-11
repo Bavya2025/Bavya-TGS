@@ -146,6 +146,18 @@ class ApiService {
     return Uri.parse('${ApiConstants.baseUrl}/$path');
   }
 
+  /// Get a full URL for an image source.
+  /// If it starts with 'data:', it handles as Base64.
+  /// If it starts with 'http', it returns it as is.
+  /// Otherwise, it prepends the baseUrl.
+  String getImageUrl(String source) {
+    if (source.startsWith('data:')) return source;
+    if (source.startsWith('http')) return source;
+    // Remove leading slash if present
+    final path = source.startsWith('/') ? source.substring(1) : source;
+    return '${ApiConstants.baseUrl}/$path';
+  }
+
   // ─── HTTP Methods ─────────────────────────────────────────────────────────
 
   /// POST request
