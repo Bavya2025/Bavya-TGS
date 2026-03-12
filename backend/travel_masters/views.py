@@ -502,5 +502,3 @@ class CadreViewSet(viewsets.ModelViewSet):
         if "error" in stats:
             return Response(stats, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(stats)
-
-
