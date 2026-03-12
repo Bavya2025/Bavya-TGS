@@ -1,6 +1,14 @@
 import axios from 'axios';
 
+<<<<<<< HEAD
 const BASE_URL = 'http://192.168.1.135:4567/';
+=======
+<<<<<<< HEAD
+const BASE_URL = 'http://192.168.1.144:4567/';
+=======
+const BASE_URL = 'http://192.168.1.135:4567/';
+>>>>>>> e3f171bfe2c6ffb1ef87126a6db92bc726dc505c
+>>>>>>> a102fcb57574f59a6d43ae22f7e1a26bb4fa038c
 
 
 const api = axios.create({

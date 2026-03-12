@@ -252,7 +252,8 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
                                 "department": pos_detail.get("department_name"),
                                 "section": pos_detail.get("section_name"),
                                 "reporting_to": resolved_reporting_to,
-                                "level_rank": pos_detail.get("level_rank")
+                                "level_rank": pos_detail.get("level_rank"),
+                                "level_name": pos_detail.get("level_name") or (f"Level {pos_detail.get('level_rank')}" if pos_detail.get("level_rank") else None)
                             },
                             "project": {
                                 "name": detail_data.get("project_name") or (detail_data.get("project") or {}).get("name") or "Main Project",
@@ -290,7 +291,8 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
                     "department": pos_info.get("department_name") or pos_info.get("department"),
                     "section": pos_info.get("section_name") or pos_info.get("section"),
                     "reporting_to": pos_info.get("reporting_to", []),
-                    "level_rank": pos_info.get("level_rank")
+                    "level_rank": pos_info.get("level_rank"),
+                    "level_name": pos_info.get("level_name") or (f"Level {pos_info.get('level_rank')}" if pos_info.get("level_rank") else None)
                 },
                 "project": proj_info,
                 "office": {

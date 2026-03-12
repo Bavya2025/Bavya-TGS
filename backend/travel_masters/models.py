@@ -122,3 +122,28 @@ class FuelRateMaster(SoftDeleteModel):
 
     class Meta:
         unique_together = ('state', 'vehicle_type', 'is_deleted')
+
+class Cadre(SoftDeleteModel):
+    name = models.CharField(max_length=100, unique=True, help_text="e.g. ADMINISTRATIVE, Grade A")
+    description = models.TextField(blank=True, null=True)
+    
+    def __str__(self):
+        return self.name
+        
+    class Meta:
+        ordering = ['name']
+
+class EligibilityRule(SoftDeleteModel):
+    cadre = models.ForeignKey(Cadre, on_delete=models.CASCADE, related_name='eligibility_rules')
+    category = models.CharField(max_length=50, help_text="Accommodation, Daily Allowance, Flight, Train, Bus, Local Conveyance, Mileage Rate")
+    city_type = models.CharField(max_length=50, blank=True, null=True, help_text="Metro, Non-Metro, State HQ, Districts, Others, N/A")
+    limit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Max eligible amount. 0 if not applicable.")
+    eligibility_class = models.CharField(max_length=50, blank=True, null=True, help_text="Economy, II A/c, Sleeper, N/A")
+
+    def __str__(self):
+        return f"{self.cadre.name} - {self.category} ({self.city_type or 'All'})"
+
+    class Meta:
+        unique_together = ('cadre', 'category', 'city_type', 'is_deleted')
+        ordering = ['cadre__name', 'category', 'city_type']
+

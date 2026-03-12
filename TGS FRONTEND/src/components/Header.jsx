@@ -110,7 +110,7 @@ const Header = () => {
 
     const mainNav = [
         { title: 'Dashboard', icon: <LayoutDashboard size={18} />, path: '/', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo', 'guesthousemanager'] },
-        { title: 'Trips', icon: <Plane size={18} />, path: '/trips', roles: ['employee', 'reporting_authority', 'finance', 'admin'] },
+        { title: 'My Trips', icon: <Plane size={18} />, path: '/trips', roles: ['employee', 'reporting_authority', 'finance', 'admin'] },
         { title: 'My Requests', icon: <ClipboardList size={18} />, path: '/my-requests', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo'] },
     ];
 
@@ -129,6 +129,7 @@ const Header = () => {
         { title: 'Route Masters', icon: <MapPin size={18} />, path: '/route-management', roles: ['admin'] },
         { title: 'Fuel Master', icon: <Fuel size={18} />, path: '/fuel-master', roles: ['admin'] },
         { title: 'Master Management', icon: <Settings size={18} />, path: '/master-management', roles: ['admin'] },
+        { title: 'Masters', icon: <Settings size={18} />, path: '/AdminMasters', roles: ['admin'] },
         { title: 'Help & Support', icon: <HelpCircle size={18} />, path: '/help', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo', 'guesthousemanager'] },
         { title: 'Login History', icon: <Settings size={18} />, path: '/login-history', roles: ['admin'] },
         { title: 'Audit Logs', icon: <ShieldCheck size={18} />, path: '/audit-logs', roles: ['admin'] },

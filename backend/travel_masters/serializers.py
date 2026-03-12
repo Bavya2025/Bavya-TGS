@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, FuelRateMaster
+from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, FuelRateMaster, Cadre, EligibilityRule
 
 class FuelRateMasterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -124,5 +124,20 @@ class RouteSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Route
+    class Meta:
+        model = Route
         fields = '__all__'
         extra_kwargs = {'name': {'required': False}}
+
+class CadreSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cadre
+        fields = '__all__'
+
+class EligibilityRuleSerializer(serializers.ModelSerializer):
+    cadre_name = serializers.CharField(source='cadre.name', read_only=True)
+    
+    class Meta:
+        model = EligibilityRule
+        fields = '__all__'
+
