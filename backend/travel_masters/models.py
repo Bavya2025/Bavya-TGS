@@ -122,8 +122,6 @@ class FuelRateMaster(SoftDeleteModel):
 
     class Meta:
         unique_together = ('state', 'vehicle_type', 'is_deleted')
-<<<<<<< HEAD
-=======
 
 class Cadre(SoftDeleteModel):
     name = models.CharField(max_length=100, unique=True, help_text="e.g. ADMINISTRATIVE, Grade A")
@@ -149,4 +147,3 @@ class EligibilityRule(SoftDeleteModel):
         unique_together = ('cadre', 'category', 'city_type', 'is_deleted')
         ordering = ['cadre__name', 'category', 'city_type']
 
->>>>>>> a102fcb57574f59a6d43ae22f7e1a26bb4fa038c

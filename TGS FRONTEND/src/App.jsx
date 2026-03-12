@@ -36,12 +36,8 @@ import RouteManagement from './pages/RouteManagement';
 import AdminMasterManagement from './pages/AdminMasterManagement';
 import FuelMaster from './pages/FuelMaster';
 import JobReport from './pages/JobReport';
-<<<<<<< HEAD
 import TravelCreation from './pages/TravelCreation';
-
-=======
 import AdminMasters from './pages/AdminMasters';
->>>>>>> a102fcb57574f59a6d43ae22f7e1a26bb4fa038c
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
@@ -92,11 +88,8 @@ function App() {
             <Route path="/master-management" element={<ProtectedRoute><AdminMasterManagement /></ProtectedRoute>} />
             <Route path="/job-report" element={<ProtectedRoute><JobReport /></ProtectedRoute>} />
             <Route path="/fuel-master" element={<ProtectedRoute><FuelMaster /></ProtectedRoute>} />
-<<<<<<< HEAD
             <Route path="/travel-creation" element={<ProtectedRoute><TravelCreation /></ProtectedRoute>} />
-=======
             <Route path="/AdminMasters" element={<ProtectedRoute><AdminMasters /></ProtectedRoute>} />
->>>>>>> a102fcb57574f59a6d43ae22f7e1a26bb4fa038c
           </Routes>
         </Router>
       </AuthProvider>
