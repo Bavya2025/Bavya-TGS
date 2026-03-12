@@ -381,6 +381,7 @@ class TripTrackingView(APIView):
     permission_classes = [IsCustomAuthenticated]
 
     def get(self, request, trip_id):
+<<<<<<< HEAD
         real_trip_id = decode_id(trip_id)
         try:
             trip = Trip.objects.get(trip_id=real_trip_id)
@@ -389,6 +390,22 @@ class TripTrackingView(APIView):
 
         user = getattr(request, 'custom_user', None)
         
+=======
+        print(f"DEBUG: TripTrackingView.get called for trip_id: {trip_id}")
+        real_trip_id = decode_id(trip_id)
+        # Verify trip exists and user has access
+        try:
+            trip = Trip.objects.get(trip_id=real_trip_id)
+        except Trip.DoesNotExist:
+            print(f"DEBUG: Trip {real_trip_id} not found")
+            return Response({"error": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Basic access check: requester or manager or finance or admin
+        user = getattr(request, 'custom_user', None)
+        print(f"DEBUG: Requester: {user.employee_id if user else 'Anonymous'}")
+        
+        # ... existing logic ...
+>>>>>>> a102fcb57574f59a6d43ae22f7e1a26bb4fa038c
         is_owner = (trip.user == user)
         is_manager = False
         if user:
@@ -398,6 +415,7 @@ class TripTrackingView(APIView):
         is_privileged = user_role in ['admin', 'finance', 'cfo', 'guesthousemanager']
 
         if not (is_owner or is_manager or is_privileged):
+<<<<<<< HEAD
             print(f"TRACKING_AUTH_FAIL: Unauthorized access attempt to trip {real_trip_id} by {user.employee_id if user else 'Anonymous'}")
             return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
 
@@ -408,21 +426,46 @@ class TripTrackingView(APIView):
         return Response(serializer.data)
 
     def post(self, request, trip_id):
+=======
+            print(f"DEBUG: Unauthorized access attempt to trip {real_trip_id}")
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        tracking_data = TripTracking.objects.filter(trip=trip).order_by('timestamp')
+        print(f"DEBUG: Returning {tracking_data.count()} points")
+        serializer = TripTrackingSerializer(tracking_data, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, trip_id):
+        print(f"DEBUG: TripTrackingView.post called for trip_id: {trip_id}")
+>>>>>>> a102fcb57574f59a6d43ae22f7e1a26bb4fa038c
         real_trip_id = decode_id(trip_id)
         try:
             trip = Trip.objects.get(trip_id=real_trip_id)
         except Trip.DoesNotExist:
+<<<<<<< HEAD
             return Response({"error": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
 
         user = getattr(request, 'custom_user', None)
         
         if not user or trip.user != user:
             print(f"TRACKING_AUTH_FAIL: POST attempt by {user.employee_id if user else 'Anonymous'} on Trip {trip.trip_id} (Owner: {trip.user.employee_id})")
+=======
+            print(f"DEBUG: Trip {real_trip_id} not found for POST")
+            return Response({"error": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Only trip owner can post tracking points
+        user = getattr(request, 'custom_user', None)
+        print(f"DEBUG: POST Requester: {user.employee_id if user else 'Anonymous'}")
+        
+        if not user or trip.user != user:
+            print(f"DEBUG: POST Unauthorized for user {user.employee_id if user else 'None'}")
+>>>>>>> a102fcb57574f59a6d43ae22f7e1a26bb4fa038c
             return Response({"error": "Only trip owner can submit tracking data"}, status=status.HTTP_403_FORBIDDEN)
 
         data = request.data.copy()
         data['trip'] = trip.trip_id
         
+<<<<<<< HEAD
         # ALWAYS force server-side timestamp for reliable live tracking timeline.
         # This prevents "future points" bugs caused by client clock drift or timezone mismatch.
         data['timestamp'] = timezone.now().isoformat()
@@ -435,6 +478,14 @@ class TripTrackingView(APIView):
         print(f"TRACKING_SAVE_FAIL: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
+=======
+        serializer = TripTrackingSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            print("DEBUG: Tracking point saved successfully")
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+>>>>>>> a102fcb57574f59a6d43ae22f7e1a26bb4fa038c
         print(f"DEBUG: Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

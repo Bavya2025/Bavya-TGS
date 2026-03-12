@@ -2,12 +2,13 @@ from django.db import models
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, FuelRateMaster
+from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, FuelRateMaster, Cadre, EligibilityRule
 from .serializers import (
     LocationSerializer, RouteSerializer, RoutePathSerializer, 
-    TollGateSerializer, TollRateSerializer, RoutePathTollSerializer, FuelRateMasterSerializer
+    TollGateSerializer, TollRateSerializer, RoutePathTollSerializer, FuelRateMasterSerializer,
+    EligibilityRuleSerializer, CadreSerializer
 )
-from .services import sync_geo_locations
+from .services import sync_geo_locations, sync_cadres
 
 class LocationViewSet(viewsets.ModelViewSet):
     serializer_class = LocationSerializer
@@ -454,3 +455,40 @@ class FuelRateMasterViewSet(viewsets.ModelViewSet):
         if vehicle_type:
             queryset = queryset.filter(vehicle_type__iexact=vehicle_type)
         return queryset.order_by('state', 'vehicle_type')
+
+class EligibilityRuleViewSet(viewsets.ModelViewSet):
+    queryset = EligibilityRule.objects.all()
+    serializer_class = EligibilityRuleSerializer
+
+    def get_queryset(self):
+        queryset = EligibilityRule.objects.all()
+        cadre = self.request.query_params.get('cadre')
+        category = self.request.query_params.get('category')
+        city_type = self.request.query_params.get('city_type')
+        
+        if cadre:
+            queryset = queryset.filter(cadre__iexact=cadre)
+        if category:
+            queryset = queryset.filter(category__iexact=category)
+        if city_type:
+            queryset = queryset.filter(city_type__iexact=city_type)
+            
+        return queryset.order_by('cadre__name', 'category', 'city_type')
+
+class CadreViewSet(viewsets.ModelViewSet):
+    queryset = Cadre.objects.all()
+    serializer_class = CadreSerializer
+
+    def get_queryset(self):
+        queryset = Cadre.objects.all()
+        search = self.request.query_params.get('search', '')
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+        return queryset.order_by('name')
+
+    @action(detail=False, methods=['post'])
+    def sync(self, request):
+        stats = sync_cadres()
+        if "error" in stats:
+            return Response(stats, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(stats)

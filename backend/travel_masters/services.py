@@ -1,5 +1,5 @@
-from api_management.services import fetch_geo_data
-from .models import Location
+from api_management.services import fetch_geo_data, fetch_employee_data
+from .models import Location, Cadre
 
 
 # Mapping of API keys to clean Location Types for the hierarchy
@@ -100,3 +100,48 @@ def get_external_locations(loc_type=None, parent_id=None):
         queryset = queryset.filter(parent_id=parent_id)
         
     return queryset
+
+def sync_cadres():
+    """
+    Syncs hierarchical position levels (Cadres) from the Employees API into the local master database.
+    """
+    stats = {"created": 0, "updated": 0, "total": 0}
+    
+    # We fetch all pages
+    data = fetch_employee_data(fetch_all_pages=True, page_size=100)
+    
+    if not data or "error" in data:
+        print("Failed to fetch Employee data")
+        return {"error": "Failed to fetch Employee data"}
+
+    results = data.get('results', [])
+    unique_levels = set()
+    
+    for emp in results:
+        pos_details = emp.get('positions_details', [])
+        pos = emp.get('position', {})
+        level_name = None
+        
+        if pos:
+            level_name = pos.get('level_name')
+            
+        if not level_name and pos_details and isinstance(pos_details, list):
+            level_name = pos_details[0].get('level_name')
+            
+        if level_name:
+            unique_levels.add(level_name)
+
+    for level in unique_levels:
+        cadre, created = Cadre.objects.get_or_create(
+            name=level,
+            defaults={'description': f"Auto-synced from employee API (Position Level)"}
+        )
+        if created:
+            stats["created"] += 1
+        else:
+            stats["updated"] += 1
+        stats["total"] += 1
+
+    print(f"Cadre Sync Complete. Extracted {len(unique_levels)} unique position levels. Created {stats['created']}.")
+    return stats
+
