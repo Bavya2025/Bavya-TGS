@@ -23,6 +23,18 @@ class User(models.Model):
     allow_photo_reset = models.BooleanField(default=False)
     frs_logs_cleared_at = models.DateTimeField(null=True, blank=True)
 
+    # Mandatory Django auth fields
+    USERNAME_FIELD = 'employee_id'
+    REQUIRED_FIELDS = []
+    
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+
     def __str__(self):
         return f"{self.name} ({self.employee_id})"
 

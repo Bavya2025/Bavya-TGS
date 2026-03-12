@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const BASE_URL = 'http://192.168.1.147:4567/';
+// Use the current origin if deployed on the same server, or an environment variable
+const BASE_URL = import.meta.env.VITE_API_URL || window.location.origin;
 
 
 const api = axios.create({
