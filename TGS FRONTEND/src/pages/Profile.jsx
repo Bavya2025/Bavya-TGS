@@ -83,7 +83,15 @@ const Profile = () => {
         },
         project: {
             name: profileData.project?.name || '',
-            code: profileData.project?.code || ''
+            code: profileData.project?.code || (() => {
+                // External API only provides project_name, not project_code.
+                // Derive a readable code from the project name if no code is available.
+                const pName = profileData.project?.name || '';
+                if (!pName) return '';
+                // Try to extract a numeric part (e.g. '104 Project' → 'PROJ-104')
+                const numMatch = pName.match(/(\d+)/);
+                return numMatch ? `PROJ-${numMatch[1]}` : pName.slice(0, 6).toUpperCase();
+            })()
         },
         office: {
             name: profileData.office?.name || '',
@@ -216,7 +224,7 @@ const Profile = () => {
                                 </div>
                                 <div className="info-item">
                                     <label>Project Code</label>
-                                    <div className="info-value">{displayData.project.code}</div>
+                                    <div className="info-value">{displayData.project.code || 'N/A'}</div>
                                 </div>
                                 <div className="info-item full-width">
                                     <label>Reporting Manager(s)</label>

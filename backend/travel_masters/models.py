@@ -111,3 +111,14 @@ class RoutePathToll(SoftDeleteModel):
 
     class Meta:
         ordering = ['order']
+
+class FuelRateMaster(SoftDeleteModel):
+    state = models.CharField(max_length=100)
+    vehicle_type = models.CharField(max_length=50) # '2 Wheeler' or '4 Wheeler'
+    rate_per_km = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.state} - {self.vehicle_type}: {self.rate_per_km}"
+
+    class Meta:
+        unique_together = ('state', 'vehicle_type', 'is_deleted')

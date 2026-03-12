@@ -2,10 +2,10 @@ from django.db import models
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll
+from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, FuelRateMaster
 from .serializers import (
     LocationSerializer, RouteSerializer, RoutePathSerializer, 
-    TollGateSerializer, TollRateSerializer, RoutePathTollSerializer
+    TollGateSerializer, TollRateSerializer, RoutePathTollSerializer, FuelRateMasterSerializer
 )
 from .services import sync_geo_locations
 
@@ -440,3 +440,17 @@ class RoutePathTollViewSet(viewsets.ModelViewSet):
                         break
         except Exception as e: print(f"Delete Sync Error: {e}")
         instance.delete()
+
+class FuelRateMasterViewSet(viewsets.ModelViewSet):
+    queryset = FuelRateMaster.objects.all()
+    serializer_class = FuelRateMasterSerializer
+
+    def get_queryset(self):
+        queryset = FuelRateMaster.objects.all()
+        state = self.request.query_params.get('state')
+        vehicle_type = self.request.query_params.get('vehicle_type')
+        if state:
+            queryset = queryset.filter(state__iexact=state)
+        if vehicle_type:
+            queryset = queryset.filter(vehicle_type__iexact=vehicle_type)
+        return queryset.order_by('state', 'vehicle_type')

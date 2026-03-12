@@ -1,5 +1,34 @@
 from rest_framework import serializers
-from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll
+from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, FuelRateMaster
+
+class FuelRateMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FuelRateMaster
+        fields = '__all__'
+        # Disable auto-generated unique_together validator because it doesn't
+        # account for soft-deleted rows (is_deleted=True). We handle it manually below.
+        validators = []
+
+    def validate(self, attrs):
+        state = attrs.get('state')
+        vehicle_type = attrs.get('vehicle_type')
+        instance = self.instance  # None on create, existing object on update
+
+        if state and vehicle_type:
+            qs = FuelRateMaster.objects.filter(
+                state__iexact=state,
+                vehicle_type__iexact=vehicle_type,
+                is_deleted=False
+            )
+            if instance:
+                qs = qs.exclude(pk=instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError({
+                    'non_field_errors': [
+                        f"A fuel rate for '{state}' ({vehicle_type}) already exists. Please edit the existing entry instead."
+                    ]
+                })
+        return attrs
 
 class LocationSerializer(serializers.ModelSerializer):
     class Meta:

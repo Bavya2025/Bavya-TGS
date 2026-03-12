@@ -264,7 +264,7 @@ class LoginHistory(models.Model):
     device_type = models.CharField(max_length=50, default='Web')
     browser_type = models.CharField(max_length=50, default='Chrome')
     status = models.CharField(max_length=20, default='Success')
-    failure_reason = models.TextField(null=True, blank=True)
+    failure_reason = models.TextField(null=True, blank=True, default='')
 
     class Meta:
         verbose_name_plural = "Login History"

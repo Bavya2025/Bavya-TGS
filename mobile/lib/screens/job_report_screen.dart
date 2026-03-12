@@ -330,27 +330,80 @@ class _JobReportScreenState extends State<JobReportScreen> {
     if (data == null || data.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          headingRowHeight: 30,
-          dataRowHeight: 25,
-          horizontalMargin: 10,
-          columnSpacing: 15,
-          columns: (data.first as Map<String, dynamic>).keys.map((k) => 
-            DataColumn(label: Text(k.replaceAll('_', ' '), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)))
-          ).toList(),
-          rows: data.map((row) => 
-            DataRow(cells: (row as Map<String, dynamic>).values.map((v) => 
-              DataCell(Text(v?.toString() ?? '-', style: const TextStyle(fontSize: 10)))
-            ).toList())
-          ).toList(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Text(
+              'Excel Entries Preview',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowHeight: 45,
+              dataRowHeight: 50,
+              columnSpacing: 24,
+              horizontalMargin: 16,
+              headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+              columns: [
+                _buildDataColumn('DATE'),
+                _buildDataColumn('PURPOSE'),
+                _buildDataColumn('FROM LOCATION'),
+                _buildDataColumn('TO LOCATION'),
+              ],
+              rows: data.map((rowMap) {
+                final row = rowMap as Map<String, dynamic>;
+                
+                return DataRow(cells: [
+                  _buildDataCell(row['date']?.toString() ?? '-'),
+                  _buildDataCell(row['visit_intent']?.toString() ?? '-'),
+                  _buildDataCell(row['origin_route']?.toString() ?? '-'),
+                  _buildDataCell(row['destination_route']?.toString() ?? '-'),
+                ]);
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  DataColumn _buildDataColumn(String label) {
+    return DataColumn(
+      label: Text(
+        label,
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFF475569),
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  DataCell _buildDataCell(String value) {
+    return DataCell(
+      Text(
+        value,
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 11,
+          color: const Color(0xFF1E293B),
+          fontWeight: FontWeight.w500,
         ),
       ),
     );

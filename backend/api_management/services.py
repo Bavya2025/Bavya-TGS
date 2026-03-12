@@ -11,8 +11,12 @@ from core.models import User, Role
 CACHE_EMPLOYEE_DATA = {}
 CACHE_TIMEOUT = 300 # 5 minutes
 
-# Cache for HR ID to Employee Code mapping
+# HR ID to Employee Code mapping
 HR_ID_TO_CODE_CACHE = {}
+
+# Full employee list cache for team filtering
+GLOBAL_EMPLOYEE_CACHE = {'timestamp': 0, 'data': []}
+GLOBAL_CACHE_TIMEOUT = 600 # 10 minutes
 
 def resolve_hr_id_to_code(hr_id, api_url, headers):
     """Resolves an internal HR ID to an employee code by fetching details."""
@@ -251,8 +255,8 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
                                 "level_rank": pos_detail.get("level_rank")
                             },
                             "project": {
-                                "name": detail_data.get("project_name") or "Main Project",
-                                "code": None
+                                "name": detail_data.get("project_name") or (detail_data.get("project") or {}).get("name") or "Main Project",
+                                "code": detail_data.get("project_code") or (detail_data.get("project") or {}).get("code") or (detail_data.get("project") or {}).get("project_code") or ""
                             },
                             "office": {
                                 "name": pos_detail.get("office_name") or "Head Office",
@@ -310,6 +314,49 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
         return {"error": f"API Connection Error: {str(e)}"}
     except Exception as e:
         return {"error": f"Data Transformation Error: {str(e)}"}
+
+def get_manager_reports_locations(manager_code):
+    """
+    Returns unique office locations of employees who report directly to the given manager.
+    Uses a global cache to avoid fetching thousands of records on every call.
+    """
+    import time
+    now = time.time()
+    
+    # Check global cache first
+    cached = GLOBAL_EMPLOYEE_CACHE
+    if now - cached['timestamp'] < GLOBAL_CACHE_TIMEOUT and cached['data']:
+        all_emps_results = cached['data']
+    else:
+        # Fetch fresh data (summary version is faster)
+        # Note: fetch_all_pages=True iterates through all results
+        response_data = fetch_employee_data(fetch_all_pages=True)
+        if "error" in response_data:
+            return []
+        
+        all_emps_results = response_data.get('results', [])
+        # Update cache
+        GLOBAL_EMPLOYEE_CACHE['timestamp'] = now
+        GLOBAL_EMPLOYEE_CACHE['data'] = all_emps_results
+
+    team_locations = set()
+    for item in all_emps_results:
+        pos = item.get('position', {})
+        reporting_to = pos.get('reporting_to', [])
+        
+        # Check if first manager matches manager_code
+        if reporting_to and isinstance(reporting_to[0], dict):
+            if reporting_to[0].get('employee_code') == manager_code:
+                off_name = item.get('office', {}).get('name')
+                if off_name:
+                    team_locations.add(off_name.strip())
+        elif reporting_to and isinstance(reporting_to[0], str):
+            if reporting_to[0] == manager_code:
+                off_name = item.get('office', {}).get('name')
+                if off_name:
+                    team_locations.add(off_name.strip())
+                    
+    return sorted(list(team_locations))
 
 def sync_user_hierarchy(user):
     """
