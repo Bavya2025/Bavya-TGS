@@ -9,7 +9,7 @@ class CustomAuthMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path.startswith('/api/auth/login') or request.path.startswith('/admin'):
+        if request.path.startswith('/api/auth/login') or request.path.startswith('/api/health') or request.path.startswith('/admin'):
             return self.get_response(request)
 
         # 1. Capture Authorization header
@@ -67,6 +67,9 @@ _thread_locals = threading.local()
 def get_current_user():
     return getattr(_thread_locals, 'user', None)
 
+def should_skip_external_api():
+    return getattr(_thread_locals, 'skip_external_api', False)
+
 def get_current_request():
     return getattr(_thread_locals, 'request', None)
 
@@ -80,11 +83,26 @@ class ThreadLocalMiddleware:
              _thread_locals.user = request.custom_user
         _thread_locals.request = request
         
+        # Set skip_external_api for specific "DB-only" views
+        db_only_paths = [
+            '/api/audit-logs/', 
+            '/api/login-history/', 
+            '/api/dashboard-stats/',
+            '/api/audit-history',
+            '/api/session-history',
+            '/api/approvals/',
+            '/api/trips/',
+            '/api/users/'
+        ]
+        _thread_locals.skip_external_api = any(request.path.startswith(p) for p in db_only_paths)
+        
         response = self.get_response(request)
         
         if hasattr(_thread_locals, 'user'):
             del _thread_locals.user
         if hasattr(_thread_locals, 'request'):
             del _thread_locals.request
+        if hasattr(_thread_locals, 'skip_external_api'):
+            del _thread_locals.skip_external_api
             
         return response

@@ -9,6 +9,7 @@ from .serializers import (
     EligibilityRuleSerializer, CadreSerializer
 )
 from .services import sync_geo_locations, sync_cadres
+from core.permissions import IsAdmin, IsCustomAuthenticated
 
 class LocationViewSet(viewsets.ModelViewSet):
     serializer_class = LocationSerializer
@@ -375,6 +376,12 @@ class TollGateViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsCustomAuthenticated()]
+        return [IsAdmin()]
+
+
     def update(self, request, *args, **kwargs):
         loc_val = request.data.get('location')
         loc = self.resolve_location(loc_val) if loc_val else None
@@ -443,6 +450,7 @@ class RoutePathTollViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 class FuelRateMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdmin]
     queryset = FuelRateMaster.objects.all()
     serializer_class = FuelRateMasterSerializer
 
@@ -457,6 +465,7 @@ class FuelRateMasterViewSet(viewsets.ModelViewSet):
         return queryset.order_by('state', 'vehicle_type')
 
 class EligibilityRuleViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdmin]
     queryset = EligibilityRule.objects.all()
     serializer_class = EligibilityRuleSerializer
 
@@ -476,6 +485,7 @@ class EligibilityRuleViewSet(viewsets.ModelViewSet):
         return queryset.order_by('cadre__name', 'category', 'city_type')
 
 class CadreViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdmin]
     queryset = Cadre.objects.all()
     serializer_class = CadreSerializer
 

@@ -19,6 +19,7 @@ INSTALLED_APPS = [
     "guest_house",
     "travel_masters",
     "fleet",
+    "chatbot",
 ]
 
 MIDDLEWARE = [
@@ -54,9 +55,9 @@ WSGI_APPLICATION = "tgs_backend.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "TGS_v13",
+        "NAME": "TGS_nyt",
         "USER": "root",
-        "PASSWORD": "root",
+        "PASSWORD": "welcome",
         "HOST": "localhost",
         "PORT": "3306",
     }

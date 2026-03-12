@@ -27,7 +27,12 @@ class User(models.Model):
         return f"{self.name} ({self.employee_id})"
 
     def _get_api_data(self):
-        # Guard for purely local users by ID and Role
+        # 0. Check if we should skip external API for performance (Pure DB Mode)
+        from .middleware import should_skip_external_api
+        if should_skip_external_api():
+            return None
+
+        # 1. Guard for purely local users by ID and Role
         lower_id = self.employee_id.lower()
         role_name = (self.role.name if self.role else '').lower()
         
