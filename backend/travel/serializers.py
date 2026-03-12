@@ -137,6 +137,25 @@ class CustomMasterValueSerializer(serializers.ModelSerializer):
         model = CustomMasterValue
         fields = '__all__'
 
+    def validate(self, data):
+        definition = data.get('definition')
+        name = data.get('name')
+        code = data.get('code')
+        
+        # Check for unique constraints manually to provide a better error message
+        if not self.instance: # On create
+            if CustomMasterValue.objects.filter(definition=definition, name=name).exists():
+                raise serializers.ValidationError({"name": f"A record with the name '{name}' already exists in this table."})
+            if code and CustomMasterValue.objects.filter(definition=definition, code=code).exists():
+                raise serializers.ValidationError({"code": f"A record with the code '{code}' already exists in this table."})
+        else: # On update
+            if CustomMasterValue.objects.filter(definition=definition, name=name).exclude(pk=self.instance.pk).exists():
+                raise serializers.ValidationError({"name": f"A record with the name '{name}' already exists in this table."})
+            if code and CustomMasterValue.objects.filter(definition=definition, code=code).exclude(pk=self.instance.pk).exists():
+                raise serializers.ValidationError({"code": f"A record with the code '{code}' already exists in this table."})
+                
+        return data
+
 # --- CORE SERIALIZERS ---
 
 class PolicyDocumentSerializer(serializers.ModelSerializer):

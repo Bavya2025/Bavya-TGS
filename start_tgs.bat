@@ -112,7 +112,7 @@ if exist "%B_PATH%\%FE_DIR%" (
 if not exist "%VENV%" python -m venv "%VENV%"
 call "%VENV%\Scripts\activate"
 pip install -r "%B_PATH%\backend\requirements.txt" --quiet
-python "%B_PATH%\backend\manage.py" collectstatic --noinput
+
 
 :: Start Workers
 if "%HIGH_LOAD%"=="true" (

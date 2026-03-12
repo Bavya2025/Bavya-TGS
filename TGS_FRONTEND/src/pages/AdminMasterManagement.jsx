@@ -12,7 +12,7 @@ const CONFIG_GROUP = {
     label: 'Config (Add Masters)',
     tables: [
         { id: 'master_module', name: 'Manage Modules', endpoint: 'master-modules', fields: ['name', 'display_order'] },
-        { id: 'custom_master_def', name: 'Manage Master Tables', endpoint: 'custom-master-definitions', fields: ['table_name', 'module_ref', 'api_endpoint', 'fields_list'] },
+        { id: 'custom_master_def', name: 'Manage Master Tables', endpoint: 'custom-master-definitions', fields: ['table_name', 'module_ref'] },
     ]
 };
 
@@ -68,10 +68,10 @@ export default function AdminMasterManagement() {
                     .map(def => ({
                         id: `table_${def.id}`,
                         name: def.table_name,
-                        endpoint: def.api_endpoint || 'custom-master-values',
-                        fields: def.fields_list ? def.fields_list.split(',') : ['name', 'code'],
-                        definitionId: def.api_endpoint ? null : def.id, // Only send definitionId for custom values table
-                        isCustom: !def.is_system
+                        endpoint: 'custom-master-values',
+                        fields: ['name', 'code'],
+                        definitionId: def.id, 
+                        isCustom: true
                     }));
 
                 return {
@@ -163,7 +163,19 @@ export default function AdminMasterManagement() {
                 fetchStructure();
             }
         } catch (error) {
-            showToast("Operation failed. Check inputs.", "error");
+            let errorMsg = "Operation failed. Check inputs.";
+            if (error.response && error.response.data) {
+                // DRF typically returns errors as { field: [messages] } or { non_field_errors: [messages] }
+                const data = error.response.data;
+                if (typeof data === 'object') {
+                    const firstField = Object.keys(data)[0];
+                    const msg = data[firstField];
+                    errorMsg = Array.isArray(msg) ? msg[0] : (typeof msg === 'string' ? msg : errorMsg);
+                } else if (typeof data === 'string') {
+                    errorMsg = data;
+                }
+            }
+            showToast(errorMsg, "error");
         }
     };
 
