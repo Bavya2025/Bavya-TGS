@@ -40,6 +40,7 @@ const MyTrips = () => {
     const { user } = useAuth();
     const [exportingId, setExportingId] = useState(null);
     const [filter, setFilter] = useState('All Status');
+    const [typeFilter, setTypeFilter] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
     const [trips, setTrips] = useState([]);
     const [selectedTrip, setSelectedTrip] = useState(null);
@@ -192,6 +193,7 @@ const MyTrips = () => {
                 tripLeader: trip.trip_leader,
                 enRoute: trip.en_route,
                 project: trip.project_code || 'General',
+                considerAsLocal: trip.consider_as_local,
                 accommodationRequests: parseJsonField(trip.accommodation_requests),
                 vehicleType: trip.vehicle_type,
                 members: parseJsonField(trip.members),
@@ -220,9 +222,13 @@ const MyTrips = () => {
         return () => clearTimeout(debounceTimer);
     }, [searchTerm]);
 
-    const filteredTrips = filter === 'All Status'
-        ? trips
-        : trips.filter(t => t.status === filter);
+    const filteredTrips = trips.filter(t => {
+        const matchesStatus = filter === 'All Status' || t.status === filter;
+        const matchesType = typeFilter === 'All' || 
+            (typeFilter === 'Trip' && !t.considerAsLocal) || 
+            (typeFilter === 'Travel' && t.considerAsLocal);
+        return matchesStatus && matchesType;
+    });
 
     return (
         <div className="trips-page">
@@ -231,9 +237,20 @@ const MyTrips = () => {
                     <h1>My Trips</h1>
                     <p>Track your travel history and upcoming bookings.</p>
                 </div>
-                <button className="btn-primary" onClick={() => navigate('/create-trip')}>
-                    New Trip Request
-                </button>
+                <div className="header-actions" style={{ display: 'flex', gap: '12px' }}>
+                    {(typeFilter === 'All' || typeFilter === 'Trip') && (
+                        <button className="btn-primary" onClick={() => navigate('/create-trip')}>
+                            <Plane size={18} style={{ marginRight: '8px' }} />
+                            New Trip Request
+                        </button>
+                    )}
+                    {(typeFilter === 'All' || typeFilter === 'Travel') && (
+                        <button className="btn-primary" style={{ backgroundColor: 'white', color: 'var(--magenta)', border: '1px solid var(--magenta)' }} onClick={() => navigate('/travel-creation')}>
+                            <Briefcase size={18} style={{ marginRight: '8px' }} />
+                            New Travel Request
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="trips-toolbar premium-card">
@@ -253,6 +270,15 @@ const MyTrips = () => {
                         <option>Approved</option>
                         <option>Pending</option>
                         <option>Settled</option>
+                        <option>Rejected</option>
+                    </select>
+                </div>
+                <div className="filter-group">
+                    <Briefcase size={18} />
+                    <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                        <option>All</option>
+                        <option>Trip</option>
+                        <option>Travel</option>
                     </select>
                 </div>
             </div>

@@ -514,4 +514,21 @@ class TripService {
       includeAuth: true,
     );
   }
+
+  Future<List<Map<String, dynamic>>> fetchBulkActivities() async {
+    final response = await _apiService.get('${ApiConstants.baseUrl}/api/bulk-activities/');
+    if (response is List) return List<Map<String, dynamic>>.from(response);
+    if (response is Map && response['results'] != null) {
+      return List<Map<String, dynamic>>.from(response['results']);
+    }
+    return [];
+  }
+
+  Future<void> handleBulkBatchAction(int batchId, String action) async {
+    await _apiService.post(
+      '${ApiConstants.baseUrl}/api/bulk-activities/$batchId/$action/',
+      body: {},
+      includeAuth: true,
+    );
+  }
 }

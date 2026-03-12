@@ -1773,23 +1773,253 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def template(self, request):
-        # Create a template Excel file
-        df = pd.DataFrame(columns=[
-            'Date (YYYY-MM-DD)', 
-            'Movement Mode (Car/Cab, 2 Wheeler, etc.)', 
-            'Vehicle Type (Own, Service)', 
-            'Route (Origin -> Destination)', 
-            'Visit Intent / Purpose',
-            'Internal Remarks'
-        ])
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+        from openpyxl.worksheet.datavalidation import DataValidation
+        from openpyxl.styles.differential import DifferentialStyle
+        from openpyxl.formatting.rule import FormulaRule
+        import datetime
+        from django.utils import timezone
+
+        wb = openpyxl.Workbook()
+
+        # ── Hidden locations sheet ───────────────────────────────────────────
+        loc_sheet = wb.create_sheet("_Locations")
+        loc_sheet.sheet_state = 'hidden'
+
+        # 1. Try to get locations of employees reporting to the current manager
+        from api_management.services import get_manager_reports_locations
+        user = getattr(request, 'custom_user', None)
+        manager_code = user.employee_id if user else None
         
-        # Add a sample row
-        df.loc[0] = ['2026-03-01', 'Car / Cab', 'Own Car', 'Office -> Client Site', 'Site Inspection', 'Regular weekly visit']
-        
+        # gather locations starting from employees reporting to this manager
+        locations = []
+        if manager_code:
+            locations = get_manager_reports_locations(manager_code)
+
+        # --- add the manager's own base location if available ---
+        if user:
+            own_loc = (user.base_location or '').strip()
+            if own_loc and own_loc not in locations:
+                locations.append(own_loc)
+
+        # --- also merge in any locations already present on trips in the DB ---
+        # this ensures sites like "Client Site" appear even when the
+        # external service returns nothing (or a limited set)
+        from .models import Trip
+        existing_locs = set(locations)  # start with whatever we already have
+        for t in Trip.objects.values('source', 'destination'):
+            if t['source'] and t['source'].strip():
+                existing_locs.add(t['source'].strip())
+            if t['destination'] and t['destination'].strip():
+                existing_locs.add(t['destination'].strip())
+
+        if existing_locs:
+            locations = sorted(existing_locs)
+        else:
+            # still empty? use generic fallback list
+            locations = [
+                "Head Office", "Field Office", "Client Site", "Warehouse",
+                "Airport", "Railway Station", "Bus Stand", "Guest House",
+                "Project Site", "Branch Office", "Regional Office", "Vendor Location"
+            ]
+
+        for i, loc in enumerate(locations, start=1):
+            loc_sheet.cell(row=i, column=1, value=loc)
+
+        # Create a named range for the locations
+        loc_range = f"_Locations!$A$1:$A${len(locations)}"
+        wb.defined_names['LocationList'] = openpyxl.workbook.defined_name.DefinedName(
+            'LocationList', attr_text=loc_range
+        )
+
+        # ── Main data sheet ─────────────────────────────────────────────────
+        ws = wb.active
+        ws.title = "Monthly Activities"
+
+        # ── Styles ──────────────────────────────────────────────────────────
+        HEADER_FILL   = PatternFill("solid", fgColor="BB0633")   # brand red
+        NOTE_FILL     = PatternFill("solid", fgColor="FFF3CD")   # warm yellow
+        HEADER_FONT   = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+        NOTE_FONT     = Font(name="Calibri", italic=True, color="856404", size=9)
+        DATA_FONT     = Font(name="Calibri", size=10)
+        CENTER        = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        LEFT          = Alignment(horizontal="left",   vertical="center", wrap_text=True)
+        thin          = Side(style="thin", color="CCCCCC")
+        BORDER        = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        # ── Column layout ────────────────────────────────────────────────────
+        # A=Date  B=Time  C=From Location  D=To Location  E=Purpose
+        columns = [
+            ("Date",          16, CENTER),
+            ("Time",          14, CENTER),
+            ("From Location", 28, LEFT),
+            ("To Location",   28, LEFT),
+            ("Purpose",       40, LEFT),
+        ]
+
+        # Row 1 – Headers
+        ws.row_dimensions[1].height = 30
+        for col_idx, (label, width, align) in enumerate(columns, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=label)
+            cell.font   = HEADER_FONT
+            cell.fill   = HEADER_FILL
+            cell.alignment = CENTER
+            cell.border    = BORDER
+            ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+        # Row 2 – Instructional note (merged across all columns)
+        ws.merge_cells("A2:E2")
+        note_cell = ws.cell(row=2, column=1,
+            value="📋  Instructions: Date must be ≥ today  |  Time must be ≥ current time (HH:MM, 24h)  |  "
+                  "Choose From/To Location from the dropdown  |  Purpose is free text")
+        note_cell.font      = NOTE_FONT
+        note_cell.fill      = NOTE_FILL
+        note_cell.alignment = LEFT
+        ws.row_dimensions[2].height = 22
+
+        # Row 3 – Sample data row
+        today_str = datetime.date.today().strftime("%Y-%m-%d")
+
+        # Explicitly convert to IST (UTC+5:30) — server TIME_ZONE is UTC
+        from zoneinfo import ZoneInfo
+        ist_tz    = ZoneInfo('Asia/Kolkata')
+        now_ist   = datetime.datetime.now(ist_tz)
+        time_str  = now_ist.strftime("%H:%M")
+
+        sample = [today_str, time_str, locations[0] if locations else "Office",
+                  locations[1] if len(locations) > 1 else "Client Site",
+                  "Site Inspection / Field Visit"]
+        ws.row_dimensions[3].height = 20
+        for col_idx, val in enumerate(sample, start=1):
+            cell = ws.cell(row=3, column=col_idx, value=val)
+            cell.font      = DATA_FONT
+            cell.alignment = columns[col_idx - 1][2]
+            cell.border    = BORDER
+
+        # Rows 4-103 – Empty data rows (100 rows)
+        for row in range(4, 104):
+            ws.row_dimensions[row].height = 20
+            for col_idx in range(1, 6):
+                cell = ws.cell(row=row, column=col_idx)
+                cell.font      = DATA_FONT
+                cell.alignment = columns[col_idx - 1][2]
+                cell.border    = BORDER
+
+        DATA_ROWS = "3:103"   # applies to sample + 100 blank rows
+
+        # ── Validation 1: Date >= today ──────────────────────────────────────
+        today_serial = (datetime.date.today() - datetime.date(1899, 12, 30)).days
+        dv_date = DataValidation(
+            type="date",
+            operator="greaterThanOrEqual",
+            formula1=str(today_serial),
+            showDropDown=False,
+            showErrorMessage=True,
+            errorTitle="Invalid Date",
+            error=f"Date must be on or after today ({datetime.date.today().strftime('%d-%b-%Y')}). "
+                  f"Please enter a valid date.",
+            showInputMessage=True,
+            promptTitle="Date",
+            prompt=f"Enter date ≥ {datetime.date.today().strftime('%d-%b-%Y')} (YYYY-MM-DD format)"
+        )
+        ws.add_data_validation(dv_date)
+        dv_date.sqref = "A3:A103"   # Column A
+
+        # ── Validation 2: Time format HH:MM ─────────────────────────────────
+        # Excel stores time as a fraction of a day (e.g. 09:30 = 9.5/24)
+        now_fraction = (now_ist.hour * 3600 + now_ist.minute * 60) / 86400
+        dv_time = DataValidation(
+            type="time",
+            operator="greaterThanOrEqual",
+            formula1=str(round(now_fraction, 8)),
+            showDropDown=False,
+            showErrorMessage=True,
+            errorTitle="Invalid Time",
+            error=f"Time must be ≥ current time ({time_str}). Use HH:MM (24h) format.",
+            showInputMessage=True,
+            promptTitle="Time (HH:MM)",
+            prompt=f"Enter time in HH:MM (24h). Must be ≥ {time_str} for today."
+        )
+        ws.add_data_validation(dv_time)
+        dv_time.sqref = "B3:B103"   # Column B
+
+        # ── Validation 3: From Location dropdown ─────────────────────────────
+        dv_from = DataValidation(
+            type="list",
+            formula1=f'_Locations!$A$1:$A${len(locations)}',
+            showDropDown=False,
+            showErrorMessage=True,
+            errorTitle="Invalid Location",
+            error="Please select a location from the dropdown list.",
+            showInputMessage=True,
+            promptTitle="From Location",
+            prompt="Select the starting location from the dropdown."
+        )
+        ws.add_data_validation(dv_from)
+        dv_from.sqref = "C3:C103"   # Column C
+
+        # ── Validation 4: To Location dropdown ───────────────────────────────
+        dv_to = DataValidation(
+            type="list",
+            formula1=f'_Locations!$A$1:$A${len(locations)}',
+            showDropDown=False,
+            showErrorMessage=True,
+            errorTitle="Invalid Location",
+            error="Please select a location from the dropdown list.",
+            showInputMessage=True,
+            promptTitle="To Location",
+            prompt="Select the destination location from the dropdown."
+        )
+        ws.add_data_validation(dv_to)
+        dv_to.sqref = "D3:D103"   # Column D
+
+        # ── Validation 5: Prevent same From & To ────────────────────────────
+        # This validation only applies to the "To" column (D); it references
+        # the corresponding "From" cell so we avoid overlapping the existing
+        # list validations which would otherwise be replaced.
+        dv_not_same = DataValidation(
+            type="custom",
+            formula1="=$C3<>$D3",  # row relative
+            showDropDown=False,
+            showErrorMessage=True,
+            errorStyle="stop",
+            errorTitle="Invalid Entry",
+            error="From and To locations cannot be the same.",
+            showInputMessage=True,
+            promptTitle="Distinct Locations",
+            prompt="Destination must differ from origin."
+        )
+        ws.add_data_validation(dv_not_same)
+        dv_not_same.sqref = "D3:D103"  # only column D
+
+        # ── Conditional formatting to highlight invalid rows ───────────────
+        red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+        rule = FormulaRule(formula=["$C3=$D3"], fill=red_fill)
+        ws.conditional_formatting.add("C3:D103", rule)
+
+        # Column E (Purpose) – no list validation, free text; just an input hint
+        dv_purpose = DataValidation(
+            type="textLength",
+            operator="greaterThan",
+            formula1="0",
+            showErrorMessage=True,
+            errorTitle="Purpose Required",
+            error="Please describe the purpose of your visit.",
+            showInputMessage=True,
+            promptTitle="Purpose",
+            prompt="Briefly describe the reason for this visit (e.g. Site Inspection, Client Meeting)."
+        )
+        ws.add_data_validation(dv_purpose)
+        dv_purpose.sqref = "E3:E103"   # Column E
+
+        # ── Freeze panes below header + note rows ────────────────────────────
+        ws.freeze_panes = "A3"
+
+        # ── Output ───────────────────────────────────────────────────────────
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Monthly Activities')
-            
+        wb.save(output)
         output.seek(0)
         response = HttpResponse(
             output.read(),
@@ -1811,16 +2041,45 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
             # Map columns to internal JSON
             rows = []
             for _, row in df.iterrows():
+                # Support both new column names and old legacy names
+                date_val = str(row.get('Date', row.get('Date (YYYY-MM-DD)', ''))).strip()
+                if len(date_val) > 10:
+                    date_val = date_val[:10]
+
+                # Read the new Time column (stored as HH:MM string or Excel time fraction)
+                time_raw = row.get('Time', '')
+                if time_raw and str(time_raw).strip() not in ('', 'nan', 'NaT'):
+                    time_str = str(time_raw).strip()
+                    # Excel may read time as a float fraction of a day (e.g. 0.395833...)
+                    try:
+                        frac = float(time_str)
+                        if 0 <= frac < 1:
+                            total_secs = int(frac * 86400)
+                            time_str = f"{total_secs // 3600:02d}:{(total_secs % 3600) // 60:02d}"
+                    except (ValueError, TypeError):
+                        pass  # already a string like "09:30"
+                    # Strip any trailing :00 seconds if HH:MM:SS
+                    time_str = ':'.join(time_str.split(':')[:2])
+                else:
+                    time_str = ''
+
                 rows.append({
-                    "date": str(row.get('Date (YYYY-MM-DD)', '')),
-                    "odo_start": 0,  # Initialize to 0, to be filled by user later
-                    "odo_end": 0,    # Initialize to 0, to be filled by user later
-                    "mode": str(row.get('Movement Mode (Car/Cab, 2 Wheeler, etc.)', '')),
-                    "vehicle": str(row.get('Vehicle Type (Own, Service)', '')),
-                    "route": str(row.get('Route (Origin -> Destination)', '')),
-                    "purpose": str(row.get('Visit Intent / Purpose', '')),
-                    "remarks": str(row.get('Internal Remarks', ''))
+                    "date": date_val,
+                    "time": time_str,
+                    "mode": "Car / Cab",
+                    "origin_route": str(row.get('From Location', row.get('from location', ''))),
+                    "destination_route": str(row.get('To Location', row.get('to location', ''))),
+                    "odo_start": "-",
+                    "odo_end": "-",
+                    "vehicle": "Own Car",
+                    "visit_intent": str(row.get('Purpose', row.get('purpose', ''))),
+                    "remarks": "-"
                 })
+            # enforce server‑side validation: origin and destination must differ
+            for idx, r in enumerate(rows, start=1):
+                if r.get('origin_route', '').strip() and r.get('destination_route', '').strip():
+                    if r['origin_route'].strip() == r['destination_route'].strip():
+                        raise ValueError(f"Row {idx}: From and To locations cannot be the same.")
             
             user = request.custom_user
             
@@ -1920,22 +2179,12 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         # Create Expenses (Activities) for each row only when the final manager approves
         created_ids = []
         for row in batch.data_json:
-            # 1. Parse route: "Origin -> Destination" or "Origin - Destination"
-            route = str(row.get('route', ''))
-            origin = ""
-            destination = ""
-            if "->" in route:
-                parts = route.split("->")
-                origin = parts[0].strip()
-                destination = parts[1].strip() if len(parts) > 1 else ""
-            elif "-" in route:
-                parts = route.split("-")
-                origin = parts[0].strip()
-                destination = parts[1].strip() if len(parts) > 1 else ""
-            else:
-                origin = route
+            # 1. Get Origin and Destination from JSON
+            origin = str(row.get('origin_route', '')).strip()
+            destination = str(row.get('destination_route', '')).strip()
 
             # 2. Map mode and subType to match DynamicExpenseGrid's expected options
+            # Since mode is not provided in the bulk template, we default to Car/Own Car
             excel_mode = str(row.get('mode', '')).lower()
             excel_vehicle = str(row.get('vehicle', '')).lower()
             
@@ -1950,17 +2199,19 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 if 'metro' in excel_mode: mapped_subType = "Metro"
                 elif 'bus' in excel_mode: mapped_subType = "Local Bus"
                 else: mapped_subType = "Auto" # Default for PT
-            else: # Car / Cab / Taxi
-                mapped_mode = "Car / Cab"
+            elif excel_mode: # Only if provided
                 if 'own' in excel_vehicle: mapped_subType = "Own Car"
                 elif 'company' in excel_vehicle: mapped_subType = "Company Car"
                 elif 'ride' in excel_vehicle or 'uber' in excel_vehicle or 'ola' in excel_vehicle or 'taxi' in excel_mode: 
                     mapped_subType = "Ride Hailing"
-                else: mapped_subType = "Own Car"
 
-            # Construct the JSON description for the grid
+             # Construct the JSON description for the grid
+            clean_date = str(row.get('date', '')).strip()
+            if len(clean_date) > 10:
+                clean_date = clean_date[:10]
+
             desc_json = {
-                "natureOfVisit": row.get('purpose'),
+                "natureOfVisit": row.get('visit_intent'), # Updated to use visit_intent as purpose was removed
                 "remarks": row.get('remarks'),
                 "from_bulk_upload": True,
                 "origin": origin,
@@ -1970,23 +2221,32 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 "odoStart": row.get('odo_start', 0),
                 "odoEnd": row.get('odo_end', 0),
                 "time": {
-                    "boardingDate": row.get('date'),
+                    "boardingDate": clean_date,
                     "boardingTime": "09:00",
                     "actualTime": "18:00"
                 }
             }
             
+            def safe_float(val):
+                try: 
+                    return float(val) if val not in [None, '', '-'] else 0.0
+                except: 
+                    return 0.0
+
+            odo_s = safe_float(row.get('odo_start', 0))
+            odo_e = safe_float(row.get('odo_end', 0))
+
             expense = Expense.objects.create(
                 trip=batch.trip,
-                date=row.get('date'),
+                date=clean_date,
                 category='Fuel', 
                 amount=0,       
                 paid_by='Self (Out of Pocket)',
                 description=json.dumps(desc_json),
                 status='Approved', 
-                odo_start=row.get('odo_start', 0),
-                odo_end=row.get('odo_end', 0),
-                distance=max(0, float(row.get('odo_end', 0)) - float(row.get('odo_start', 0))),
+                odo_start=odo_s,
+                odo_end=odo_e,
+                distance=max(0, odo_e - odo_s),
                 travel_mode=mapped_mode,
                 vehicle_type=mapped_subType,
                 latitude=0, longitude=0

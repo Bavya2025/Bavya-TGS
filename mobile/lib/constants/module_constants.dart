@@ -27,6 +27,7 @@ import '../screens/my_requests_screen.dart';
 import '../screens/my_claims_screen.dart';
 import '../screens/my_tracking_screen.dart';
 import '../screens/help_support_screen.dart';
+import '../screens/job_report_screen.dart';
 
 /// Module constants matching the Header.jsx navigation structure
 class ModuleConstants {
@@ -222,6 +223,15 @@ class ModuleConstants {
       iconColor: const Color(0xFF3F51B5),
       allowedRoles: ['admin'],
       destinationScreen: () => const AdminAuditLogsScreen(),
+    ),
+    NavigationModule(
+      title: 'Job Report',
+      description: 'Activity consolidated',
+      icon: Icons.assignment_turned_in_rounded,
+      backgroundColor: const Color(0xFFF0FDF4),
+      iconColor: const Color(0xFF16A34A),
+      allowedRoles: allRoles,
+      destinationScreen: () => const JobReportScreen(),
     ),
   ];
 
