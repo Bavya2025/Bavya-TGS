@@ -2,13 +2,18 @@ from django.db import models
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, FuelRateMaster, Cadre, EligibilityRule
+from .models import (
+    Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, 
+    FuelRateMaster, EligibilityRule, Cadre, Circle, Jurisdiction
+)
 from .serializers import (
-    LocationSerializer, RouteSerializer, RoutePathSerializer, 
-    TollGateSerializer, TollRateSerializer, RoutePathTollSerializer, FuelRateMasterSerializer,
-    EligibilityRuleSerializer, CadreSerializer
+    LocationSerializer, RouteSerializer, RoutePathSerializer,
+    TollGateSerializer, TollRateSerializer, RoutePathTollSerializer,
+    FuelRateMasterSerializer, EligibilityRuleSerializer, CadreSerializer,
+    CircleSerializer, JurisdictionSerializer
 )
 from .services import sync_geo_locations, sync_cadres
+from api_management.services import fetch_employee_data
 from core.permissions import IsAdmin, IsCustomAuthenticated
 
 class LocationViewSet(viewsets.ModelViewSet):
@@ -21,12 +26,10 @@ class LocationViewSet(viewsets.ModelViewSet):
         last_sync = getattr(self.__class__, '_last_sync_time', 0)
         if time.time() - last_sync > 60: # 1 minute cooldown
             try:
-                print(f"DEBUG AUTH: Starting Geo Sync triggered by {request.path}...")
                 sync_geo_locations()
-                print("DEBUG AUTH: Geo Sync completed.")
                 self.__class__._last_sync_time = time.time()
             except Exception as e:
-                print(f"Auto-sync failed: {e}")
+                pass
             
         return super().list(request, *args, **kwargs)
 
@@ -502,3 +505,58 @@ class CadreViewSet(viewsets.ModelViewSet):
         if "error" in stats:
             return Response(stats, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(stats)
+
+class CircleViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdmin]
+    queryset = Circle.objects.all()
+    serializer_class = CircleSerializer
+
+    def get_queryset(self):
+        queryset = Circle.objects.all()
+        state_id = self.request.query_params.get('state')
+        if state_id:
+            queryset = queryset.filter(state_id=state_id)
+        return queryset
+
+class JurisdictionViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdmin]
+    queryset = Jurisdiction.objects.all()
+    serializer_class = JurisdictionSerializer
+
+    def get_queryset(self):
+        queryset = Jurisdiction.objects.all()
+        search = self.request.query_params.get('search', '')
+        if search:
+            queryset = queryset.filter(
+                models.Q(project_name__icontains=search) | 
+                models.Q(project_code__icontains=search) |
+                models.Q(circle__name__icontains=search)
+            )
+        return queryset.order_by('project_name', 'circle__name')
+
+    @action(detail=False, methods=['get'])
+    def projects(self, request):
+        """
+        Custom endpoint to get unique projects from external API (Employees API)
+        """
+        try:
+            # Fetch all employees to extract unique projects
+            data = fetch_employee_data(fetch_all_pages=True, page_size=100)
+            
+            if not data or "error" in data:
+                return Response({"error": "Failed to fetch project data from Employee API"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            results = data.get('results', [])
+            unique_projects = {} # Use code as key to ensure uniqueness
+            
+            for emp in results:
+                proj = emp.get('project', {})
+                if proj and isinstance(proj, dict):
+                    name = proj.get('name')
+                    code = proj.get('code')
+                    if name and code:
+                        unique_projects[code] = {"name": name, "code": code}
+            
+            return Response(list(unique_projects.values()))
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

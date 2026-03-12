@@ -19,6 +19,11 @@ const AdminMasters = () => {
     const [activeTab, setActiveTab] = useState('Eligibility');
     const [rules, setRules] = useState([]);
     const [cadres, setCadres] = useState([]);
+    const [jurisdictions, setJurisdictions] = useState([]);
+    const [projects, setProjects] = useState([]);
+    const [states, setStates] = useState([]);
+    const [circles, setCircles] = useState([]);
+    const [districts, setDistricts] = useState([]);
     const [loading, setLoading] = useState(false);
     const [syncing, setSyncing] = useState(false);
     
@@ -28,14 +33,25 @@ const AdminMasters = () => {
     
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isJurisdictionModalOpen, setIsJurisdictionModalOpen] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [isAmountFocused, setIsAmountFocused] = useState(false);
+    
     const [currentRule, setCurrentRule] = useState({
         cadre: '',
         category: 'Accommodation',
         city_type: 'Metro',
         limit_amount: '',
         eligibility_class: ''
+    });
+
+    const [currentJurisdiction, setCurrentJurisdiction] = useState({
+        project_name: '',
+        project_code: '',
+        state: '',
+        circle_name: '',
+        circle: '', // Existing circle ID if applicable
+        districts: [] // Array of location IDs
     });
 
     const { showToast } = useToast();
@@ -67,8 +83,63 @@ const AdminMasters = () => {
         if (activeTab === 'Eligibility') {
             fetchCadres();
             fetchRules();
+        } else if (activeTab === 'Jurisdiction') {
+            fetchJurisdictions();
+            fetchProjects();
+            fetchStates();
         }
     }, [activeTab]);
+
+    const fetchJurisdictions = async () => {
+        setLoading(true);
+        try {
+            const response = await api.get('/api/masters/jurisdictions/');
+            setJurisdictions(response.data || []);
+        } catch (error) {
+            console.error("Failed to fetch jurisdictions", error);
+            showToast("Failed to load jurisdictions", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchProjects = async () => {
+        try {
+            const response = await api.get('/api/masters/jurisdictions/projects/');
+            setProjects(response.data || []);
+        } catch (error) {
+            console.error("Failed to fetch projects", error);
+        }
+    };
+
+    const fetchStates = async () => {
+        try {
+            const response = await api.get('/api/masters/locations/?type=State');
+            setStates(response.data || []);
+        } catch (error) {
+            console.error("Failed to fetch states", error);
+        }
+    };
+
+    const fetchCircles = async (stateId) => {
+        if (!stateId) return;
+        try {
+            const response = await api.get(`/api/masters/circles/?state=${stateId}`);
+            setCircles(response.data || []);
+        } catch (error) {
+            console.error("Failed to fetch circles", error);
+        }
+    };
+
+    const fetchDistricts = async (stateExtId) => {
+        if (!stateExtId) return;
+        try {
+            const response = await api.get(`/api/masters/locations/?type=District&parent=${stateExtId}`);
+            setDistricts(response.data || []);
+        } catch (error) {
+            console.error("Failed to fetch districts", error);
+        }
+    };
 
     const fetchCadres = async () => {
         try {
@@ -107,33 +178,79 @@ const AdminMasters = () => {
         }
     };
 
-    const openModal = (rule = null) => {
-        if (rule) {
-            setCurrentRule({
-                id: rule.id,
-                cadre: rule.cadre,
-                category: rule.category,
-                city_type: rule.city_type || 'N/A',
-                limit_amount: rule.limit_amount || '',
-                eligibility_class: rule.eligibility_class || ''
-            });
-            setEditMode(true);
+    const openModal = (item = null) => {
+        if (activeTab === 'Eligibility') {
+            if (item) {
+                setCurrentRule({
+                    id: item.id,
+                    cadre: item.cadre,
+                    category: item.category,
+                    city_type: item.city_type || 'N/A',
+                    limit_amount: item.limit_amount || '',
+                    eligibility_class: item.eligibility_class || ''
+                });
+                setEditMode(true);
+            } else {
+                setCurrentRule({
+                    cadre: cadres.length > 0 ? cadres[0].id : '',
+                    category: 'Accommodation',
+                    city_type: 'N/A',
+                    limit_amount: '',
+                    eligibility_class: ''
+                });
+                setEditMode(false);
+            }
+            setIsModalOpen(true);
         } else {
-            setCurrentRule({
-                cadre: cadres.length > 0 ? cadres[0].id : '',
-                category: 'Accommodation',
-                city_type: 'N/A',
-                limit_amount: '',
-                eligibility_class: ''
-            });
-            setEditMode(false);
+            // Jurisdiction Modal
+            if (item) {
+                setCurrentJurisdiction({
+                    id: item.id,
+                    project_name: item.project_name,
+                    project_code: item.project_code,
+                    state: item.state_id,
+                    circle_name: item.circle_name,
+                    circle: item.circle,
+                    districts: item.districts || []
+                });
+                if (item.state_id) {
+                    fetchCircles(item.state_id);
+                    fetchDistricts(item.state_external_id);
+                }
+                setEditMode(true);
+            } else {
+                setCurrentJurisdiction({
+                    project_name: '',
+                    project_code: '',
+                    state: '',
+                    circle_name: '',
+                    circle: '',
+                    districts: []
+                });
+                setEditMode(false);
+            }
+            setIsJurisdictionModalOpen(true);
         }
-        setIsModalOpen(true);
     };
 
     const closeModal = () => {
         setIsModalOpen(false);
-        setCurrentRule({});
+        setIsJurisdictionModalOpen(false);
+        setCurrentRule({
+            cadre: '',
+            category: 'Accommodation',
+            city_type: 'N/A',
+            limit_amount: '',
+            eligibility_class: ''
+        });
+        setCurrentJurisdiction({
+            project_name: '',
+            project_code: '',
+            state: '',
+            circle_name: '',
+            circle: '',
+            districts: []
+        });
     };
 
     const handleSaveRule = async (e) => {
@@ -187,6 +304,65 @@ const AdminMasters = () => {
                             r.category?.toLowerCase().includes(searchQuery.toLowerCase());
         const matchCadre = filterCadre ? r.cadre === parseInt(filterCadre) : true;
         return matchSearch && matchCadre;
+    });
+
+    const handleSaveJurisdiction = async (e) => {
+        e.preventDefault();
+        
+        if (!currentJurisdiction.project_code || !currentJurisdiction.circle_name || currentJurisdiction.districts.length === 0) {
+            showToast("Project, Circle Name, and Districts are required", "warning");
+            return;
+        }
+
+        try {
+            // 1. Ensure circle exists or create it
+            let circleId = currentJurisdiction.circle;
+            if (!circleId) {
+                const circleResp = await api.post('/api/masters/circles/', {
+                    name: currentJurisdiction.circle_name,
+                    state: currentJurisdiction.state
+                });
+                circleId = circleResp.data.id;
+            }
+
+            const payload = {
+                project_name: currentJurisdiction.project_name,
+                project_code: currentJurisdiction.project_code,
+                circle: circleId,
+                districts: currentJurisdiction.districts
+            };
+
+            if (editMode) {
+                await api.put(`/api/masters/jurisdictions/${currentJurisdiction.id}/`, payload);
+            } else {
+                await api.post('/api/masters/jurisdictions/', payload);
+            }
+
+            showToast(`Jurisdiction successfully ${editMode ? 'updated' : 'added'}!`, "success");
+            closeModal();
+            fetchJurisdictions();
+        } catch (error) {
+            console.error("Failed to save jurisdiction", error);
+            showToast("Failed to save jurisdiction. Check for duplicates.", "error");
+        }
+    };
+
+    const handleDeleteJurisdiction = async (id) => {
+        if (!window.confirm("Are you sure you want to delete this jurisdiction?")) return;
+        try {
+            await api.delete(`/api/masters/jurisdictions/${id}/`);
+            showToast("Jurisdiction deleted successfully", "success");
+            fetchJurisdictions();
+        } catch (error) {
+            console.error("Failed to delete jurisdiction", error);
+            showToast("Failed to delete jurisdiction", "error");
+        }
+    };
+
+    const filteredJurisdictions = jurisdictions.filter(j => {
+        return j.project_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+               j.project_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               j.circle_name?.toLowerCase().includes(searchQuery.toLowerCase());
     });
 
     return (
@@ -306,9 +482,60 @@ const AdminMasters = () => {
                             )}
                         </>
                     ) : (
-                        <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
-                            Settings for {activeTab} will be available here.
-                        </div>
+                        <>
+                            <div className="content-toolbar">
+                                <div className="search-box">
+                                    <Search size={18} />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Search jurisdictions..." 
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            {loading ? (
+                                <div className="loading-spinner">Loading jurisdictions...</div>
+                            ) : (
+                                <table className="admin-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th>Circle (Zone)</th>
+                                            <th>State</th>
+                                            <th>Linked Districts</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredJurisdictions.length === 0 ? (
+                                            <tr><td colSpan="5" style={{textAlign: 'center', padding: '20px'}}>No jurisdictions found.</td></tr>
+                                        ) : (
+                                            filteredJurisdictions.map((item) => (
+                                                <tr key={item.id}>
+                                                    <td>
+                                                        <div style={{ fontWeight: '600' }}>{item.project_name}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#666' }}>{item.project_code}</div>
+                                                    </td>
+                                                    <td><span className="badge-city" style={{ backgroundColor: 'var(--magenta)', color: 'white' }}>{item.circle_name}</span></td>
+                                                    <td>{item.state_name}</td>
+                                                    <td>
+                                                        <div style={{ fontSize: '0.85rem', color: '#444', maxWidth: '300px' }}>
+                                                            {item.district_names?.join(', ') || 'N/A'}
+                                                        </div>
+                                                    </td>
+                                                    <td className="actions-cell">
+                                                        <button className="icon-btn-small" onClick={() => openModal(item)}><Edit2 size={16} /></button>
+                                                        <button className="icon-btn-small delete" onClick={() => handleDeleteJurisdiction(item.id)}><Trash2 size={16} /></button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
@@ -467,6 +694,140 @@ const AdminMasters = () => {
                                 <button type="submit" className="btn-primary" style={{ minWidth: '140px' }}>
                                     <Save size={18} />
                                     <span>{editMode ? 'Update Rule' : 'Save Rule'}</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Add / Edit Jurisdiction Modal */}
+            {isJurisdictionModalOpen && (
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+                        <div className="modal-header">
+                            <h2>{editMode ? 'Edit Jurisdiction' : 'Add New Jurisdiction'}</h2>
+                            <button onClick={closeModal} className="icon-btn-small"><X size={20} /></button>
+                        </div>
+                        <form onSubmit={handleSaveJurisdiction} className="modal-body form-grid" style={{ overflowY: 'auto', padding: '1.5rem' }}>
+                            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                <label>Project <span className="required">*</span></label>
+                                <select 
+                                    value={currentJurisdiction.project_code}
+                                    onChange={(e) => {
+                                        const proj = projects.find(p => p.code === e.target.value);
+                                        setCurrentJurisdiction({
+                                            ...currentJurisdiction, 
+                                            project_code: e.target.value,
+                                            project_name: proj?.name || ''
+                                        });
+                                    }}
+                                    required
+                                >
+                                    <option value="" disabled>Select Project from Employee API</option>
+                                    {projects.map(p => (
+                                        <option key={p.code} value={p.code}>{p.name} ({p.code})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                <label>State <span className="required">*</span></label>
+                                <select 
+                                    value={currentJurisdiction.state}
+                                    onChange={(e) => {
+                                        const state = states.find(s => s.id === parseInt(e.target.value));
+                                        setCurrentJurisdiction({
+                                            ...currentJurisdiction, 
+                                            state: e.target.value,
+                                            districts: [] // Reset districts when state changes
+                                        });
+                                        fetchCircles(e.target.value);
+                                        fetchDistricts(state?.external_id);
+                                    }}
+                                    required
+                                >
+                                    <option value="" disabled>Select State</option>
+                                    {states.map(s => (
+                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Circle / Zone Name <span className="required">*</span></label>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <input 
+                                        type="text"
+                                        placeholder="e.g. Hyderabad South"
+                                        value={currentJurisdiction.circle_name}
+                                        onChange={(e) => setCurrentJurisdiction({...currentJurisdiction, circle_name: e.target.value, circle: ''})}
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Or Select Existing Circle</label>
+                                <select 
+                                    value={currentJurisdiction.circle}
+                                    onChange={(e) => {
+                                        const circle = circles.find(c => c.id === parseInt(e.target.value));
+                                        setCurrentJurisdiction({
+                                            ...currentJurisdiction, 
+                                            circle: e.target.value,
+                                            circle_name: circle?.name || ''
+                                        });
+                                    }}
+                                >
+                                    <option value="">-- New Circle --</option>
+                                    {circles.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                <label>Link Districts <span className="required">*</span></label>
+                                <div className="preference-list" style={{ 
+                                    display: 'grid', 
+                                    gridTemplateColumns: '1fr 1fr', 
+                                    gap: '8px', 
+                                    padding: '12px',
+                                    border: '1.5px solid var(--border)',
+                                    borderRadius: '8px',
+                                    maxHeight: '200px',
+                                    overflowY: 'auto'
+                                }}>
+                                    {districts.map(d => (
+                                        <label key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}>
+                                            <input 
+                                                type="checkbox"
+                                                checked={currentJurisdiction.districts.includes(d.id)}
+                                                onChange={(e) => {
+                                                    let dists = [...currentJurisdiction.districts];
+                                                    if (e.target.checked) dists.push(d.id);
+                                                    else dists = dists.filter(id => id !== d.id);
+                                                    setCurrentJurisdiction({...currentJurisdiction, districts: dists});
+                                                }}
+                                            />
+                                            {d.name}
+                                        </label>
+                                    ))}
+                                    {districts.length === 0 && (
+                                        <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#888' }}>
+                                            Select a state to view districts.
+                                        </div>
+                                    )}
+                                </div>
+                                <small>Select districts to include in this circle for the project.</small>
+                            </div>
+
+                            <div className="form-actions" style={{ gridColumn: '1 / -1', marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+                                <button type="button" className="btn-secondary" onClick={closeModal}>Cancel</button>
+                                <button type="submit" className="btn-primary">
+                                    <Save size={18} />
+                                    <span>{editMode ? 'Update Jurisdiction' : 'Save Jurisdiction'}</span>
                                 </button>
                             </div>
                         </form>

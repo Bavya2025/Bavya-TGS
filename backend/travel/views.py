@@ -398,7 +398,6 @@ class TripTrackingView(APIView):
         is_privileged = user_role in ['admin', 'finance', 'cfo', 'guesthousemanager']
 
         if not (is_owner or is_manager or is_privileged):
-            print(f"TRACKING_AUTH_FAIL: Unauthorized access attempt to trip {real_trip_id} by {user.employee_id if user else 'Anonymous'}")
             return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
 
         # Optimization: Return only the latest 100 points for the map
@@ -417,7 +416,6 @@ class TripTrackingView(APIView):
         user = getattr(request, 'custom_user', None)
         
         if not user or trip.user != user:
-            print(f"TRACKING_AUTH_FAIL: POST attempt by {user.employee_id if user else 'Anonymous'} on Trip {trip.trip_id} (Owner: {trip.user.employee_id})")
             return Response({"error": "Only trip owner can submit tracking data"}, status=status.HTTP_403_FORBIDDEN)
 
         data = request.data.copy()
@@ -432,9 +430,6 @@ class TripTrackingView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
-        print(f"TRACKING_SAVE_FAIL: {serializer.errors}")
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        print(f"DEBUG: Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ApprovalCountView(APIView):

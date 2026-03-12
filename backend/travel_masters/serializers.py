@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, FuelRateMaster, Cadre, EligibilityRule
+from .models import (
+    Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, 
+    FuelRateMaster, Cadre, EligibilityRule, Circle, Jurisdiction
+)
 
 class FuelRateMasterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -124,8 +127,6 @@ class RouteSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Route
-    class Meta:
-        model = Route
         fields = '__all__'
         extra_kwargs = {'name': {'required': False}}
 
@@ -140,4 +141,25 @@ class EligibilityRuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = EligibilityRule
         fields = '__all__'
+
+class CircleSerializer(serializers.ModelSerializer):
+    state_name = serializers.ReadOnlyField(source='state.name')
+    
+    class Meta:
+        model = Circle
+        fields = '__all__'
+
+class JurisdictionSerializer(serializers.ModelSerializer):
+    circle_name = serializers.ReadOnlyField(source='circle.name')
+    state_name = serializers.ReadOnlyField(source='circle.state.name')
+    state_id = serializers.ReadOnlyField(source='circle.state.id')
+    state_external_id = serializers.ReadOnlyField(source='circle.state.external_id')
+    district_names = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Jurisdiction
+        fields = '__all__'
+
+    def get_district_names(self, obj):
+        return [d.name for d in obj.districts.all()]
 
