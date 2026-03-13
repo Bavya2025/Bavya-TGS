@@ -22,26 +22,10 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api/api';
 
 const Sidebar = () => {
-    const { user } = useAuth();
-    const [approvalCount, setApprovalCount] = React.useState(0);
+    const { user, heartbeatData } = useAuth();
+    const approvalCount = heartbeatData?.approval_counts?.total || 0;
     const rawRole = user?.role?.toLowerCase() || 'employee';
     const userRole = rawRole === 'user' ? 'employee' : rawRole;
-
-    const fetchApprovalCount = async () => {
-        if (!['reporting_authority', 'admin'].includes(userRole)) return;
-        try {
-            const response = await api.get('/api/approvals/count/');
-            setApprovalCount(response.data.total);
-        } catch (error) {
-            console.error("Failed to fetch approval count:", error);
-        }
-    };
-
-    React.useEffect(() => {
-        fetchApprovalCount();
-        const interval = setInterval(fetchApprovalCount, 10000);
-        return () => clearInterval(interval);
-    }, [userRole]);
 
     const sections = [
         {

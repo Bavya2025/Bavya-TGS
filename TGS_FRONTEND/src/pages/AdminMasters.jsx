@@ -824,8 +824,19 @@ const AdminMasters = () => {
                             </div>
 
                             <div className="form-actions" style={{ gridColumn: '1 / -1', marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
-                                <button type="button" className="btn-secondary" onClick={closeModal}>Cancel</button>
-                                <button type="submit" className="btn-primary">
+                                <button 
+                                    type="button" 
+                                    className="btn-secondary" 
+                                    onClick={closeModal}
+                                    style={{ 
+                                        backgroundColor: '#f1f5f9', 
+                                        color: '#334155',
+                                        border: '1.5px solid #e2e8f0'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn-primary" style={{ minWidth: '140px' }}>
                                     <Save size={18} />
                                     <span>{editMode ? 'Update Jurisdiction' : 'Save Jurisdiction'}</span>
                                 </button>

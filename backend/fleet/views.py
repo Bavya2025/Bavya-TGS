@@ -14,7 +14,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def bookings(self, request, pk=None):
-        from core.models import Notification
+        from notifications.models import Notification
         from travel.models import Trip
 
         vehicle = self.get_object()

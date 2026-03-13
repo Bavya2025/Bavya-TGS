@@ -7,7 +7,7 @@ from .serializers import (
 )
 from rest_framework.permissions import IsAuthenticated
 from core.permissions import IsAdmin, IsCustomAuthenticated, IsGuestHouseManager
-from core.models import Notification
+from notifications.models import Notification
 
 class GuestHouseView(APIView):
     def get_permissions(self):

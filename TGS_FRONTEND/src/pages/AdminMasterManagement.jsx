@@ -3,8 +3,9 @@ import api from '../api/api';
 import {
     Plus, Edit2, Trash2, CheckCircle, XCircle, ChevronDown, AlignLeft, Settings, Layers, AlertCircle
 } from 'lucide-react';
-import '../styles/AdminMasterManagement.css';
 import { useToast } from '../context/ToastContext';
+
+
 
 // Config layout for managing the system architecture itself
 const CONFIG_GROUP = {

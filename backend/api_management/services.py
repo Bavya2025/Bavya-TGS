@@ -78,8 +78,10 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
         elif SystemConfig.objects.filter(key='external_api_key').exists():
             encrypted_key = SystemConfig.objects.get(key='external_api_key').value
             api_key = decrypt_key(encrypted_key)
+            if not api_key:
+                return {"error": "Failed to decrypt API Key. This usually happens if DJANGO_SECRET_KEY has changed. Please re-type the key in settings.", "status_code": 500}
         else:
-            return {"error": "API Key not configured in system settings."}
+            return {"error": "API Key not configured in system settings.", "status_code": 500}
 
         # Get configured API URL from DB
         if SystemConfig.objects.filter(key='external_api_url').exists():
@@ -183,7 +185,14 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
         except requests.RequestException as e:
             # If it's a 401/403, we should definitely notify the caller
             status_code = getattr(e.response, 'status_code', 'Unknown')
-            error_msg = f"External Employee API Request failed (Status {status_code}). Service unavailable."
+            
+            # CRITICAL FIX: Map external 401/403 to 503 so frontend doesn't log the user out
+            if status_code in [401, 403]:
+                error_msg = f"External API Authentication Error (External Status {status_code}). Please check API keys in system settings."
+                status_code = 503
+            else:
+                error_msg = f"External Employee API Request failed (Status {status_code}). Service unavailable."
+                
             print(f"External API Request failed (Status {status_code}): {str(e)}")
             return {"error": error_msg, "status_code": status_code}
 
@@ -376,8 +385,10 @@ def fetch_geo_data():
         if SystemConfig.objects.filter(key='geo_api_key').exists():
             encrypted_key = SystemConfig.objects.get(key='geo_api_key').value
             api_key = decrypt_key(encrypted_key)
+            if not api_key:
+                 return {"error": "Failed to decrypt Geo API Key. Please re-type the key in settings.", "status_code": 500}
         else:
-            return {"error": "Geo API Key not configured in system settings."}
+            return {"error": "Geo API Key not configured in system settings.", "status_code": 500}
 
         # Get configured API URL
         if SystemConfig.objects.filter(key='geo_api_url').exists():
@@ -411,11 +422,19 @@ def fetch_geo_data():
 
     except requests.exceptions.Timeout as e:
         print(f"Geo API Connection Timed Out: {str(e)}")
-        return {"error": "Geo API Connection Timed Out. Please try again later."}
+        return {"error": "Geo API Connection Timed Out. Please try again later.", "status_code": 408}
     except requests.RequestException as e:
         status_code = getattr(e.response, 'status_code', 'Unknown')
+        
+        # MAP 401/403 to 503 to avoid frontend logout
+        if status_code in [401, 403]:
+            error_msg = f"Geo API Authentication Error (External Status {status_code})."
+            status_code = 503
+        else:
+            error_msg = f"Geo API Service Unavailable (Status {status_code})."
+            
         print(f"Geo API Connection Error (Status {status_code}): {str(e)}")
-        return {"error": f"Geo API Service Unavailable (Status {status_code})."}
+        return {"error": error_msg, "status_code": status_code}
     except Exception as e:
         print(f"An unexpected error occurred in Geo API: {str(e)}")
-        return {"error": "An unexpected error occurred while fetching location data."}
+        return {"error": "An unexpected error occurred while fetching location data.", "status_code": 500}

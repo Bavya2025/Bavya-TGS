@@ -27,42 +27,20 @@ import {
 import { useAuth } from '../context/AuthContext';
 
 const Header = () => {
-    const { user, logout } = useAuth();
+    const { user, logout, heartbeatData, fetchHeartbeat } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const [showManagement, setShowManagement] = useState(false);
     const [showProfileDropdown, setShowProfileDropdown] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
-    const [notifications, setNotifications] = useState([]);
-    const [isLoadingNotifs, setIsLoadingNotifs] = useState(false);
-    const fetchInProgress = React.useRef(false);
-
-    const fetchNotifications = async (signal) => {
-        if (!user || fetchInProgress.current) return;
-        fetchInProgress.current = true;
-        setIsLoadingNotifs(true);
-        try {
-            const response = await api.get('/api/notifications/', { signal });
-            setNotifications(response.data);
-        } catch (error) {
-            if (error.name !== 'CanceledError') console.error("Failed to fetch notifications:", error);
-        } finally {
-            setIsLoadingNotifs(false);
-            fetchInProgress.current = false;
-        }
-    };
+    const notifications = heartbeatData?.notifications || [];
+    const unreadCount = heartbeatData?.unread_notification_count || 0;
 
     useEffect(() => {
-        const controller = new AbortController();
-        if (user) {
-            fetchNotifications(controller.signal);
-            const interval = setInterval(() => fetchNotifications(controller.signal), 60000);
-            return () => {
-                clearInterval(interval);
-                controller.abort();
-            };
+        if (user && showNotifications) {
+            fetchHeartbeat();
         }
-    }, [user]);
+    }, [user, showNotifications, fetchHeartbeat]);
 
     const rawRole = user?.role?.toLowerCase() || 'employee';
     const dept = user?.department?.toLowerCase() || '';
@@ -76,7 +54,6 @@ const Header = () => {
     else if (dept.includes('cfo') || desig.includes('cfo') || rawRole === 'cfo') userRole = 'cfo';
     else if (rawRole.includes('guesthouse') || rawRole === 'guesthousemanager') userRole = 'guesthousemanager';
 
-    const unreadCount = notifications.filter(n => n.unread).length;
 
     useEffect(() => {
         setShowManagement(false);
@@ -102,7 +79,7 @@ const Header = () => {
     const markAllRead = async () => {
         try {
             await api.post('/api/notifications/mark-all-read/');
-            setNotifications(notifications.map(n => ({ ...n, unread: false })));
+            fetchHeartbeat();
         } catch (error) {
             console.error("Failed to mark notifications as read:", error);
         }
@@ -212,18 +189,10 @@ const Header = () => {
                                     <div className="notifications-list">
                                         {notifications.length > 0 ? (
                                             notifications.map(n => (
-                                                <div
+                                                 <div
                                                     key={n.id}
                                                     className={`notification-item ${n.unread ? 'unread' : ''}`}
-                                                    onClick={() => {
-                                                        if (n.title.toLowerCase().includes('room') || n.message.toLowerCase().includes('room')) {
-                                                            navigate('/guesthouse?tab=requests');
-                                                        } else if (n.title.toLowerCase().includes('trip') || n.message.toLowerCase().includes('payout') || n.message.toLowerCase().includes('advance') || n.message.toLowerCase().includes('claim')) {
-                                                            navigate('/approvals');
-                                                        }
-                                                        setShowNotifications(false);
-                                                    }}
-                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => setShowNotifications(false)}
                                                 >
                                                     <div className="notif-content">
                                                         <div className="notif-header">
@@ -231,6 +200,24 @@ const Header = () => {
                                                             <span className="notif-time">{n.time_ago}</span>
                                                         </div>
                                                         <p>{n.message}</p>
+                                                        {n.link && !n.title.toLowerCase().includes('reminder') && !n.message.toLowerCase().includes('reminder') && (
+                                                            <button 
+                                                                className="click-to-view-link"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (n.link) {
+                                                                        navigate(n.link);
+                                                                    } else if (n.title.toLowerCase().includes('room') || n.message.toLowerCase().includes('room')) {
+                                                                        navigate('/guesthouse?tab=requests');
+                                                                    } else {
+                                                                        navigate('/approvals');
+                                                                    }
+                                                                    setShowNotifications(false);
+                                                                }}
+                                                            >
+                                                                Click to view
+                                                            </button>
+                                                        )}
                                                     </div>
                                                     {n.unread && <div className="unread-dot"></div>}
                                                 </div>
@@ -243,7 +230,10 @@ const Header = () => {
                                         )}
                                     </div>
                                     <div className="notifications-footer">
-                                        <button className="view-all-notif">View All Notifications</button>
+                                        <button className="view-all-notif" onClick={() => {
+                                            navigate('/notifications');
+                                            setShowNotifications(false);
+                                        }}>View All Notifications</button>
                                     </div>
                                 </div>
                             )}

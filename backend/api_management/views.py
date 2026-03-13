@@ -544,5 +544,8 @@ class GeoHierarchyView(APIView):
     def get(self, request):
         data = fetch_geo_data()
         if "error" in data:
-            return Response(data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            status_code = data.get("status_code", status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(data, status=status_code)
         return Response(data)
+
+        

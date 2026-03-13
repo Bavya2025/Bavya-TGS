@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Role, Session, Notification, AuditLog, LoginHistory
+from .models import User, Role, Session, AuditLog, LoginHistory
 
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.StringRelatedField()
@@ -16,29 +16,7 @@ class SessionSerializer(serializers.ModelSerializer):
         model = Session
         fields = ['id', 'user_name', 'user_email', 'ip_address', 'created_at', 'expires_at', 'logged_out_at', 'is_active']
 
-class NotificationSerializer(serializers.ModelSerializer):
-    time_ago = serializers.SerializerMethodField()
-    user = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), 
-        required=False,
-        allow_null=True
-    )
 
-    class Meta:
-        model = Notification
-        fields = ['id', 'user', 'title', 'message', 'type', 'unread', 'created_at', 'time_ago']
-
-    def get_time_ago(self, obj):
-        from django.utils.timezone import now
-        diff = now() - obj.created_at
-        if diff.days > 0:
-            return f"{diff.days}d ago"
-        seconds = diff.seconds
-        if seconds < 60:
-            return "Just now"
-        if seconds < 3600:
-            return f"{seconds // 60}m ago"
-        return f"{seconds // 3600}h ago"
 
 class LoginHistorySerializer(serializers.ModelSerializer):
     user_name = serializers.ReadOnlyField(source='user.name')

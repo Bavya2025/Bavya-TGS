@@ -1,11 +1,11 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import login_view, logout_view, me_view, NotificationViewSet, LoginHistoryViewSet, AuditLogViewSet, profile_view, AuditLogView, LoginHistoryView, enroll_face_view, verify_face_view, get_face_registration_requests_view, handle_face_registration_request_view, get_pending_frs_approvals_view, handle_frs_approval_view, clear_frs_notifications_view, request_photo_update_view, get_photo_update_requests_view, handle_photo_update_request_view, health_check
+from .views import login_view, logout_view, me_view, LoginHistoryViewSet, AuditLogViewSet, profile_view, AuditLogView, LoginHistoryView, enroll_face_view, verify_face_view, get_face_registration_requests_view, handle_face_registration_request_view, get_pending_frs_approvals_view, handle_frs_approval_view, clear_frs_notifications_view, request_photo_update_view, get_photo_update_requests_view, handle_photo_update_request_view, health_check, heartbeat_view
 
 app_name = 'core'
 
 router = DefaultRouter()
-router.register(r'notifications', NotificationViewSet, basename='notification')
+
 
 
 router.register(r'login-history', LoginHistoryViewSet, basename='login-history')
@@ -14,6 +14,7 @@ router.register(r'audit-logs', AuditLogViewSet, basename='audit-logs')
 urlpatterns = [
     path('auth/login', login_view, name='login'),
     path('health', health_check, name='health-check'),
+    path('heartbeat', heartbeat_view, name='heartbeat'),
     path('auth/logout', logout_view, name='logout'),
     path('auth/me', me_view, name='me'),
     path('auth/profile', profile_view, name='profile'),
