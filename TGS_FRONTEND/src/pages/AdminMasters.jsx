@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import api from '../api/api';
 import { useToast } from '../context/ToastContext';
+import SearchableSelect from '../components/SearchableSelect';
 
 const AdminMasters = () => {
     const [activeTab, setActiveTab] = useState('Eligibility');
@@ -552,16 +553,13 @@ const AdminMasters = () => {
                             
                             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                 <label>Cadre / Position Level <span className="required">*</span></label>
-                                <select 
+                                <SearchableSelect
+                                    options={cadres.map(c => ({ value: c.id, label: c.name }))}
                                     value={currentRule.cadre}
-                                    onChange={(e) => setCurrentRule({...currentRule, cadre: e.target.value})}
-                                    required
-                                >
-                                    <option value="" disabled>Select Cadre</option>
-                                    {cadres.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => setCurrentRule({...currentRule, cadre: val})}
+                                    placeholder="Select Cadre"
+                                    noDataMessage="No cadres found. Click Sync!"
+                                />
                                 {cadres.length === 0 && (
                                     <small style={{ color: 'var(--primary-color)' }}>
                                         No cadres found. Please click "Sync Cadres" first to fetch them.
@@ -571,27 +569,22 @@ const AdminMasters = () => {
 
                             <div className="form-group">
                                 <label>Expense Category <span className="required">*</span></label>
-                                <select 
+                                <SearchableSelect
+                                    options={categories.map(cat => ({ value: cat, label: cat }))}
                                     value={currentRule.category}
-                                    onChange={(e) => setCurrentRule({...currentRule, category: e.target.value})}
-                                    required
-                                >
-                                    {categories.map(cat => (
-                                        <option key={cat} value={cat}>{cat}</option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => setCurrentRule({...currentRule, category: val})}
+                                    placeholder="Select Category"
+                                />
                             </div>
 
                             <div className="form-group">
                                 <label>City Type</label>
-                                <select 
+                                <SearchableSelect
+                                    options={cityTypes.map(ct => ({ value: ct, label: ct }))}
                                     value={currentRule.city_type}
-                                    onChange={(e) => setCurrentRule({...currentRule, city_type: e.target.value})}
-                                >
-                                    {cityTypes.map(ct => (
-                                        <option key={ct} value={ct}>{ct}</option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => setCurrentRule({...currentRule, city_type: val})}
+                                    placeholder="Select City Type"
+                                />
                             </div>
 
                             <div className="form-group">
@@ -712,46 +705,39 @@ const AdminMasters = () => {
                         <form onSubmit={handleSaveJurisdiction} className="modal-body form-grid" style={{ overflowY: 'auto', padding: '1.5rem' }}>
                             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                 <label>Project <span className="required">*</span></label>
-                                <select 
+                                <SearchableSelect
+                                    options={[...new Map(projects.map(p => [p.code, { value: p.code, label: `${p.name} (${p.code})` }])).values()]}
                                     value={currentJurisdiction.project_code}
-                                    onChange={(e) => {
-                                        const proj = projects.find(p => p.code === e.target.value);
+                                    onChange={(val) => {
+                                        const proj = projects.find(p => p.code === val);
                                         setCurrentJurisdiction({
                                             ...currentJurisdiction, 
-                                            project_code: e.target.value,
+                                            project_code: val,
                                             project_name: proj?.name || ''
                                         });
                                     }}
-                                    required
-                                >
-                                    <option value="" disabled>Select Project from Employee API</option>
-                                    {projects.map(p => (
-                                        <option key={p.code} value={p.code}>{p.name} ({p.code})</option>
-                                    ))}
-                                </select>
+                                    placeholder="Search Project from Employee API..."
+                                />
                             </div>
 
                             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                 <label>State <span className="required">*</span></label>
-                                <select 
+                                <SearchableSelect
+                                    options={[...new Map(states.map(s => [s.name, { value: s.id, label: s.name, extId: s.external_id }])).values()]}
                                     value={currentJurisdiction.state}
-                                    onChange={(e) => {
-                                        const state = states.find(s => s.id === parseInt(e.target.value));
+                                    onChange={(val) => {
+                                        // Find the original state object to get the external_id
+                                        const stateObj = states.find(s => s.id === parseInt(val));
                                         setCurrentJurisdiction({
                                             ...currentJurisdiction, 
-                                            state: e.target.value,
+                                            state: val,
                                             districts: [] // Reset districts when state changes
                                         });
-                                        fetchCircles(e.target.value);
-                                        fetchDistricts(state?.external_id);
+                                        fetchCircles(val);
+                                        fetchDistricts(stateObj?.external_id);
                                     }}
-                                    required
-                                >
-                                    <option value="" disabled>Select State</option>
-                                    {states.map(s => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
-                                    ))}
-                                </select>
+                                    placeholder="Search State..."
+                                />
                             </div>
 
                             <div className="form-group">
@@ -769,22 +755,22 @@ const AdminMasters = () => {
 
                             <div className="form-group">
                                 <label>Or Select Existing Circle</label>
-                                <select 
+                                <SearchableSelect
+                                    options={[
+                                        { value: "", label: "-- New Circle --" },
+                                        ...circles.map(c => ({ value: c.id, label: c.name }))
+                                    ]}
                                     value={currentJurisdiction.circle}
-                                    onChange={(e) => {
-                                        const circle = circles.find(c => c.id === parseInt(e.target.value));
+                                    onChange={(val) => {
+                                        const circle = circles.find(c => c.id === parseInt(val));
                                         setCurrentJurisdiction({
                                             ...currentJurisdiction, 
-                                            circle: e.target.value,
+                                            circle: val,
                                             circle_name: circle?.name || ''
                                         });
                                     }}
-                                >
-                                    <option value="">-- New Circle --</option>
-                                    {circles.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
+                                    placeholder="Search Existing Circle"
+                                />
                             </div>
 
                             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
@@ -816,7 +802,7 @@ const AdminMasters = () => {
                                     ))}
                                     {districts.length === 0 && (
                                         <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#888' }}>
-                                            Select a state to view districts.
+                                            {currentJurisdiction.state ? "No districts found for this state." : "Select a state to view districts."}
                                         </div>
                                     )}
                                 </div>
