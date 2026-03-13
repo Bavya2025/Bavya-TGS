@@ -9,3 +9,5 @@ Updated the toll creations and other route masters pages.
 12-03-2026 -> vinay -> created the chat bot module separately and added the models like chatsession, chatmessage, SupportTicket.
 
 12-03-2026 -> vinay -> updated the jurisdiction and circle in travel masters module, also added the models like Circle, Jurisdiction.
+
+13-03-2026 -> vinay -> updated the notifications and added remainders. separated the notifications and remainder module from core and added the new models like Notification, Reminder, PushSubscription.
