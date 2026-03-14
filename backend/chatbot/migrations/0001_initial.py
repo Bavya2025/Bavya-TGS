@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("core", "0003_alter_attendancefrs_timestamp_and_more"),
+        ("core", "0001_initial"),
     ]
 
     operations = [

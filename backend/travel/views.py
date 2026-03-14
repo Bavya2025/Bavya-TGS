@@ -24,6 +24,177 @@ from .serializers import (
     CustomMasterDefinitionSerializer, CustomMasterValueSerializer, MasterModuleSerializer,
     TripTrackingSerializer
 )
+
+DEFAULT_MASTER_MODULES = [
+    {"name": "Travel", "display_order": 1},
+    {"name": "Local Conveyance", "display_order": 2},
+    {"name": "Stay & Lodging", "display_order": 3, "aliases": ["Stay"]},
+    {"name": "Food & Refreshments", "display_order": 4, "aliases": ["Food"]},
+    {"name": "Incidental Expenses", "display_order": 5},
+]
+
+DYNAMIC_MASTER_SPECS = [
+    {"key": "travel_mode", "table_name": "Travel Mode", "module_name": "Travel", "source_model": TravelModeMaster, "name_field": "mode_name", "code_field": "lookup_key"},
+    {"key": "booking_type", "table_name": "Booking Type", "module_name": "Travel", "source_model": BookingTypeMaster, "name_field": "booking_type", "code_field": "lookup_key"},
+    {"key": "airline", "table_name": "Airline", "module_name": "Travel", "source_model": AirlineMaster, "name_field": "airline_name", "code_field": "lookup_key", "extra_fields": ["airline_code"]},
+    {"key": "flight_class", "table_name": "Flight Class", "module_name": "Travel", "source_model": FlightClassMaster, "name_field": "class_name", "code_field": "lookup_key"},
+    {"key": "train_class", "table_name": "Train Class", "module_name": "Travel", "source_model": TrainClassMaster, "name_field": "class_name", "code_field": "lookup_key"},
+    {"key": "bus_operator", "table_name": "Bus Operator", "module_name": "Travel", "source_model": BusOperatorMaster, "name_field": "operator_name", "code_field": "lookup_key"},
+    {"key": "bus_type", "table_name": "Bus Seat Type", "module_name": "Travel", "source_model": BusTypeMaster, "name_field": "bus_type", "code_field": "lookup_key"},
+    {"key": "intercity_cab_vehicle", "table_name": "Cab Vehicle Type", "module_name": "Travel", "source_model": IntercityCabVehicleMaster, "name_field": "vehicle_type", "code_field": "lookup_key"},
+    {"key": "train_provider", "table_name": "Train Provider", "module_name": "Travel", "source_model": TrainProviderMaster, "name_field": "provider_name", "code_field": "lookup_key"},
+    {"key": "bus_provider", "table_name": "Bus Provider", "module_name": "Travel", "source_model": BusProviderMaster, "name_field": "provider_name", "code_field": "lookup_key"},
+    {"key": "intercity_cab_provider", "table_name": "Cab Provider", "module_name": "Travel", "source_model": IntercityCabProviderMaster, "name_field": "provider_name", "code_field": "lookup_key"},
+    {"key": "travel_provider", "table_name": "Other Provider", "module_name": "Travel", "source_model": TravelProviderMaster, "name_field": "provider_name", "code_field": "lookup_key"},
+    {"key": "local_travel_mode", "table_name": "Travel Mode (Local)", "module_name": "Local Conveyance", "source_model": LocalTravelModeMaster, "name_field": "mode_name", "code_field": "lookup_key"},
+    {"key": "local_car_subtype", "table_name": "Car Sub-Type", "module_name": "Local Conveyance", "source_model": LocalCarSubTypeMaster, "name_field": "sub_type", "code_field": "lookup_key"},
+    {"key": "local_bike_subtype", "table_name": "Bike Sub-Type", "module_name": "Local Conveyance", "source_model": LocalBikeSubTypeMaster, "name_field": "sub_type", "code_field": "lookup_key"},
+    {"key": "local_provider", "table_name": "Local Provider", "module_name": "Local Conveyance", "source_model": LocalProviderMaster, "name_field": "provider_name", "code_field": "lookup_key"},
+    {"key": "stay_type", "table_name": "Stay Type", "module_name": "Stay & Lodging", "source_model": StayTypeMaster, "name_field": "stay_type", "code_field": "lookup_key"},
+    {"key": "room_type", "table_name": "Room Type", "module_name": "Stay & Lodging", "source_model": RoomTypeMaster, "name_field": "room_type", "code_field": "lookup_key"},
+    {"key": "meal_category", "table_name": "Meal Category", "module_name": "Food & Refreshments", "source_model": MealCategoryMaster, "name_field": "category_name", "code_field": "lookup_key"},
+    {"key": "meal_type", "table_name": "Meal Type", "module_name": "Food & Refreshments", "source_model": MealTypeMaster, "name_field": "meal_type", "code_field": "lookup_key"},
+    {"key": "incidental_type", "table_name": "Expense Type", "module_name": "Incidental Expenses", "source_model": IncidentalTypeMaster, "name_field": "expense_type", "code_field": "lookup_key"},
+]
+
+
+def _get_or_restore_module(module_data):
+    target_name = module_data["name"]
+    candidate_names = [target_name, *(module_data.get("aliases") or [])]
+    module = MasterModule.all_objects.filter(name__in=candidate_names).order_by('id').first()
+
+    if not module:
+        module = MasterModule.all_objects.create(
+            name=target_name,
+            display_order=module_data["display_order"],
+            status=True
+        )
+
+    changed = False
+    if module.is_deleted:
+        module.is_deleted = False
+        module.deleted_at = None
+        changed = True
+    if module.name != target_name:
+        module.name = target_name
+        changed = True
+    if module.display_order != module_data["display_order"]:
+        module.display_order = module_data["display_order"]
+        changed = True
+    if not module.status:
+        module.status = True
+        changed = True
+    if changed:
+        module.save(update_fields=["is_deleted", "deleted_at", "name", "display_order", "status"])
+    return module
+
+
+def _upsert_dynamic_value(definition, *, name, code=None, extra_data=None, status=True):
+    normalized_name = (name or '').strip()
+    if not normalized_name:
+        return
+
+    value = CustomMasterValue.all_objects.filter(definition_id=definition.id, name__iexact=normalized_name).order_by('id').first()
+    if not value:
+        CustomMasterValue.all_objects.create(
+            definition=definition,
+            name=normalized_name,
+            code=code,
+            extra_data=extra_data or {},
+            status=status
+        )
+        return
+
+    changed = False
+    if value.is_deleted:
+        value.is_deleted = False
+        value.deleted_at = None
+        changed = True
+    if value.name != normalized_name:
+        value.name = normalized_name
+        changed = True
+    if value.code != code:
+        value.code = code
+        changed = True
+    if (value.extra_data or {}) != (extra_data or {}):
+        value.extra_data = extra_data or {}
+        changed = True
+    if value.status != status:
+        value.status = status
+        changed = True
+    if changed:
+        value.save(update_fields=["is_deleted", "deleted_at", "name", "code", "extra_data", "status"])
+
+
+def _seed_definition_values(spec, definition):
+    if CustomMasterValue.all_objects.filter(definition=definition).exists():
+        return
+
+    source_qs = spec["source_model"].all_objects.all()
+    for item in source_qs:
+        name = getattr(item, spec["name_field"], None)
+        if not name:
+            continue
+        code = getattr(item, spec["code_field"], None) if spec.get("code_field") else None
+        extra_data = {}
+        for field in spec.get("extra_fields", []):
+            extra_data[field] = getattr(item, field, None)
+        _upsert_dynamic_value(
+            definition,
+            name=name,
+            code=code,
+            extra_data=extra_data,
+            status=getattr(item, "status", True)
+        )
+
+
+def ensure_default_master_setup():
+    modules = {}
+    for module_data in DEFAULT_MASTER_MODULES:
+        module = _get_or_restore_module(module_data)
+        modules[module.name] = module
+
+    for spec in DYNAMIC_MASTER_SPECS:
+        definition = CustomMasterDefinition.all_objects.filter(key=spec["key"]).first()
+        if not definition:
+            definition = CustomMasterDefinition.all_objects.filter(table_name=spec["table_name"]).first()
+
+        if not definition:
+            definition = CustomMasterDefinition.all_objects.create(
+                table_name=spec["table_name"],
+                key=spec["key"],
+                module_ref=modules.get(spec["module_name"]),
+                module=spec["module_name"],
+                api_endpoint='',
+                fields_list='name,code',
+                is_system=True,
+                status=True
+            )
+            _seed_definition_values(spec, definition)
+            continue
+
+        changed = False
+        if definition.is_deleted:
+            definition.is_deleted = False
+            definition.deleted_at = None
+            changed = True
+        defaults = {
+            "table_name": spec["table_name"],
+            "key": spec["key"],
+            "module_ref": modules.get(spec["module_name"]),
+            "module": spec["module_name"],
+            "api_endpoint": "",
+            "fields_list": "name,code",
+            "is_system": True,
+            "status": True,
+        }
+        for field, value in defaults.items():
+            if getattr(definition, field) != value:
+                setattr(definition, field, value)
+                changed = True
+        if changed:
+            definition.save(update_fields=["is_deleted", "deleted_at", *list(defaults.keys())])
+        _seed_definition_values(spec, definition)
 import io
 import json
 import pandas as pd
@@ -2338,19 +2509,78 @@ class IncidentalTypeMasterViewSet(viewsets.ModelViewSet):
     queryset = IncidentalTypeMaster.objects.all()
     serializer_class = IncidentalTypeMasterSerializer
 
+
+class DynamicMasterBundleView(APIView):
+    permission_classes = [IsCustomAuthenticated]
+
+    def get(self, request):
+        ensure_default_master_setup()
+
+        requested_keys = [key.strip() for key in (request.query_params.get('keys') or '').split(',') if key.strip()]
+        definitions = CustomMasterDefinition.objects.filter(status=True).select_related('module_ref').prefetch_related('values')
+        if requested_keys:
+            definitions = definitions.filter(key__in=requested_keys)
+
+        payload = {}
+        for definition in definitions.order_by('module_ref__display_order', 'table_name'):
+            payload[definition.key] = {
+                "id": definition.id,
+                "key": definition.key,
+                "table_name": definition.table_name,
+                "module": definition.module_ref.name if definition.module_ref else definition.module,
+                "values": [
+                    {
+                        "id": value.id,
+                        "name": value.name,
+                        "code": value.code,
+                        "status": value.status,
+                        "extra_data": value.extra_data or {}
+                    }
+                    for value in definition.values.filter(status=True).order_by('name')
+                ]
+            }
+        return Response(payload)
+
+
 class MasterModuleViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = MasterModule.objects.all()
     serializer_class = MasterModuleSerializer
+
+    def get_queryset(self):
+        ensure_default_master_setup()
+        return MasterModule.objects.all().order_by('display_order', 'name')
 
 class CustomMasterDefinitionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = CustomMasterDefinition.objects.all()
     serializer_class = CustomMasterDefinitionSerializer
 
+    def get_queryset(self):
+        ensure_default_master_setup()
+        queryset = CustomMasterDefinition.objects.all().select_related('module_ref')
+        module_ref = self.request.query_params.get('module_ref')
+        key = self.request.query_params.get('key')
+        if module_ref:
+            queryset = queryset.filter(module_ref_id=module_ref)
+        if key:
+            queryset = queryset.filter(key=key)
+        return queryset.order_by('module_ref__display_order', 'table_name')
+
 class CustomMasterValueViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = CustomMasterValue.objects.all()
     serializer_class = CustomMasterValueSerializer
     filterset_fields = ['definition']
+
+    def get_queryset(self):
+        ensure_default_master_setup()
+        queryset = CustomMasterValue.objects.all().select_related('definition')
+        definition_id = self.request.query_params.get('definition', None) or self.request.query_params.get('definition_id', None)
+        definition_key = self.request.query_params.get('definition_key', None)
+        if definition_id is not None:
+            queryset = queryset.filter(definition_id=definition_id)
+        if definition_key is not None:
+            queryset = queryset.filter(definition__key=definition_key)
+        return queryset.order_by('name')
 

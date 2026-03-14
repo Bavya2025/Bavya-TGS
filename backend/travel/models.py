@@ -3,6 +3,7 @@ import random
 import datetime
 from django.conf import settings
 from django.utils import timezone
+from django.utils.text import slugify
 
 class SoftDeleteManager(models.Manager):
     def get_queryset(self):
@@ -564,9 +565,18 @@ class MasterModule(SoftDeleteModel):
 
 class CustomMasterDefinition(SoftDeleteModel):
     table_name = models.CharField(max_length=100, unique=True)
+    key = models.CharField(max_length=100, unique=True, null=True, blank=True)
     module_ref = models.ForeignKey(MasterModule, on_delete=models.CASCADE, related_name='tables', null=True, blank=True)
+    module = models.CharField(max_length=50, blank=True, null=True)
+    api_endpoint = models.CharField(max_length=255, blank=True, null=True)
+    fields_list = models.TextField(default='name,code')
     is_system = models.BooleanField(default=False)
     status = models.BooleanField(default=True)
+
+    def save(self, *args, **kwargs):
+        if not self.key and self.table_name:
+            self.key = slugify(self.table_name).replace('-', '_')
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.table_name
@@ -575,6 +585,7 @@ class CustomMasterValue(SoftDeleteModel):
     definition = models.ForeignKey(CustomMasterDefinition, on_delete=models.CASCADE, related_name='values')
     name = models.CharField(max_length=200)
     code = models.CharField(max_length=100, blank=True, null=True)
+    extra_data = models.JSONField(default=dict, blank=True)
     status = models.BooleanField(default=True)
 
     class Meta:

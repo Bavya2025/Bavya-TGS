@@ -251,6 +251,73 @@ class RouteViewSet(viewsets.ModelViewSet):
         serializer = RoutePathSerializer(paths, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'], url_path='toll-lookup')
+    def toll_lookup(self, request):
+        source_name = (request.query_params.get('source') or '').strip()
+        dest_name = (request.query_params.get('destination') or '').strip()
+
+        if not source_name or not dest_name:
+            return Response({"error": "Source and destination are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        route = Route.objects.filter(
+            source__name__iexact=source_name,
+            destination__name__iexact=dest_name
+        ).first()
+
+        if not route:
+            return Response({
+                "has_route": False,
+                "has_toll_record": False,
+                "has_rate_record": False,
+                "manual_entry_allowed": False,
+                "amount": 0,
+            })
+
+        path = route.paths.filter(is_default=True).first() or route.paths.order_by('id').first()
+        if not path:
+            return Response({
+                "has_route": True,
+                "has_toll_record": False,
+                "has_rate_record": False,
+                "manual_entry_allowed": False,
+                "amount": 0,
+            })
+
+        assignments = path.toll_assignments.select_related('toll_gate').prefetch_related('toll_gate__rates')
+        if not assignments.exists():
+            return Response({
+                "has_route": True,
+                "has_toll_record": False,
+                "has_rate_record": False,
+                "manual_entry_allowed": False,
+                "amount": 0,
+                "path_id": path.id,
+                "path_name": path.path_name,
+            })
+
+        total_amount = 0
+        has_rate_record = False
+        missing_rate_gate_codes = []
+
+        for assignment in assignments:
+            rate = assignment.toll_gate.rates.filter(travel_mode__iexact='4 Wheeler (Single)').first()
+            if rate:
+                has_rate_record = True
+                total_amount += float(rate.rate or 0)
+            else:
+                missing_rate_gate_codes.append(assignment.toll_gate.gate_code)
+
+        return Response({
+            "has_route": True,
+            "has_toll_record": True,
+            "has_rate_record": has_rate_record,
+            "manual_entry_allowed": not has_rate_record,
+            "amount": total_amount if has_rate_record else 0,
+            "path_id": path.id,
+            "path_name": path.path_name,
+            "missing_rate_gate_codes": [code for code in missing_rate_gate_codes if code],
+        })
+
 class RoutePathViewSet(viewsets.ModelViewSet):
     queryset = RoutePath.objects.all()
     serializer_class = RoutePathSerializer
