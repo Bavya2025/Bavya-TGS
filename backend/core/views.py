@@ -9,9 +9,10 @@ from rest_framework.response import Response
 from rest_framework import status, generics, viewsets
 from rest_framework.permissions import AllowAny
 
-from .models import User, Session, LoginHistory, AuditLog, Notification, FaceRegistrationRequest, AttendanceFRS, PhotoUpdateRequest
+from .models import User, Session, LoginHistory, AuditLog, FaceRegistrationRequest, AttendanceFRS, PhotoUpdateRequest
+from notifications.models import Notification
 from .permissions import IsCustomAuthenticated, IsAdmin
-from .serializers import NotificationSerializer, AuditLogSerializer, LoginHistorySerializer, UserSerializer
+from .serializers import AuditLogSerializer, LoginHistorySerializer, UserSerializer
 from .pagination import StandardResultsSetPagination
 from django.db.models import Q
 from rest_framework import filters
@@ -162,25 +163,7 @@ def health_check(request):
     return Response({'status': 'ok', 'message': 'Backend is running correctly.'})
 
 
-class NotificationViewSet(viewsets.ModelViewSet):
-    serializer_class = NotificationSerializer
 
-    def get_queryset(self):
-        return Notification.objects.filter(user=self.request.custom_user)
-
-    def perform_create(self, serializer):
-        # Allow specifying a target user via 'user' or 'target_user' ID
-        user_id = self.request.data.get('user') or self.request.data.get('target_user')
-        if user_id:
-            serializer.save(user_id=user_id)
-        else:
-            serializer.save(user=self.request.custom_user)
-
-    @action(detail=False, methods=['post'], url_path='mark-all-read')
-    def mark_all_read(self, request):
-        user = request.custom_user
-        Notification.objects.filter(user=user, unread=True).update(unread=False)
-        return Response({'message': 'All notifications marked as read'})
 
 class LoginHistoryView(generics.ListAPIView):
     serializer_class = None # We will use a custom simple serializer or just values
@@ -760,3 +743,84 @@ def clear_frs_notifications_view(request):
     return Response({'message': 'FRS notifications cleared.'})
 
 
+@api_view(['GET'])
+@permission_classes([IsCustomAuthenticated])
+def heartbeat_view(request):
+    user = request.custom_user
+    now = timezone.now()
+    
+    # 1. Notifications (Latest 10)
+    notifications_qs = Notification.objects.filter(user=user).order_by('-created_at')[:10]
+    unread_count = Notification.objects.filter(user=user, unread=True).count()
+    
+    # 2. Approval Counts
+    from travel.models import Trip, TravelAdvance, TravelClaim
+    user_role = (user.role.name.lower() if user.role else '')
+    privileged_keywords = ['admin', 'superuser', 'it admin', 'it-admin', 'cfo', 'hr']
+    is_privileged = any(kw in user_role for kw in privileged_keywords)
+    is_finance = 'finance' in user_role
+    
+    trip_count = 0
+    advance_count = 0
+    claim_count = 0
+    
+    if is_privileged and not is_finance:
+         trip_count = Trip.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded']).count()
+         advance_count = TravelAdvance.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded']).count()
+         claim_count = TravelClaim.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded']).count()
+    elif is_finance:
+        if user.office_level == 1:
+            advance_count = TravelAdvance.objects.filter(status='PENDING_HEAD').count()
+            claim_count = TravelClaim.objects.filter(status='PENDING_HEAD').count()
+        else:
+            pending_money_statuses = ['PENDING_EXECUTIVE', 'HR Approved', 'REJECTED_BY_HEAD', 'PENDING_FINAL_RELEASE', 'Approved', 'Under Process']
+            advance_count = TravelAdvance.objects.filter(status__in=pending_money_statuses).count()
+            claim_count = TravelClaim.objects.filter(status__in=pending_money_statuses).count()
+    else:
+        trip_count = Trip.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved']).count()
+        advance_count = TravelAdvance.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved']).count()
+        claim_count = TravelClaim.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved']).count()
+
+    total_approvals = trip_count + advance_count + claim_count
+
+    # 3. Reminders (look ahead 5 minutes for precision frontend triggering)
+    from notifications.models import Reminder
+    from datetime import timedelta
+    future_buffer = now + timedelta(minutes=5)
+    due_reminders = Reminder.objects.filter(user=user, remind_at__lte=future_buffer, acknowledged=False)
+    
+    reminder_data = []
+    for r in due_reminders:
+        reminder_data.append({
+            'id': r.id,
+            'title': r.title,
+            'message': r.message,
+            'remind_at': r.remind_at,
+            'category': r.category,
+            'trip': r.trip.trip_id if r.trip else None,
+            'is_sent': r.is_sent
+        })
+
+    notif_data = []
+    for n in notifications_qs:
+        # Simple serialization
+        notif_data.append({
+            'id': n.id,
+            'title': n.title,
+            'message': n.message,
+            'unread': n.unread,
+            'created_at': n.created_at,
+            'link': n.link
+        })
+
+    return Response({
+        'notifications': notif_data,
+        'unread_notification_count': unread_count,
+        'approval_counts': {
+            'total': total_approvals,
+            'trips': trip_count,
+            'advances': advance_count,
+            'claims': claim_count
+        },
+        'due_reminders': reminder_data
+    })

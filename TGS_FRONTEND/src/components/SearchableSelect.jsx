@@ -1,62 +1,82 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ChevronDown, Search, RefreshCw, AlertCircle } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { ChevronDown, Search, X, Loader2 } from 'lucide-react';
 
-const SearchableSelect = ({ options, value, onChange, placeholder, loading, error, disabled, style, searchByCodeOnly, emptyMessage }) => {
+const SearchableSelect = ({ 
+    options, 
+    value, 
+    onChange, 
+    placeholder = "Select an option...", 
+    noDataMessage = "No data found",
+    className = "",
+    disabled = false,
+    loading = false,
+    error = null
+}) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [search, setSearch] = useState('');
-    const dropdownRef = useRef(null);
+    const [searchTerm, setSearchTerm] = useState("");
+    const wrapperRef = useRef(null);
+    const inputRef = useRef(null);
 
+    // Find the current label for the value
+    const selectedOption = options.find(opt => {
+        const optValue = typeof opt === 'object' ? opt.value : opt;
+        return String(optValue) === String(value);
+    });
+    
+    const displayValue = selectedOption ? 
+        (typeof selectedOption === 'object' ? selectedOption.label : selectedOption) 
+        : "";
+
+    // Reset search term when modal closes
     useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        if (!isOpen) setSearchTerm("");
+    }, [isOpen]);
+
+    // Close dropdown on click outside
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
                 setIsOpen(false);
             }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const filteredOptions = (options || []).filter(opt => {
-        const optName = typeof opt === 'string' ? opt : (opt.name || opt.id || '');
-        const optCode = typeof opt === 'object' && opt !== null ? (opt.code || opt.location_code || opt.external_id || '') : '';
-        const searchStr = search.toLowerCase();
-
-        if (searchByCodeOnly) {
-            return String(optCode).toLowerCase().includes(searchStr);
-        }
-
-        return String(optName).toLowerCase().includes(searchStr) || String(optCode).toLowerCase().includes(searchStr);
+    const filteredOptions = options.filter(opt => {
+        const label = typeof opt === 'object' ? opt.label : opt;
+        return String(label).toLowerCase().includes(searchTerm.toLowerCase());
     });
 
-    const handleSelect = (selectedOpt) => {
-        onChange(selectedOpt);
+    const handleSelect = (option) => {
+        const optValue = typeof option === 'object' ? option.value : option;
+        onChange(optValue);
         setIsOpen(false);
-        setSearch('');
+        setSearchTerm("");
+    };
+
+    const handleToggle = () => {
+        if (!disabled) {
+            setIsOpen(!isOpen);
+            if (!isOpen) {
+                // Focus the input when opening
+                setTimeout(() => inputRef.current?.focus(), 50);
+            }
+        }
     };
 
     return (
-        <div className="searchable-select-container" ref={dropdownRef} style={style}>
+        <div className={`searchable-select-container ${className}`} ref={wrapperRef}>
             <button
                 type="button"
-                disabled={disabled}
-                onClick={() => setIsOpen(!isOpen)}
                 className={`searchable-select-trigger ${isOpen ? 'active' : ''} ${error ? 'error' : ''}`}
+                onClick={handleToggle}
+                disabled={disabled}
             >
                 <div className="select-trigger-inner">
-                    {loading && <RefreshCw size={12} className="animate-spin text-primary" />}
+                    {loading && <Loader2 size={12} className="animate-spin text-primary" />}
                     <span className="select-trigger-selected">
-                        {typeof value === 'object' && value !== null
-                            ? (
-                                <div className="select-trigger-selected">
-                                    {(value.code || value.location_code || value.external_id) && (
-                                        <span className="select-code-badge select-trigger-badge">
-                                            {value.code || value.location_code || value.external_id}
-                                        </span>
-                                    )}
-                                    <span>{value.name || value.id}</span>
-                                </div>
-                            )
-                            : (value || placeholder)}
+                        {displayValue || placeholder}
                     </span>
                 </div>
                 <ChevronDown size={14} className={`select-arrow ${isOpen ? 'rotated' : ''}`} />
@@ -65,65 +85,48 @@ const SearchableSelect = ({ options, value, onChange, placeholder, loading, erro
             {isOpen && (
                 <div className="searchable-select-dropdown">
                     <div className="searchable-select-search-container">
-                        <Search size={14} className="professional-input-icon select-search-icon" />
+                        <Search size={14} className="professional-input-icon select-search-icon" style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                         <input
-                            autoFocus
+                            ref={inputRef}
                             type="text"
-                            placeholder={`Search ${placeholder}...`}
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
                             className="searchable-select-input"
+                            onClick={(e) => e.stopPropagation()}
+                            autoFocus
                         />
+                        {searchTerm && (
+                            <X 
+                                size={14} 
+                                className="clear-icon" 
+                                style={{ position: 'absolute', right: '0.875rem', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#94a3b8' }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSearchTerm("");
+                                }} 
+                            />
+                        )}
                     </div>
-
+                    
                     <div className="searchable-select-list no-scrollbar">
-                        <button
-                            type="button"
-                            onClick={() => handleSelect('')}
-                            className={`searchable-select-item ${!value ? 'all-option' : ''}`}
-                        >
-                            {placeholder === 'Continent' ? 'Select Continent' : `All ${placeholder}s`}
-                        </button>
-
-                        {loading ? (
-                            <div className="searchable-select-status">
-                                <RefreshCw size={14} className="animate-spin" />
-                                <span>Loading data...</span>
-                            </div>
-                        ) : error ? (
-                            <div className="searchable-select-status text-red-500">
-                                <AlertCircle size={14} />
-                                <span>{error}</span>
-                            </div>
-                        ) : filteredOptions.length > 0 ? (
-                            filteredOptions.map((opt, idx) => {
-                                const optName = typeof opt === 'string' ? opt : (opt.name || opt.id || '');
+                        {filteredOptions.length > 0 ? (
+                            filteredOptions.map((opt, index) => {
+                                const optValue = typeof opt === 'object' ? opt.value : opt;
+                                const optLabel = typeof opt === 'object' ? opt.label : opt;
                                 return (
                                     <button
-                                        key={opt.id || idx}
+                                        key={`${optValue}-${index}`}
                                         type="button"
+                                        className={`searchable-select-item ${String(optValue) === String(value) ? 'selected' : ''}`}
                                         onClick={() => handleSelect(opt)}
-                                        className={`searchable-select-item ${value === optName ? 'selected' : ''}`}
                                     >
-                                        <div className="select-item-inner">
-                                            {(opt.code || opt.location_code || opt.external_id) && (
-                                                <span className="select-code-badge">
-                                                    {opt.code || opt.location_code || opt.external_id}
-                                                </span>
-                                            )}
-                                            <span className="select-name-text">
-                                                {optName.startsWith(opt.code || opt.location_code || opt.external_id || 'NEVER_MATCH')
-                                                    ? optName.replace(opt.code || opt.location_code || opt.external_id, '').trim()
-                                                    : optName}
-                                            </span>
-                                        </div>
+                                        {optLabel}
                                     </button>
                                 );
                             })
                         ) : (
-                            <div className="searchable-select-empty">
-                                {emptyMessage || `No ${placeholder.toLowerCase()}s found`}
-                            </div>
+                            <div className="searchable-select-empty">{noDataMessage}</div>
                         )}
                     </div>
                 </div>

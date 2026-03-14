@@ -64,6 +64,13 @@ call :ProcessApp "%APP2_PATH%" "%APP2_NAME%" "%APP2_FRONTEND%" "%APP2_PORTS%" "%
 call :ProcessApp "%APP3_PATH%" "%APP3_NAME%" "%APP3_FRONTEND%" "%APP3_PORTS%" "%APP3_HIGH_LOAD%"
 
 :: 3. START/RELOAD NGINX
+echo [FINAL] Updating Nginx configuration paths...
+set "APP_ROOT_FWD=%~dp0"
+set "APP_ROOT_FWD=%APP_ROOT_FWD:\=/%"
+if "%APP_ROOT_FWD:~-1%"=="/" set "APP_ROOT_FWD=%APP_ROOT_FWD:~0,-1%"
+
+powershell -Command "(Get-Content '%~dp0nginx.conf') -replace 'include\s+\"[^\"]*?/?tools/nginx/conf/mime\.types\";', 'include       \"%APP_ROOT_FWD%/tools/nginx/conf/mime.types\";' -replace 'root\s+\"[^\"]*?/?TGS_FRONTEND/dist\";', 'root \"%APP_ROOT_FWD%/TGS_FRONTEND/dist\";' | Set-Content '%~dp0nginx.conf'"
+
 echo [FINAL] Starting Nginx...
 if exist "%NGINX_ROOT%\nginx.exe" (
     cd /d "%NGINX_ROOT%"
@@ -116,8 +123,14 @@ pip install -r "%B_PATH%\backend\requirements.txt" --quiet
 
 :: Start Workers
 if "%HIGH_LOAD%"=="true" (
-    for %%P in (%PORTS%) do start "TGS-%NAME%-Port-%%P" cmd /c "call "%VENV%\Scripts\activate" && cd /d "%B_PATH%\backend" && waitress-serve --port=%%P tgs_backend.wsgi:application"
+    for %%P in (%PORTS%) do start "TGS-%NAME%-Port-%%P" cmd /c "call "%VENV%\Scripts\activate" && cd /d "%B_PATH%\backend" && waitress-serve --port=%%P --threads=12 tgs_backend.wsgi:application"
 ) else (
-    for /f "tokens=1" %%P in ("%PORTS%") do start "TGS-%NAME%-Port-%%P" cmd /c "call "%VENV%\Scripts\activate" && cd /d "%B_PATH%\backend" && waitress-serve --port=%%P tgs_backend.wsgi:application"
+    for /f "tokens=1" %%P in ("%PORTS%") do start "TGS-%NAME%-Port-%%P" cmd /c "call "%VENV%\Scripts\activate" && cd /d "%B_PATH%\backend" && waitress-serve --port=%%P --threads=12 tgs_backend.wsgi:application"
+    
+    :: Start Notification Scheduler for TGS_Core
+    if "%NAME%"=="TGS_Core" (
+        echo      -- Starting Notification Scheduler...
+        start "TGS-Notification-Scheduler" cmd /c "call "%VENV%\Scripts\activate" && cd /d "%B_PATH%\backend" && python manage.py run_scheduler"
+    )
 )
 goto :eof

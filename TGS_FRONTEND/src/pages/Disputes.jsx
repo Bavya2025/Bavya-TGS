@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/api';
+import { useToast } from '../context/ToastContext';
 import {
     AlertCircle,
     MessageSquare,
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 
 const Disputes = () => {
+    const { showToast } = useToast();
     const [disputes, setDisputes] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const [trips, setTrips] = useState([]);
@@ -88,7 +90,7 @@ const fetchExpenses = async (tripId) => {
             setFormData({ trip: '', expense: '', category: 'Mileage', reason: '' });
         } catch (error) {
             console.error("Error raising dispute:", error);
-            alert("Failed to raise dispute. Please try again.");
+            showToast("Failed to raise dispute. Please try again.", "error");
         }
     };
 

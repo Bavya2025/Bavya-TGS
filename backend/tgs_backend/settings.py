@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "travel_masters",
     "fleet",
     "chatbot",
+    "notifications",
 ]
 
 MIDDLEWARE = [
@@ -133,3 +134,8 @@ USE_I18N = True
 USE_TZ = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# WebPush Configuration
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
+VAPID_CLAIM_EMAIL = os.environ.get("VAPID_CLAIM_EMAIL")

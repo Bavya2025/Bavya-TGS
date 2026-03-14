@@ -207,7 +207,8 @@ from api_management.utils import encrypt_key, decrypt_key
 from django.utils import timezone
 from rest_framework.views import APIView
 from django.db.models import Sum
-from core.models import Notification, User
+from core.models import User
+from notifications.models import Notification
 from core.permissions import IsCustomAuthenticated
 import requests
 
@@ -455,7 +456,8 @@ class TripListCreateView(generics.ListCreateAPIView):
                 user=current_approver,
                 title="New Trip Request",
                 message=f"{user.name} has submitted a new trip request to {trip.destination}.",
-                type='info'
+                type='info',
+                link='/approvals'
             )
         
         # Notify Guest House Managers if room is requested
@@ -466,7 +468,8 @@ class TripListCreateView(generics.ListCreateAPIView):
                     user=manager,
                     title="Room Request Received",
                     message=f"{user.name} has requested a room for trip {trip.trip_id} to {trip.destination}.",
-                    type='info'
+                    type='info',
+                    link='/guesthouse?tab=requests'
                 )
 
         # Notify HR
@@ -480,7 +483,8 @@ class TripListCreateView(generics.ListCreateAPIView):
                     user=manager,
                     title="Vehicle Request Received",
                     message=f"{user.name} has requested a company vehicle for trip {trip.trip_id} to {trip.destination}.",
-                    type='info'
+                    type='info',
+                    link='/fleet'
                 )
 
 class TripBookingSearchView(generics.ListAPIView):
@@ -1024,7 +1028,8 @@ class ApprovalsView(APIView):
                                 user=ghm,
                                 title="Pending Room Request",
                                 message=f"{requester.name}'s trip to {obj.destination} is management-approved. Room booking may be initiated.",
-                                type='info'
+                                type='info',
+                                link='/guesthouse?tab=requests'
                             )
                     
                     if hr_head:
@@ -1032,7 +1037,8 @@ class ApprovalsView(APIView):
                             user=hr_head,
                             title=f"HR Verification Required",
                             message=f"{requester.name}'s {request_type} is management-approved and awaits your verification.",
-                            type='info'
+                            type='info',
+                            link='/approvals'
                         )
                 return Response({"message": "Sent to HR for verification"})
 
@@ -1063,7 +1069,8 @@ class ApprovalsView(APIView):
                                 user=ghm,
                                 title="Room Request Ready",
                                 message=f"Trip {obj.trip_id} to {obj.destination} has been approved. Room booking is now required.",
-                                type='info'
+                                type='info',
+                                link='/guesthouse?tab=requests'
                             )
                 else:
                     # --- MONEY REQUESTS MOVE TO FINANCE EXECUTIVE ---
@@ -1093,7 +1100,8 @@ class ApprovalsView(APIView):
                             user=finance_exec,
                             title=f"Finance Verification Required",
                             message=f"{requester.name}'s {request_type} is HR-verified and awaits your verification.",
-                            type='info'
+                            type='info',
+                            link='/approvals'
                         )
                 return Response({"message": "HR recommendation processed"})
             # --- STAGE 3: Finance Approval ---
@@ -1119,7 +1127,8 @@ class ApprovalsView(APIView):
                         user=obj.current_approver,
                         title="Finance Authorization Required",
                         message=f"{requester.name}'s request verified by executive and awaits your authorization.",
-                        type='info'
+                        type='info',
+                        link='/approvals'
                     )
                     return Response({"message": "Verified and sent to Head"})
 
@@ -1356,7 +1365,8 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
                 user=current_approver,
                 title="New Expense Claim",
                 message=f"{user.name} has submitted an expense claim for Trip {claim.trip.trip_id}.",
-                type='info'
+                type='info',
+                link='/approvals'
             )
             
         # Notify HR
@@ -1439,7 +1449,8 @@ class TravelAdvanceViewSet(viewsets.ModelViewSet):
                 user=current_approver,
                 title="New Advance Request",
                 message=f"{user.name} has requested an advance of ₹{advance.requested_amount} for Trip {advance.trip.trip_id}.",
-                type='info'
+                type='info',
+                link='/approvals'
             )
             
         # Notify HR

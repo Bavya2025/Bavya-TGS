@@ -30,8 +30,10 @@ import {
     PauseCircle,
     AlertTriangle,
     FileText,
-    ArrowRight
+    ArrowRight,
+    Bell
 } from 'lucide-react';
+import ReminderModal from '../components/ReminderModal';
 import { encodeId, decodeId } from '../utils/idEncoder';
 import api from '../api/api';
 import { useToast } from '../context/ToastContext.jsx';
@@ -53,7 +55,9 @@ const TripStory = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [showWalletModal, setShowWalletModal] = useState(false);
     const [isActionLoading, setIsActionLoading] = useState(false);
+    const [hasActiveReminder, setHasActiveReminder] = useState(false);
     const [auditRemarks, setAuditRemarks] = useState({});
+    const [showReminderModal, setShowReminderModal] = useState(false);
 
     // Luggage popup state
     const [showLuggagePopup, setShowLuggagePopup] = useState(false);
@@ -72,9 +76,21 @@ const TripStory = () => {
     const fetchTripStory = async () => {
         setIsLoading(true);
         try {
-            const decodedId = decodeId(id);
-            const response = await api.get(`/api/trips/${decodedId}/`);
-            setTrip(response.data);
+            // Fetch trip details - backend expects trip_id (can be encoded or raw)
+            // We use the ID from params directly (encoded)
+            const response = await api.get(`/api/trips/${id}/`);
+            const tripData = response.data;
+            setTrip(tripData);
+            
+            // Check for active reminders - we need the raw trip_id (e.g. TRP-...)
+            // which is tripData.trip_id
+            const tripIdRaw = tripData.trip_id;
+            const reminderRes = await api.get(`/api/notifications/reminders/`, {
+                params: { trip_id: tripIdRaw }
+            });
+            const reminders = reminderRes.data || [];
+            setHasActiveReminder(reminders.some(r => !r.is_sent));
+
         } catch (error) {
             console.error("Failed to fetch trip story:", error);
             showToast("Failed to load trip story", "error");
@@ -239,7 +255,18 @@ const TripStory = () => {
                 <div className="story-section span-2">
                     <div className="section-header">
                         <LayoutGrid size={20} />
-                        <h3>Trip Core Details</h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                            <h3>Trip Core Details</h3>
+                            <button 
+                                className={`reminder-trigger-btn ${hasActiveReminder ? 'disabled' : ''}`}
+                                onClick={() => !hasActiveReminder && setShowReminderModal(true)}
+                                title={hasActiveReminder ? "Reminder already set" : "Set Reminder"}
+                                disabled={hasActiveReminder}
+                                style={hasActiveReminder ? { color: '#94a3b8', cursor: 'not-allowed', opacity: 0.6 } : {}}
+                            >
+                                <Bell size={16} className={hasActiveReminder ? "" : "ringing"} />
+                            </button>
+                        </div>
                     </div>
                     <div className="details-grid-4">
                         <div className="detail-card">
@@ -640,6 +667,15 @@ const TripStory = () => {
                 isOpen={showWalletModal}
                 onClose={() => setShowWalletModal(false)}
                 trip={{ id: trip.trip_id, ...trip }}
+                onUpdate={fetchTripStory}
+            />
+
+            <ReminderModal 
+                isOpen={showReminderModal}
+                onClose={() => setShowReminderModal(false)}
+                tripId={trip.trip_id}
+                defaultTitle={`Reminder for Trip ${trip.trip_id}`}
+                defaultCategory="other"
                 onUpdate={fetchTripStory}
             />
 

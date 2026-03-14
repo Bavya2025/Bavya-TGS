@@ -8,6 +8,12 @@ export const AuthProvider = ({ children }) => {
   const { showToast } = useToast();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [heartbeatData, setHeartbeatData] = useState({
+    notifications: [],
+    unread_notification_count: 0,
+    approval_counts: { total: 0, trips: 0, advances: 0, claims: 0 },
+    due_reminders: []
+  });
 
   const login = async (username, password) => {
     try {
@@ -92,8 +98,26 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
+  const fetchHeartbeat = async () => {
+    if (!user || document.visibilityState !== 'visible') return;
+    try {
+      const response = await api.get('/api/heartbeat');
+      setHeartbeatData(response.data);
+    } catch (error) {
+      console.error("Heartbeat failed:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchHeartbeat();
+      const interval = setInterval(fetchHeartbeat, 60000); // 1 minute
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, heartbeatData, fetchHeartbeat }}>
       {children}
     </AuthContext.Provider>
   );
