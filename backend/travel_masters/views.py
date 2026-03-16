@@ -539,6 +539,49 @@ class EligibilityRuleViewSet(viewsets.ModelViewSet):
     queryset = EligibilityRule.objects.all()
     serializer_class = EligibilityRuleSerializer
 
+    @action(detail=False, methods=['post'], url_path='bulk-save')
+    def bulk_save(self, request):
+        rules_data = request.data
+        if not isinstance(rules_data, list):
+            return Response({"error": "Expected a list of rules"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        results = {"created": 0, "updated": 0, "errors": []}
+        
+        for index, data in enumerate(rules_data):
+            rule_id = data.get('id')
+            try:
+                if rule_id:
+                    instance = EligibilityRule.objects.get(pk=rule_id)
+                    serializer = EligibilityRuleSerializer(instance, data=data, partial=True)
+                else:
+                    # Check for duplicates before creation to avoid integrity errors
+                    existing = EligibilityRule.objects.filter(
+                        cadre_id=data.get('cadre'),
+                        category=data.get('category'),
+                        city_type=data.get('city_type', 'N/A')
+                    ).first()
+                    
+                    if existing:
+                        instance = existing
+                        serializer = EligibilityRuleSerializer(instance, data=data, partial=True)
+                    else:
+                        serializer = EligibilityRuleSerializer(data=data)
+                
+                if serializer.is_valid():
+                    serializer.save()
+                    if rule_id or existing:
+                        results["updated"] += 1
+                    else:
+                        results["created"] += 1
+                else:
+                    results["errors"].append({"index": index, "errors": serializer.errors})
+            except Exception as e:
+                results["errors"].append({"index": index, "error": str(e)})
+        
+        if results["errors"]:
+            return Response(results, status=status.HTTP_207_MULTI_STATUS)
+        return Response(results, status=status.HTTP_200_OK)
+
     def get_queryset(self):
         queryset = EligibilityRule.objects.all()
         cadre = self.request.query_params.get('cadre')
@@ -600,6 +643,56 @@ class JurisdictionViewSet(viewsets.ModelViewSet):
                 models.Q(circle__name__icontains=search)
             )
         return queryset.order_by('project_name', 'circle__name')
+
+    @action(detail=False, methods=['post'], url_path='bulk-save')
+    def bulk_save(self, request):
+        data_list = request.data
+        if not isinstance(data_list, list):
+            return Response({"error": "Expected a list of jurisdictions"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        results = {"created": 0, "updated": 0, "errors": []}
+        
+        for index, data in enumerate(data_list):
+            try:
+                juris_id = data.get('id')
+                districts = data.pop('districts', [])
+                
+                if juris_id:
+                    instance = Jurisdiction.objects.get(pk=juris_id)
+                    serializer = JurisdictionSerializer(instance, data=data, partial=True)
+                else:
+                    # Check for duplicates (Project + Circle)
+                    existing = Jurisdiction.objects.filter(
+                        project_code=data.get('project_code'),
+                        circle=data.get('circle')
+                    ).first()
+                    
+                    if existing:
+                        instance = existing
+                        serializer = JurisdictionSerializer(instance, data=data, partial=True)
+                    else:
+                        serializer = JurisdictionSerializer(data=data)
+                
+                if serializer.is_valid():
+                    instance = serializer.save()
+                    # Districts are many-to-many, serializer.save() handles them if passed correctly
+                    # but sometimes it's cleaner to handle M2M explicitly if needed
+                    # serializer.save() with M2M requires the data to be in the dict
+                    if districts:
+                        instance.districts.set(districts)
+                    
+                    if juris_id or (not juris_id and existing):
+                        results["updated"] += 1
+                    else:
+                        results["created"] += 1
+                else:
+                    results["errors"].append({"index": index, "errors": serializer.errors})
+            except Exception as e:
+                results["errors"].append({"index": index, "error": str(e)})
+        
+        if results["errors"]:
+            return Response(results, status=status.HTTP_207_MULTI_STATUS)
+        return Response(results, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'])
     def projects(self, request):

@@ -85,6 +85,10 @@ class ThreadLocalMiddleware:
         
         # Set skip_external_api for specific "DB-only" views
         db_only_paths = [
+            '/api/auth/login',
+            '/api/auth/me',
+            '/api/heartbeat',
+            '/api/bot/chat',
             '/api/audit-logs/', 
             '/api/login-history/', 
             '/api/dashboard-stats/',

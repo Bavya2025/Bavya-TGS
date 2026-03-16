@@ -17,12 +17,17 @@ class ChatBotViewSet(viewsets.ViewSet):
         
         if not message_text:
             return Response({"error": "Message is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        reply = get_bot_response(user, message_text, session_id)
+
+        # v12.5: Restore requested_lang to fix NameError
+        requested_lang = request.data.get('language', 'en')
+        # v12.5: Receive reply, language, and detected_lang from services
+        reply, effective_lang, detected_lang = get_bot_response(user, message_text, session_id, language=requested_lang)
         
         return Response({
             "reply": reply,
-            "session_id": session_id
+            "session_id": session_id,
+            "language": effective_lang,
+            "detected_language": detected_lang
         })
 
     @action(detail=False, methods=['get'])

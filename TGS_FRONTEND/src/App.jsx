@@ -39,6 +39,7 @@ import JobReport from './pages/JobReport';
 import TravelCreation from './pages/TravelCreation';
 import AdminMasters from './pages/AdminMasters';
 import NotificationsPage from './pages/NotificationsPage';
+import SupportBot from './components/SupportBot';
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
@@ -282,6 +283,7 @@ function App() {
         <NotificationHandler />
         <ReminderHandler />
         <Router>
+          <SupportBot />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

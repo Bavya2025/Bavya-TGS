@@ -1,8 +1,6 @@
 import React from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import SupportBot from './SupportBot';
-
 const Layout = ({ children }) => {
     return (
         <div className="layout">
@@ -12,7 +10,6 @@ const Layout = ({ children }) => {
                     {children}
                 </div>
             </main>
-            <SupportBot />
         </div>
     );
 };

@@ -85,6 +85,11 @@ class ReminderViewSet(viewsets.ModelViewSet):
         category = self.request.data.get('category', 'other')
         if trip_id:
             from .models import Reminder
+            # A reminder is "active" if it hasn't been acknowledged AND hasn't been sent.
+            # If it's sent but not acknowledged (ringing), or not sent yet, it blocks.
+            # Once either it's acknowledged OR it's been sent AND we decide to allow retry (usually acknowledged is the key).
+            # The USER says "remainder is not allowing to create when the current remainder is stop."
+            # "Stop" means acknowledged=True.
             existing = Reminder.objects.filter(
                 user=self.request.custom_user,
                 trip_id=trip_id,
