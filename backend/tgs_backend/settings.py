@@ -7,8 +7,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load .env file
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
-DEBUG = os.environ.get("DJANGO_DEBUG")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-2+wg90pxjk^*ntkh**68*1)h4-9t0_%lg8@&)1ihhdk6c3ev0x")
+DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
 
 # In production, specify your domain or IP
 ALLOWED_HOSTS = ["*"] 
@@ -72,11 +72,11 @@ WSGI_APPLICATION = "tgs_backend.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": os.environ.get("DB_NAME"),
-        "USER": os.environ.get("DB_USER"),
-        "PASSWORD": os.environ.get("DB_PASSWORD"),
-        "HOST": os.environ.get("DB_HOST"),
-        "PORT": os.environ.get("DB_PORT"),
+        "NAME": os.environ.get("DB_NAME", "tgs_b2"),
+        "USER": os.environ.get("DB_USER", "root"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", "Ramprasad1819@"),
+        "HOST": os.environ.get("DB_HOST", "localhost"),
+        "PORT": os.environ.get("DB_PORT", "3306"),
     }
 }
 
