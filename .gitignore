@@ -25,3 +25,16 @@ backend/media/
 .idea/
 *.swp
 *.swo
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Windows installer / shortcuts
+*.lnk
+*.tmp
+
+# Windows logs
+*.log
