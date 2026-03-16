@@ -26837,6 +26837,10 @@ select:disabled {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
+.searchable-select-container.is-open {
+  z-index: 10001; /* Higher than neighboring containers to ensure dropdown is on top */
+}
+
 .searchable-select-trigger {
   width: 100%;
   min-height: 48px;

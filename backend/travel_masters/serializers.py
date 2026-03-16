@@ -95,10 +95,16 @@ class RoutePathSerializer(serializers.ModelSerializer):
     source_name = serializers.ReadOnlyField(source='route.source.name')
     destination_name = serializers.ReadOnlyField(source='route.destination.name')
     via_location_names = serializers.SerializerMethodField()
+    via_locations_data = serializers.SerializerMethodField()
     
     class Meta:
         model = RoutePath
-        fields = '__all__'
+        fields = [
+            'id', 'route', 'path_name', 'via_locations', 'is_default', 
+            'distance_km', 'segment_data', 'latitude', 'longitude', 
+            'toll_assignments', 'source_name', 'destination_name', 
+            'via_location_names', 'via_locations_data'
+        ]
 
     def get_via_location_names(self, obj):
         if not obj.via_locations or not isinstance(obj.via_locations, list):
@@ -118,17 +124,42 @@ class RoutePathSerializer(serializers.ModelSerializer):
                 names.append(str(vid))
         return names
 
+    def get_via_locations_data(self, obj):
+        if not obj.via_locations or not isinstance(obj.via_locations, list):
+            return []
+        
+        data = []
+        for vid in obj.via_locations:
+            loc = None
+            if str(vid).isdigit():
+                loc = Location.objects.filter(pk=vid).first()
+            else:
+                loc = Location.objects.filter(external_id=vid).first()
+            
+            if loc:
+                data.append({
+                    'id': loc.id,
+                    'name': loc.name,
+                    'code': loc.code or 'HUB',
+                    'location_type': loc.location_type
+                })
+        return data
+
 class RouteSerializer(serializers.ModelSerializer):
     paths = RoutePathSerializer(many=True, read_only=True)
     source_name = serializers.ReadOnlyField(source='source.name')
     destination_name = serializers.ReadOnlyField(source='destination.name')
     source_external_id = serializers.ReadOnlyField(source='source.external_id')
     destination_external_id = serializers.ReadOnlyField(source='destination.external_id')
+    variant_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Route
         fields = '__all__'
         extra_kwargs = {'name': {'required': False}}
+
+    def get_variant_count(self, obj):
+        return obj.paths.count()
 
 class CadreSerializer(serializers.ModelSerializer):
     class Meta:

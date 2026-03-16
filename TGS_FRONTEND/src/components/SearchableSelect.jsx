@@ -1,6 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Search, X, Loader2 } from 'lucide-react';
 
+const getPillStyles = (type) => {
+    const t = (type || '').toUpperCase();
+    switch (t) {
+        case 'METRO': return { background: '#ef4444', color: '#ffffff' }; // Bright red
+        case 'CITY': return { background: '#3b82f6', color: '#ffffff' }; // Blue
+        case 'TOWN': return { background: '#10b981', color: '#ffffff' }; // Emerald
+        case 'VILLAGE': return { background: '#f59e0b', color: '#ffffff' }; // Amber
+        default: return { background: '#94a3b8', color: '#ffffff' }; // Slate
+    }
+};
+
 const SearchableSelect = ({ 
     options = [], 
     value, 
@@ -13,7 +24,8 @@ const SearchableSelect = ({
     error = null,
     style = {},
     searchByCodeOnly = false,
-    emptyMessage = ""
+    emptyMessage = "",
+    hideCodeBadge = false // New prop to hide redundant badge
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
@@ -159,8 +171,24 @@ const SearchableSelect = ({
                                         style={isSelected && isAllOption ? { background: 'rgba(187, 6, 51, 0.05)', color: 'var(--primary)', fontWeight: 600 } : {}}
                                     >
                                         <div className="flex items-center justify-between w-full">
-                                            <span>{optLabel}</span>
-                                            {optCode && (
+                                            <div className="flex items-center">
+                                                <span className="font-bold">{optLabel}</span>
+                                                {typeof opt === 'object' && opt.cluster_type && (
+                                                    <span style={{ 
+                                                        marginLeft: '1.5rem', 
+                                                        fontSize: '10px', 
+                                                        fontWeight: 900, 
+                                                        padding: '2px 8px', 
+                                                        borderRadius: '6px',
+                                                        textTransform: 'uppercase',
+                                                        letterSpacing: '0.05em',
+                                                        ...getPillStyles(opt.cluster_type)
+                                                    }}>
+                                                        {opt.cluster_type}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {!hideCodeBadge && optCode && (
                                                 <span style={{ fontSize: '10px', opacity: 0.6, padding: '2px 6px', background: '#f1f5f9', borderRadius: '4px', fontWeight: 700 }}>
                                                     {optCode}
                                                 </span>

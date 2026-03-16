@@ -58,6 +58,7 @@ class RoutePath(SoftDeleteModel):
     via_locations = models.JSONField(default=list, help_text="Ordered list of location IDs")
     is_default = models.BooleanField(default=False)
     distance_km = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    segment_data = models.JSONField(default=dict, blank=True, help_text="Distances between segments")
     latitude = models.DecimalField(max_digits=12, decimal_places=9, null=True, blank=True)
     longitude = models.DecimalField(max_digits=12, decimal_places=9, null=True, blank=True)
     

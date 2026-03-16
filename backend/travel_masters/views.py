@@ -235,16 +235,20 @@ class RouteViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def find_paths(self, request):
-        source_name = request.query_params.get('source')
-        dest_name = request.query_params.get('destination')
+        source_name = request.query_params.get('source', '').strip()
+        dest_name = request.query_params.get('destination', '').strip()
         
         if not source_name or not dest_name:
             return Response({"error": "Source and destination are required"}, status=400)
+
+        # Strip code suffix if present (e.g. "Nellore - NLR" -> "Nellore")
+        source_base = source_name.split(' - ')[0].strip()
+        dest_base = dest_name.split(' - ')[0].strip()
             
         # Find routes that match source and destination names
         matching_routes = Route.objects.filter(
-            source__name__iexact=source_name, 
-            destination__name__iexact=dest_name
+            models.Q(source__name__iexact=source_base) | models.Q(source__name__iexact=source_name),
+            models.Q(destination__name__iexact=dest_base) | models.Q(destination__name__iexact=dest_name)
         )
         
         paths = RoutePath.objects.filter(route__in=matching_routes)
