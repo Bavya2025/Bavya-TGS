@@ -3,6 +3,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import FleetHub, Vehicle, Driver, VehicleBooking
 from .serializers import FleetHubSerializer, VehicleSerializer, DriverSerializer, VehicleBookingSerializer
+from core.permissions import IsCustomAuthenticated
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from django.utils.dateparse import parse_datetime
+from django.db.models import Q
 
 class FleetHubViewSet(viewsets.ModelViewSet):
     queryset = FleetHub.objects.prefetch_related('vehicles__bookings', 'drivers').all()
@@ -110,3 +115,54 @@ class FleetItemViewSet(viewsets.ViewSet):
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Driver.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+
+# Simple CRUD for items (Vehicles, Drivers) under a Hub context if needed
+
+
+@api_view(['GET'])
+@permission_classes([IsCustomAuthenticated])
+def available_assets(request):
+    """
+    Returns vehicles and drivers that are truly free:
+    - Vehicle: status='available' AND no active VehicleBooking overlapping the given date range.
+    - Driver: availability='Available' AND no active VehicleBooking overlapping the given date range.
+
+    Query params (optional):
+      start_date  – ISO datetime string (e.g. 2026-03-16T00:00:00)
+      end_date    – ISO datetime string
+    """
+    start_str = request.query_params.get('start_date')
+    end_str   = request.query_params.get('end_date')
+    start_dt  = parse_datetime(start_str) if start_str else None
+    end_dt    = parse_datetime(end_str)   if end_str   else None
+
+    # --- Vehicles ---
+    # Step 1: base filter – only those marked available
+    vehicle_qs = Vehicle.objects.filter(status='available').select_related('hub')
+
+    # Step 2: exclude those with an overlapping booking
+    if start_dt and end_dt:
+        booked_vehicle_ids = VehicleBooking.objects.filter(
+            start_date__lt=end_dt,
+            end_date__gt=start_dt
+        ).values_list('vehicle_id', flat=True)
+        vehicle_qs = vehicle_qs.exclude(id__in=booked_vehicle_ids)
+
+    # --- Drivers ---
+    driver_qs = Driver.objects.filter(
+        Q(availability__iexact='available') | Q(status__iexact='available')
+    ).select_related('hub')
+
+    if start_dt and end_dt:
+        booked_driver_ids = VehicleBooking.objects.filter(
+            start_date__lt=end_dt,
+            end_date__gt=start_dt,
+            driver__isnull=False
+        ).values_list('driver_id', flat=True)
+        driver_qs = driver_qs.exclude(id__in=booked_driver_ids)
+
+    vehicles_data = VehicleSerializer(vehicle_qs, many=True).data
+    drivers_data  = DriverSerializer(driver_qs, many=True).data
+
+    return Response({'vehicles': vehicles_data, 'drivers': drivers_data})

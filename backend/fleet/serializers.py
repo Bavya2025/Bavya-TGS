@@ -23,4 +23,11 @@ class FleetHubSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = FleetHub
-        fields = '__all__'
+        fields = [
+            'id', 'name', 'address', 'location', 'pincode', 'is_active', 
+            'latitude', 'longitude', 'image', 'description', 'created_at',
+            'vehicles', 'drivers',
+            'continent_id', 'country_id', 'state_id', 'district_id', 
+            'mandal_id', 'cluster_id', 'visiting_location_id'
+        ]
+        read_only_fields = ('created_at',)

@@ -191,7 +191,6 @@ const SupportBot = () => {
                 if (bestConfidence < 0.2 && finalTranscript.length < 15) {
                     const placeholder = document.querySelector('.chat-footer input');
                     if (placeholder) placeholder.placeholder = `Low confidence (${Math.round(bestConfidence*100)}%) ignored...`;
-                    console.warn(`Mic: Result ignored (Confidence: ${bestConfidence})`);
                     return;
                 }
 
@@ -218,7 +217,6 @@ const SupportBot = () => {
         };
 
         rec.onerror = (event) => {
-            console.error("Mic: RECOGNITION ERROR:", event.error);
             if (event.error === 'not-allowed') {
                 setModal({
                     show: true,
@@ -255,7 +253,6 @@ const SupportBot = () => {
                     try {
                         if (isListening) rec.start();
                     } catch (e) {
-                        console.warn("Mic: Restart failed, re-wiring...", e);
                         setupRecognition();
                     }
                 }, 1500);
@@ -358,7 +355,6 @@ const SupportBot = () => {
                     recognition.current.lang = currentLang;
                     recognition.current.start();
                 } catch (e2) {
-                    console.error("Mic: CRITICAL FAILURE:", e2);
                     setIsListening(false);
                 }
             }
@@ -420,7 +416,6 @@ const SupportBot = () => {
             const useRomanAtomic = nativeVoices.length === 0 && speechFallback;
 
             if (useRomanAtomic) {
-                console.info("TTS: Using Atomic Romanized Fallback (Preventing Echo)");
                 startSpeaking(speechFallback, "", targetLang, 0);
                 return;
             }
@@ -526,7 +521,6 @@ const SupportBot = () => {
                 if (onChunkEnd) onChunkEnd();
             };
             utterance.onerror = (e) => {
-                console.error("TTS Error:", e);
                 utteranceRef.current = null;
                 
                 // v11.6: Continuer - If current chunk fails, move to next!
@@ -606,7 +600,6 @@ const SupportBot = () => {
             setTimeout(() => speak(botReply, newLanguage), 100);
             
             if (newLanguage && newLanguage !== language) {
-                console.info(`Chat: Detected Language Jump! Syncing UI from ${language} -> ${newLanguage}`);
                 setLanguage(newLanguage);
             }
             
@@ -617,7 +610,6 @@ const SupportBot = () => {
                 detectedLang: detectedLang // v12.5
             }]);
         } catch (error) {
-            console.error("Chat error:", error);
             
             // v7.9: Handle Session Expiry (401) with SPA redirect
             if (error.response && error.response.status === 401) {
@@ -778,7 +770,13 @@ const SupportBot = () => {
                             >
                                 {isSpeakingEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
                             </button>
-                            <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                            <button 
+                                onClick={() => {
+                                    setIsOpen(false);
+                                    if (window.speechSynthesis) window.speechSynthesis.cancel();
+                                }} 
+                                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+                            >
                                 <X size={20} />
                             </button>
                         </div>
