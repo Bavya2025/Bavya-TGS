@@ -1120,7 +1120,6 @@ const AdminMasters = () => {
                                 <span>{editMode ? (currentJurisdictions.length > 1 ? `Update All Selected (${currentJurisdictions.length})` : 'Update Jurisdiction') : `Save All Jurisdictions (${currentJurisdictions.length})`}</span>
                             </button>
                         </div>
->>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                     </div>
                 </div>
             )}

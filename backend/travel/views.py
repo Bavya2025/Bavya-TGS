@@ -463,16 +463,9 @@ class TripListCreateView(generics.ListCreateAPIView):
         if current_approver:
             Notification.objects.create(
                 user=current_approver,
-<<<<<<< HEAD
                 title=f"New {label} Request",
                 message=f"{user.name} has submitted a new {label.lower()} request to {trip.destination}.",
                 type='info'
-=======
-                title="New Trip Request",
-                message=f"{user.name} has submitted a new trip request to {trip.destination}.",
-                type='info',
-                link='/approvals'
->>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
             )
         
         if trip.accommodation_requests and any('Room' in r for r in trip.accommodation_requests):
@@ -481,19 +474,12 @@ class TripListCreateView(generics.ListCreateAPIView):
                 Notification.objects.create(
                     user=manager,
                     title="Room Request Received",
-<<<<<<< HEAD
                     message=f"{user.name} has requested a room for {label.lower()} {trip.trip_id}.",
                     type='info'
-=======
-                    message=f"{user.name} has requested a room for trip {trip.trip_id} to {trip.destination}.",
-                    type='info',
-                    link='/guesthouse?tab=requests'
->>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                 )
 
         notify_hr(f"New {label} Request", f"{user.name} has raised a {label.lower()} request to {trip.destination} (ID: {trip.trip_id}).")
 
-<<<<<<< HEAD
 class TravelListCreateView(TripListCreateView):
     def get_queryset(self):
         user = getattr(self.request, 'custom_user', None)
@@ -502,19 +488,6 @@ class TravelListCreateView(TripListCreateView):
 
     def perform_create(self, serializer):
         super().perform_create(serializer, is_local=True)
-=======
-        # Notify Fleet Managers if vehicle is requested
-        if trip.accommodation_requests and any('Vehicle' in r for r in trip.accommodation_requests):
-            fleet_notifees = User.objects.filter(Q(role__name='Admin') | Q(role__name='GuestHouseManager'), is_active=True)
-            for manager in fleet_notifees:
-                Notification.objects.create(
-                    user=manager,
-                    title="Vehicle Request Received",
-                    message=f"{user.name} has requested a company vehicle for trip {trip.trip_id} to {trip.destination}.",
-                    type='info',
-                    link='/fleet'
-                )
->>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
 
 class TripBookingSearchView(generics.ListAPIView):
     serializer_class = TripSerializer
@@ -2723,17 +2696,4 @@ class CustomMasterValueViewSet(viewsets.ModelViewSet):
     serializer_class = CustomMasterValueSerializer
     filterset_fields = ['definition']
 
-<<<<<<< HEAD
-=======
-    def get_queryset(self):
-        ensure_default_master_setup()
-        queryset = CustomMasterValue.objects.all().select_related('definition')
-        definition_id = self.request.query_params.get('definition', None) or self.request.query_params.get('definition_id', None)
-        definition_key = self.request.query_params.get('definition_key', None)
-        if definition_id is not None:
-            queryset = queryset.filter(definition_id=definition_id)
-        if definition_key is not None:
-            queryset = queryset.filter(definition__key=definition_key)
-        return queryset.order_by('name')
->>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
 

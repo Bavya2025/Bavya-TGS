@@ -290,11 +290,7 @@ class TripSerializer(serializers.ModelSerializer):
 
     has_gh_booking = serializers.SerializerMethodField()
     has_vehicle_booking = serializers.SerializerMethodField()
-<<<<<<< HEAD
     job_reports = JobReportSerializer(many=True, read_only=True)
-=======
-    user_base_location = serializers.ReadOnlyField(source='user.base_location')
->>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
 
     class Meta:
         model = Trip
@@ -306,11 +302,7 @@ class TripSerializer(serializers.ModelSerializer):
             'vehicle_type', 'members', 'lifecycle_events', 'created_at', 'updated_at',
             'advances', 'expenses', 'odometer', 'claim', 'reporting_manager_name',
             'current_approver', 'total_approved_advance', 'total_expenses', 'wallet_balance', 'has_gh_booking', 'has_vehicle_booking',
-<<<<<<< HEAD
             'rejection_reason', 'rejected_by', 'fuel_rate_snapshot', 'job_reports'
-=======
-            'rejection_reason', 'rejected_by', 'fuel_rate_snapshot', 'user_base_location'
->>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
         ]
         read_only_fields = ('trip_id', 'user', 'user_name', 'user_emp_id', 'status', 'cost_estimate', 'created_at', 'updated_at', 'lifecycle_events')
 

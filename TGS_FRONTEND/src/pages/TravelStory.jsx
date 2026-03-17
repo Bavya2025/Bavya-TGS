@@ -107,7 +107,7 @@ const TravelStory = () => {
         p = p.replace(/'\]$/, '').replace(/'$/, '');
 
         if (p.startsWith('http') || p.startsWith('data:')) return p;
-        const backendBase = 'http://192.168.1.138:4567';
+        const backendBase = import.meta.env.VITE_API_URL || window.location.origin;
         return `${backendBase}${p.startsWith('/') ? '' : '/'}${p}`;
     };
 

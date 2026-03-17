@@ -31,11 +31,7 @@ import {
     AlertTriangle,
     FileText,
     ArrowRight,
-<<<<<<< HEAD
     Upload
-=======
-    Bell
->>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
 } from 'lucide-react';
 import ReminderModal from '../components/ReminderModal';
 import { encodeId, decodeId } from '../utils/idEncoder';
