@@ -29,24 +29,7 @@ const Sidebar = () => {
     const rawRole = user?.role?.toLowerCase() || 'employee';
     const userRole = rawRole === 'user' ? 'employee' : rawRole;
 
-<<<<<<< HEAD
-    const fetchApprovalCount = async () => {
-        try {
-            const response = await api.get('/api/approvals/count/');
-            setApprovalCount(response.data.total);
-        } catch (error) {
-            console.error("Failed to fetch approval count:", error);
-        }
-    };
 
-    React.useEffect(() => {
-        fetchApprovalCount();
-        const interval = setInterval(fetchApprovalCount, 10000);
-        return () => clearInterval(interval);
-    }, [userRole]);
-
-=======
->>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
     const sections = [
         {
             label: 'CORE',
