@@ -22,7 +22,9 @@ import {
     HelpCircle,
     Car,
     ClipboardList,
-    Fuel
+    Fuel,
+    Inbox as InboxIcon,
+    Archive
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -88,12 +90,12 @@ const Header = () => {
     const mainNav = [
         { title: 'Dashboard', icon: <LayoutDashboard size={18} />, path: '/', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo', 'guesthousemanager'] },
         { title: 'My Trips', icon: <Plane size={18} />, path: '/trips', roles: ['employee', 'reporting_authority', 'finance', 'admin'] },
-        { title: 'My Requests', icon: <ClipboardList size={18} />, path: '/my-requests', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo'] },
+        { title: 'Inbox', icon: <InboxIcon size={18} />, path: '/inbox' },
+        { title: 'Outbox', icon: <Archive size={18} />, path: '/outbox' },
     ];
 
     const managementNav = [
         { title: 'Finance Hub', icon: <IndianRupee size={18} />, path: '/finance', roles: ['finance', 'admin'] },
-        { title: 'Approvals', icon: <BarChart3 size={18} />, path: '/approvals', roles: ['employee', 'reporting_authority', 'hr', 'finance', 'cfo', 'admin'] },
         { title: 'Job Report', icon: <ClipboardList size={18} />, path: '/job-report', roles: ['employee', 'reporting_authority', 'admin'] },
         { title: 'Settlements', icon: <Wallet size={18} />, path: '/settlement', roles: ['finance', 'admin'] },
         { title: 'Documents', icon: <FolderOpen size={18} />, path: '/documents', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo'] },
@@ -112,8 +114,8 @@ const Header = () => {
         { title: 'Audit Logs', icon: <ShieldCheck size={18} />, path: '/audit-logs', roles: ['admin'] },
     ];
 
-    const filteredMain = mainNav.filter(item => item.roles.includes(userRole));
-    const filteredManagement = managementNav.filter(item => item.roles.includes(userRole));
+    const filteredMain = mainNav.filter(item => !item.roles || item.roles.includes(userRole));
+    const filteredManagement = managementNav.filter(item => !item.roles || item.roles.includes(userRole));
 
     return (
         <header className="header">

@@ -1,0 +1,46 @@
+Making migrations...
+It is impossible to add a non-nullable field 'user' to jobreport without specifying a default. This is because the database needs something to populate existing rows.
+Please select a fix:
+ 1) Provide a one-off default now (will be set on all existing rows with a null value for this column)
+ 2) Quit and manually define a default value in models.py.
+Select an option: Traceback (most recent call last):
+  File "c:\Users\Usha\Desktop\TGS\Bavya-TGS\backend\run_migs.py", line 9, in <module>
+    call_command('makemigrations', 'travel')
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Usha\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\core\management\__init__.py", line 194, in call_command
+    return command.execute(*args, **defaults)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Usha\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\core\management\base.py", line 458, in execute
+    output = self.handle(*args, **options)
+  File "C:\Users\Usha\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\core\management\base.py", line 106, in wrapper
+    res = handle_func(*args, **kwargs)
+  File "C:\Users\Usha\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\core\management\commands\makemigrations.py", line 233, in handle
+    changes = autodetector.changes(
+        graph=loader.graph,
+    ...<2 lines>...
+        migration_name=self.migration_name,
+    )
+  File "C:\Users\Usha\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\db\migrations\autodetector.py", line 46, in changes
+    changes = self._detect_changes(convert_apps, graph)
+  File "C:\Users\Usha\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\db\migrations\autodetector.py", line 196, in _detect_changes
+    self.generate_added_fields()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Usha\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\db\migrations\autodetector.py", line 1026, in generate_added_fields
+    self._generate_added_field(app_label, model_name, field_name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Usha\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\db\migrations\autodetector.py", line 1059, in _generate_added_field
+    field.default = self.questioner.ask_not_null_addition(
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        field_name, model_name
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Usha\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\db\migrations\questioner.py", line 169, in ask_not_null_addition
+    choice = self._choice_input(
+        f"It is impossible to add a non-nullable field '{field_name}' "
+    ...<10 lines>...
+        ],
+    )
+  File "C:\Users\Usha\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\db\migrations\questioner.py", line 114, in _choice_input
+    result = input()
+EOFError: EOF when reading a line

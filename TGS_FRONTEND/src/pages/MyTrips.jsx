@@ -135,8 +135,8 @@ const MyTrips = () => {
                     : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             });
             const url = URL.createObjectURL(blob);
-            const a   = document.createElement('a');
-            a.href     = url;
+            const a = document.createElement('a');
+            a.href = url;
             a.download = `expense_statement_${tripId}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
             document.body.appendChild(a);
             a.click();
@@ -154,9 +154,13 @@ const MyTrips = () => {
     const fetchTrips = async () => {
         setIsLoading(true);
         try {
-            const response = await api.get('/api/trips/', {
-                params: { search: searchTerm }
-            });
+            const [tripsRes, travelsRes] = await Promise.all([
+                api.get('/api/trips/', { params: { search: searchTerm } }),
+                api.get('/api/travels/', { params: { search: searchTerm } })
+            ]);
+
+            const allData = [...(tripsRes.data || []), ...(travelsRes.data || [])];
+
             const parseJsonField = (field) => {
                 if (!field) return [];
                 if (Array.isArray(field)) return field;
@@ -171,13 +175,13 @@ const MyTrips = () => {
                 return [];
             };
 
-            if (!Array.isArray(response.data)) {
-                console.warn("Expected array from /api/trips/, got:", response.data);
+            if (!Array.isArray(allData)) {
+                console.warn("Expected array from APIs, got:", allData);
                 setTrips([]);
                 return;
             }
 
-            const mappedTrips = response.data.filter(t => t !== null && t !== undefined).map(trip => ({
+            const mappedTrips = allData.filter(t => t !== null && t !== undefined).map(trip => ({
                 id: trip.trip_id,
                 userName: trip.user_name || 'N/A',
                 userEmpId: trip.user_emp_id || 'N/A',
@@ -223,9 +227,17 @@ const MyTrips = () => {
     }, [searchTerm]);
 
     const filteredTrips = trips.filter(t => {
+        const s = (t.status || '').toLowerCase();
+
+        // Comprehensive list of states to hide as per user request (Pending/Processing states)
+        const hideStates = ['pending', 'submitted', 'forwarded', 'draft', 'under process', 'in progress', 'ongoing'];
+        const isHidden = hideStates.some(state => s === state || s.includes('pending'));
+
+        if (isHidden) return false;
+
         const matchesStatus = filter === 'All Status' || t.status === filter;
-        const matchesType = typeFilter === 'All' || 
-            (typeFilter === 'Trip' && !t.considerAsLocal) || 
+        const matchesType = typeFilter === 'All' ||
+            (typeFilter === 'Trip' && !t.considerAsLocal) ||
             (typeFilter === 'Travel' && t.considerAsLocal);
         return matchesStatus && matchesType;
     });
@@ -234,7 +246,7 @@ const MyTrips = () => {
         <div className="trips-page">
             <div className="page-header">
                 <div>
-                    <h1>My Trips</h1>
+                    <h1>My Trips & Tour Plans</h1>
                     <p>Track your travel history and upcoming bookings.</p>
                 </div>
                 <div className="header-actions" style={{ display: 'flex', gap: '12px' }}>
@@ -247,7 +259,7 @@ const MyTrips = () => {
                     {(typeFilter === 'All' || typeFilter === 'Travel') && (
                         <button className="btn-primary" style={{ backgroundColor: 'white', color: 'var(--magenta)', border: '1px solid var(--magenta)' }} onClick={() => navigate('/travel-creation')}>
                             <Briefcase size={18} style={{ marginRight: '8px' }} />
-                            New Travel Request
+                            New Tour Plan
                         </button>
                     )}
                 </div>
@@ -263,16 +275,7 @@ const MyTrips = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <div className="filter-group">
-                    <Filter size={18} />
-                    <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-                        <option>All Status</option>
-                        <option>Approved</option>
-                        <option>Pending</option>
-                        <option>Settled</option>
-                        <option>Rejected</option>
-                    </select>
-                </div>
+
                 <div className="filter-group">
                     <Briefcase size={18} />
                     <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
@@ -298,7 +301,15 @@ const MyTrips = () => {
                     </div>
                 ) : (
                     filteredTrips.map(trip => (
-                        <div key={trip.id} className="trip-card premium-card">
+                        <div key={trip.id} className={`trip-card premium-card ${trip.status?.toLowerCase() === 'settled' ? 'completed-blocked' : ''}`}>
+                            {trip.status?.toLowerCase() === 'settled' && (
+                                <div className="settled-overlay">
+                                    <div className="settled-badge">
+                                        <CheckCircle2 size={20} />
+                                        <span>JOURNEY COMPLETED & SETTLED</span>
+                                    </div>
+                                </div>
+                            )}
                             <div className="card-top">
                                 <div className={`status-pill ${trip.status?.toLowerCase() || 'pending'}`}>
                                     {trip.status}
@@ -332,33 +343,36 @@ const MyTrips = () => {
                                     <p>{trip.cost}</p>
                                 </div>
                                 <div className="card-actions-v">
-                                    <button
-                                        className="view-details-btn-v secondary"
-                                        onClick={() => setSelectedTrip(trip)}
-                                    >
-                                        <span>View Details</span>
-                                        <ArrowRight size={16} />
-                                    </button>
+                                    {!trip.considerAsLocal && (
+                                        <>
+                                            <button
+                                                className="view-details-btn-v secondary"
+                                                onClick={() => setSelectedTrip(trip)}
+                                            >
+                                                <span>View Details</span>
+                                                <ArrowRight size={16} />
+                                            </button>
 
-                                    <button
-                                        className="view-details-btn-v"
-                                        onClick={() => navigate(`/trip-timeline/${encodeId(trip.id)}`)}
-                                    >
-                                        <span>View Trip Timeline</span>
-                                        <ChevronRight size={16} />
-                                    </button>
+                                            <button
+                                                className="view-details-btn-v"
+                                                onClick={() => navigate(`/trip-timeline/${encodeId(trip.id)}`)}
+                                            >
+                                                <span>View Trip Timeline</span>
+                                                <ChevronRight size={16} />
+                                            </button>
+                                        </>
+                                    )}
 
                                     {trip.status?.toLowerCase() !== 'draft' && trip.status?.toLowerCase() !== 'cancelled' && (
                                         <button
                                             className="view-details-btn-v"
                                             style={{ color: 'var(--magenta)' }}
-                                            onClick={() => navigate(`/trip-story/${encodeId(trip.id)}`)}
+                                            onClick={() => navigate(`/${trip.considerAsLocal ? 'travel-story' : 'trip-story'}/${encodeId(trip.id)}`)}
                                         >
-                                            <span>View Trip Story</span>
+                                            <span>View {trip.considerAsLocal ? 'Travel Story' : 'Trip Story'}</span>
                                             <TrendingUp size={16} />
                                         </button>
                                     )}
-
                                 </div>
                             </div>
                         </div>
@@ -475,6 +489,43 @@ const MyTrips = () => {
                     </div>
                 )
             }
+            <style>{`
+                .trip-card.completed-blocked {
+                    position: relative;
+                    opacity: 0.85;
+                    pointer-events: none;
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                }
+                .settled-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(255, 255, 255, 0.4);
+                    backdrop-filter: grayscale(1);
+                    z-index: 5;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 20px;
+                }
+                .settled-badge {
+                    background: #0f172a;
+                    color: white;
+                    padding: 8px 16px;
+                    border-radius: 30px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 11px;
+                    font-weight: 800;
+                    letter-spacing: 0.5px;
+                    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+                    transform: rotate(-5deg);
+                }
+            `}</style>
         </div>
     );
 };

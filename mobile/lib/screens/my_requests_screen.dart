@@ -6,7 +6,14 @@ import '../models/trip_model.dart';
 import 'trip_details_screen.dart';
 
 class MyRequestsScreen extends StatefulWidget {
-  const MyRequestsScreen({super.key});
+  final bool hideHeader;
+  final int? enforceTab;
+
+  const MyRequestsScreen({
+    super.key,
+    this.hideHeader = false,
+    this.enforceTab,
+  });
 
   @override
   State<MyRequestsScreen> createState() => _MyRequestsScreenState();
@@ -27,6 +34,9 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> with SingleTickerPr
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    if (widget.enforceTab != null) {
+      _viewMode = widget.enforceTab == 0 ? 'active' : 'historical';
+    }
     _fetchData();
   }
 
@@ -151,8 +161,8 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> with SingleTickerPr
           ),
           Column(
             children: [
-              _buildCustomHeader(),
-              _buildFilterSection(),
+              if (!widget.hideHeader) _buildCustomHeader(),
+              if (widget.enforceTab == null) _buildFilterSection(),
               _buildTabBarSection(activeTrips.length, activeAdvances.length, activeClaims.length),
               Expanded(
                 child: _isLoading 

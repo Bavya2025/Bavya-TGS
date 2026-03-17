@@ -17,7 +17,7 @@ import { useToast } from '../context/ToastContext.jsx';
 import { encodeId } from '../utils/idEncoder';
 
 
-const MyRequests = () => {
+const MyRequests = ({ enforceView = null }) => {
     const navigate = useNavigate();
     const { showToast } = useToast();
 
@@ -25,8 +25,14 @@ const MyRequests = () => {
     const [advances, setAdvances] = useState([]);
     const [claims, setClaims] = useState([]);
 
-    const [viewMode, setViewMode] = useState('active'); // 'active' or 'historical'
+    const [viewMode, setViewMode] = useState(enforceView || 'active'); // 'active' or 'historical'
     const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        if (enforceView) {
+            setViewMode(enforceView);
+        }
+    }, [enforceView]);
 
     useEffect(() => {
         fetchData();
@@ -35,9 +41,12 @@ const MyRequests = () => {
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            // Fetch Trips
-            const tripsRes = await api.get('/api/trips/');
-            const rawTrips = tripsRes.data || [];
+            // Fetch Trips and Travels
+            const [tripsRes, travelsRes] = await Promise.all([
+                api.get('/api/trips/'),
+                api.get('/api/travels/')
+            ]);
+            const rawTrips = [...(tripsRes.data || []), ...(travelsRes.data || [])];
 
             // Map Trips
             const mappedTrips = rawTrips.map(trip => ({
@@ -145,27 +154,29 @@ const MyRequests = () => {
     );
 
     return (
-        <div className="requests-page">
-            <div className="req-header-top">
-                <div>
-                    <h1>My Requests</h1>
-                </div>
+        <div className={`requests-page ${enforceView ? 'pt-0 border-none px-0' : ''}`}>
+            {!enforceView && (
+                <div className="req-header-top">
+                    <div>
+                        <h1>My Requests</h1>
+                    </div>
 
-                <div className="req-filters">
-                    <button
-                        className={`filter-btn ${viewMode === 'active' ? 'active' : ''}`}
-                        onClick={() => setViewMode('active')}
-                    >
-                        <Clock size={16} /> Active Queue
-                    </button>
-                    <button
-                        className={`filter-btn ${viewMode === 'historical' ? 'active' : ''}`}
-                        onClick={() => setViewMode('historical')}
-                    >
-                        <CheckCircle2 size={16} /> Historical / Expired
-                    </button>
+                    <div className="req-filters">
+                        <button
+                            className={`filter-btn ${viewMode === 'active' ? 'active' : ''}`}
+                            onClick={() => setViewMode('active')}
+                        >
+                            <Clock size={16} /> Active Queue
+                        </button>
+                        <button
+                            className={`filter-btn ${viewMode === 'historical' ? 'active' : ''}`}
+                            onClick={() => setViewMode('historical')}
+                        >
+                            <CheckCircle2 size={16} /> Historical / Expired
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {isLoading ? (
                 <div className="loading-state h-64 flex flex-col items-center justify-center">

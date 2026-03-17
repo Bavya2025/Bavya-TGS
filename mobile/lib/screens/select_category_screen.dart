@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'expense_forms.dart';
+import 'trip_expense_form_detailed.dart';
 
 class SelectCategoryScreen extends StatelessWidget {
-  const SelectCategoryScreen({super.key});
+  final String tripId;
+  const SelectCategoryScreen({super.key, required this.tripId});
 
   @override
   Widget build(BuildContext context) {
@@ -50,9 +51,7 @@ class SelectCategoryScreen extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => ExpenseFormScreen(category: title),
-          ),
+          MaterialPageRoute(builder: (context) => TripExpenseFormDetailedScreen(category: title, tripId: tripId)),
         );
       },
       child: Container(

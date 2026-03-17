@@ -307,6 +307,7 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
                 "office": {
                     "name": off_info.get("name") or off_info.get("office_name"),
                     "level": off_info.get("level") or off_info.get("office_level"),
+                    "geo_location": off_info.get("geo_location") or item.get("location_details") or {}
                 }
             })
 
@@ -350,23 +351,54 @@ def get_manager_reports_locations(manager_code):
         GLOBAL_EMPLOYEE_CACHE['timestamp'] = now
         GLOBAL_EMPLOYEE_CACHE['data'] = all_emps_results
 
+    # 1. Resolve manager's internal employee ID from the manager_code
+    manager_id = None
+    for item in all_emps_results:
+        if item.get('employee', {}).get('employee_code') == manager_code:
+            manager_id = item.get('employee', {}).get('id')
+            break
+
+    if not manager_id:
+        return []
+
+    # 2. Recursively find ALL subordinates at every level
+    team_ids = set()
+    def find_all_reports(m_id):
+        direct_ids = []
+        for item in all_emps_results:
+            reporting_to = item.get('position', {}).get('reporting_to', [])
+            is_match = False
+            if reporting_to and isinstance(reporting_to[0], dict):
+                r_mgr_id = reporting_to[0].get('employee_id')
+                if r_mgr_id and str(r_mgr_id) == str(m_id):
+                    is_match = True
+            elif reporting_to and isinstance(reporting_to[0], (str, int)):
+                if str(reporting_to[0]) == str(m_id):
+                    is_match = True
+            
+            if is_match:
+                emp_id = item.get('employee', {}).get('id')
+                if emp_id and emp_id not in team_ids:
+                    team_ids.add(emp_id)
+                    direct_ids.append(emp_id)
+        
+        for d_id in direct_ids:
+            find_all_reports(d_id)
+
+    find_all_reports(manager_id)
+
+    # 3. Collect geo_location cluster/district for all team members
     team_locations = set()
     for item in all_emps_results:
-        pos = item.get('position', {})
-        reporting_to = pos.get('reporting_to', [])
-        
-        # Check if first manager matches manager_code
-        if reporting_to and isinstance(reporting_to[0], dict):
-            if reporting_to[0].get('employee_code') == manager_code:
-                off_name = item.get('office', {}).get('name')
-                if off_name:
-                    team_locations.add(off_name.strip())
-        elif reporting_to and isinstance(reporting_to[0], str):
-            if reporting_to[0] == manager_code:
-                off_name = item.get('office', {}).get('name')
-                if off_name:
-                    team_locations.add(off_name.strip())
-                    
+        emp_id = item.get('employee', {}).get('id')
+        if emp_id in team_ids:
+            geo = item.get('office', {}).get('geo_location', {})
+            # Prioritize cluster > district > mandal > office name
+            loc_label = (geo.get('cluster') or geo.get('district') or geo.get('mandal') or 
+                         item.get('office', {}).get('name') or '').strip()
+            if loc_label:
+                team_locations.add(loc_label)
+
     return sorted(list(team_locations))
 
 def sync_user_hierarchy(user):

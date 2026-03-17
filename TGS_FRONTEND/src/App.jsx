@@ -11,6 +11,8 @@ import MileageCapture from './pages/MileageCapture';
 import CFOWarRoom from './pages/CFOWarRoom';
 import PolicyCenter from './pages/PolicyCenter';
 import ApprovalInbox from './pages/ApprovalInbox';
+import Inbox from './pages/Inbox';
+import Outbox from './pages/Outbox';
 import AdvanceRequest from './pages/AdvanceRequest';
 import GuestHouse from './pages/GuestHouse';
 import TripPlanner from './pages/TripPlanner';
@@ -26,6 +28,7 @@ import Profile from './pages/Profile';
 import ApiManagement from './pages/ApiManagement';
 import TripTimeline from './pages/TripTimeline';
 import TripStory from './pages/TripStory';
+import TravelStory from './pages/TravelStory';
 import LoginHistory from './pages/LoginHistory';
 import AuditLogs from './pages/AuditLogs';
 import DocumentOrganizerPage from './pages/DocumentOrganizerPage';
@@ -289,6 +292,8 @@ function App() {
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/trips" element={<ProtectedRoute><MyTrips /></ProtectedRoute>} />
             <Route path="/my-requests" element={<ProtectedRoute><MyRequests /></ProtectedRoute>} />
+            <Route path="/inbox" element={<ProtectedRoute><Inbox /></ProtectedRoute>} />
+            <Route path="/outbox" element={<ProtectedRoute><Outbox /></ProtectedRoute>} />
             <Route path="/documents" element={<ProtectedRoute><DocumentOrganizerPage /></ProtectedRoute>} />
             <Route path="/planner" element={<ProtectedRoute><TripPlanner /></ProtectedRoute>} />
             <Route path="/create-trip" element={<ProtectedRoute><CreateTrip /></ProtectedRoute>} />
@@ -303,24 +308,25 @@ function App() {
             <Route path="/disputes" element={<ProtectedRoute><Disputes /></ProtectedRoute>} />
             <Route path="/vendors" element={<ProtectedRoute><VendorSelection /></ProtectedRoute>} />
             <Route path="/location-codes" element={<ProtectedRoute><LocationCodes /></ProtectedRoute>} />
-            <Route path="/finance" element={<AdminRoute><FinanceDashboard /></AdminRoute>} />
-            <Route path="/employees" element={<AdminRoute><UserManagement /></AdminRoute>} />
+            <Route path="/finance" element={<ProtectedRoute><FinanceDashboard /></ProtectedRoute>} />
+            <Route path="/employees" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
             <Route path="/policy" element={<ProtectedRoute><PolicyCenter /></ProtectedRoute>} />
-            <Route path="/cfo-war-room" element={<AdminRoute><CFOWarRoom /></AdminRoute>} />
+            <Route path="/cfo-war-room" element={<ProtectedRoute><CFOWarRoom /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/api-management" element={<AdminRoute><ApiManagement /></AdminRoute>} />
+            <Route path="/api-management" element={<ProtectedRoute><ApiManagement /></ProtectedRoute>} />
             <Route path="/trip-timeline/:id" element={<ProtectedRoute><TripTimeline /></ProtectedRoute>} />
             <Route path="/trip-story/:id" element={<ProtectedRoute><TripStory /></ProtectedRoute>} />
+            <Route path="/travel-story/:id" element={<ProtectedRoute><TravelStory /></ProtectedRoute>} />
             <Route path="/login-history" element={<ProtectedRoute><LoginHistory /></ProtectedRoute>} />
-            <Route path="/audit-logs" element={<AdminRoute><AuditLogs /></AdminRoute>} />
+            <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
             <Route path="/help" element={<ProtectedRoute><HelpSupport /></ProtectedRoute>} />
-            <Route path="/route-management" element={<AdminRoute><RouteManagement /></AdminRoute>} />
-            <Route path="/master-management" element={<AdminRoute><AdminMasterManagement /></AdminRoute>} />
-            <Route path="/job-report" element={<AdminRoute><JobReport /></AdminRoute>} />
-            <Route path="/fuel-master" element={<AdminRoute><FuelMaster /></AdminRoute>} />
+            <Route path="/route-management" element={<ProtectedRoute><RouteManagement /></ProtectedRoute>} />
+            <Route path="/master-management" element={<ProtectedRoute><AdminMasterManagement /></ProtectedRoute>} />
+            <Route path="/job-report" element={<ProtectedRoute><JobReport /></ProtectedRoute>} />
+            <Route path="/fuel-master" element={<ProtectedRoute><FuelMaster /></ProtectedRoute>} />
             <Route path="/travel-creation" element={<ProtectedRoute><TravelCreation /></ProtectedRoute>} />
+            <Route path="/AdminMasters" element={<ProtectedRoute><AdminMasters /></ProtectedRoute>} />
             <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
-            <Route path="/AdminMasters" element={<AdminRoute><AdminMasters /></AdminRoute>} />
           </Routes>
         </Router>
       </AuthProvider>

@@ -1,6 +1,7 @@
 from django.db import models
 import random
 import datetime
+import re
 from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
@@ -60,7 +61,7 @@ class Trip(SoftDeleteModel):
     ]
 
     user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='trips', null=True, blank=True)
-    trip_id = models.CharField(max_length=20, unique=True, primary_key=True, editable=False)
+    trip_id = models.CharField(max_length=100, unique=True, primary_key=True, editable=False)
     source = models.CharField(max_length=100) 
     destination = models.CharField(max_length=100) 
     route_path = models.ForeignKey('travel_masters.RoutePath', on_delete=models.SET_NULL, null=True, blank=True)
@@ -75,7 +76,7 @@ class Trip(SoftDeleteModel):
     trip_leader = models.CharField(max_length=100, default='Self (Creator)')
     accommodation_requests = models.JSONField(default=list, blank=True) 
     lifecycle_events = models.JSONField(default=list, blank=True) 
-    project_code = models.CharField(max_length=50, default='General', blank=True)
+    project_code = models.CharField(max_length=100, default='General', blank=True)
     consider_as_local = models.BooleanField(default=True)
     current_approver = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='trips_to_approve')
     status = models.CharField(max_length=50, default='Submitted') # Submitted, Forwarded, Manager Approved, Approved, Rejected, Completed
@@ -99,13 +100,51 @@ class Trip(SoftDeleteModel):
         is_new = self._state.adding
         
         if not self.trip_id:
-            current_year = datetime.datetime.now().year
-            random_number = random.randint(1000, 9999)
-            self.trip_id = f"TRP-{current_year}-{random_number}"
-            
-            while Trip.objects.filter(trip_id=self.trip_id).exists():
+            if self.consider_as_local:
+                # 1. Project Code
+                proj = (self.project_code or 'GS').upper()
+                if proj == 'GENERAL': proj = 'GS'
+                
+                # 2. Branch Code
+                branch = 'GEN'
+                if self.user:
+                    base_loc = self.user.base_location
+                    if base_loc:
+                        try:
+                            from travel_masters.models import Location
+                            loc = Location.objects.filter(name__icontains=base_loc).first()
+                            if loc and loc.code:
+                                branch = loc.code.upper()
+                            else:
+                                clean_loc = re.sub(r'[^a-zA-Z0-9]', '', base_loc)
+                                branch = clean_loc[:3].upper() if len(clean_loc) >= 3 else clean_loc.upper()
+                        except:
+                            pass
+                
+                # 3. MonthYear (e.g., apr26) – use english abbreviation to avoid locale issues
+                import calendar
+                ref_date = self.start_date or datetime.date.today()
+                month_year = f"{calendar.month_abbr[ref_date.month].lower()}{str(ref_date.year)[-2:]}"
+                
+                # 4. Generate & Check Uniqueness
+                base_id = f"ITS-{proj}-{branch}-{month_year}"
+                generated_id = base_id
+                
+                seq = 1
+                while Trip.objects.filter(trip_id=generated_id).exists():
+                    generated_id = f"{base_id}-{seq:02d}"
+                    seq += 1
+                
+                self.trip_id = generated_id
+            else:
+                # Legacy / Trip ID format
+                current_year = datetime.datetime.now().year
                 random_number = random.randint(1000, 9999)
                 self.trip_id = f"TRP-{current_year}-{random_number}"
+                
+                while Trip.objects.filter(trip_id=self.trip_id).exists():
+                    random_number = random.randint(1000, 9999)
+                    self.trip_id = f"TRP-{current_year}-{random_number}"
         
         if is_new and not self.lifecycle_events:
             self.lifecycle_events = [{
@@ -429,6 +468,22 @@ class BulkActivityBatch(SoftDeleteModel):
 
     def __str__(self):
         return f"Batch {self.id} - {self.user.name} ({self.status})"
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class JobReport(SoftDeleteModel):
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='job_reports')
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='job_reports', null=True)
+    description = models.TextField()
+    attachment = models.TextField(null=True, blank=True) # Base64 encoded PDF
+    file_name = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Job Report for {self.trip.trip_id} by {self.user.name}"
 
     class Meta:
         ordering = ['-created_at']

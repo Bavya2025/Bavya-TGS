@@ -1,10 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    TripListCreateView, TripDetailView, ExpenseViewSet, TravelClaimViewSet, 
+    TripListCreateView, TravelListCreateView, TripDetailView, ExpenseViewSet, TravelClaimViewSet, 
     TravelAdvanceViewSet, TripOdometerViewSet, DashboardStatsView,
     ApprovalsView, ApprovalCountView, TripBookingSearchView, DisputeViewSet,
-    PolicyDocumentViewSet, TripSettlementView, CFOWarRoomView, BulkActivityBatchViewSet,
+    PolicyDocumentViewSet, TripSettlementView, CFOWarRoomView, BulkActivityBatchViewSet, JobReportViewSet,
     TripTrackingView,
     TravelModeMasterViewSet, BookingTypeMasterViewSet, AirlineMasterViewSet,
     FlightClassMasterSerializer, FlightClassMasterViewSet, TrainClassMasterViewSet, BusOperatorMasterViewSet, BusTypeMasterViewSet,
@@ -26,6 +26,7 @@ router.register(r'odometers', TripOdometerViewSet)
 router.register(r'disputes', DisputeViewSet)
 router.register(r'policies', PolicyDocumentViewSet)
 router.register(r'bulk-activities', BulkActivityBatchViewSet)
+router.register(r'job-reports', JobReportViewSet)
 
 # Master route registers (Travel)
 router.register(r'travel-mode-masters', TravelModeMasterViewSet)
@@ -66,6 +67,8 @@ router.register(r'custom-master-values', CustomMasterValueViewSet)
 
 urlpatterns = [
     path('trips/', TripListCreateView.as_view(), name='trip-list-create'),
+    path('travels/', TravelListCreateView.as_view(), name='travel-list-create'),
+    path('travels/<str:trip_id>/', TripDetailView.as_view(), name='travel-detail'),
     path('trips/approvals/', ApprovalsView.as_view(), name='trip-approvals-list'),
     path('trips/search/', TripBookingSearchView.as_view(), name='trip-search'),
     path('trips/<str:trip_id>/', TripDetailView.as_view(), name='trip-detail'),

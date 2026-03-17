@@ -65,7 +65,7 @@ const ExpenseReportPDF = forwardRef(({ trip }, ref) => {
                     </tr>
                     <tr>
                         <td style={{ border: '1px solid #000', padding: '5px', fontWeight: 'bold' }}>Trip Source</td>
-                        <td style={{ border: '1px solid #000', padding: '5px' }}>{trip.source || 'N/A'}</td>
+                        <td style={{ border: '1px solid #000', padding: '5px' }}>{trip.consider_as_local ? (trip.user_base_location || trip.source) : (trip.source || 'N/A')}</td>
                         <td style={{ border: '1px solid #000', padding: '5px', fontWeight: 'bold' }}>Team Members</td>
                         <td style={{ border: '1px solid #000', padding: '5px' }}>
                             {(() => {

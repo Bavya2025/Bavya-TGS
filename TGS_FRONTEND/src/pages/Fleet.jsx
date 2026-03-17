@@ -13,7 +13,10 @@ import {
     Edit,
     Trash2,
     ArrowLeft,
+<<<<<<< HEAD
+=======
     ArrowRight,
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
     Phone,
     Calendar,
     Save,
@@ -25,6 +28,11 @@ import {
     Contact,
     Fuel,
     LocateFixed,
+<<<<<<< HEAD
+    Shield
+} from 'lucide-react';
+import Modal from '../components/Modal';
+=======
     Shield,
     FileText,
     Settings,
@@ -37,6 +45,7 @@ import {
 } from 'lucide-react';
 import Modal from '../components/Modal';
 import SearchableSelect from '../components/SearchableSelect';
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
 
 const Fleet = () => {
     const { showToast } = useToast();
@@ -46,6 +55,13 @@ const Fleet = () => {
     const isAdmin = userRole === 'admin' || user?.is_superuser || userRole === 'guesthouse_manager';
 
     const [fleetHubs, setFleetHubs] = useState([]);
+<<<<<<< HEAD
+    const [isLoading, setIsLoading] = useState(false);
+    const [deleteModal, setDeleteModal] = useState({ isOpen: false, type: null, id: null, title: '', message: '' });
+    const [formErrors, setFormErrors] = useState({});
+    const hubImageInputRef = useRef(null);
+
+=======
     const [selectedHub, setSelectedHub] = useState(null);
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState('vehicles');
@@ -119,11 +135,14 @@ const Fleet = () => {
     const [clusters, setClusters] = useState([]);
     const [visitingLocations, setVisitingLocations] = useState([]);
 
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
     const validateHubForm = () => {
         const errors = {};
         if (!hubFormData.name || hubFormData.name.length < 3) errors.name = "Hub name is too short (min 3 chars)";
         if (!hubFormData.address || hubFormData.address.length < 10) errors.address = "Address is required (min 10 chars)";
         if (!hubFormData.pincode || !/^\d{6}$/.test(hubFormData.pincode)) errors.pincode = "Invalid 6-digit pincode";
+<<<<<<< HEAD
+=======
         
         // Location hierarchy validations
         if (!hubFormData.state_id) errors.state_id = "State is required";
@@ -131,6 +150,7 @@ const Fleet = () => {
         if (!hubFormData.mandal_id) errors.mandal_id = "Mandal is required";
         if (!hubFormData.visiting_location_id) errors.visiting_location_id = "Visiting Location is required";
 
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
         setFormErrors(errors);
         return Object.keys(errors).length === 0;
     };
@@ -138,6 +158,16 @@ const Fleet = () => {
     const validateItemForm = () => {
         const errors = {};
         if (activeTab === 'vehicles') {
+<<<<<<< HEAD
+            if (!itemFormData.plate_number || !/^[A-Z]{2}\s\d{2}\s[A-Z]{1,2}\s\d{4}$/.test(itemFormData.plate_number.toUpperCase()) && !/^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$/.test(itemFormData.plate_number.toUpperCase())) {
+                // errors.plate_number = "Format: XX 00 XX 0000"; // Lax validation for now as some might be different
+            }
+            if (!itemFormData.plate_number) errors.plate_number = "Plate number is required";
+            if (!itemFormData.name) errors.name = "Model name is required";
+        } else {
+            if (!itemFormData.name || itemFormData.name.length < 3) errors.name = "Name is required";
+            if (!itemFormData.phone || !/^\d{10}$/.test(itemFormData.phone)) errors.phone = "Invalid 10-digit phone number";
+=======
             const plate = itemFormData.plate_number?.trim().toUpperCase() || '';
             const plateRegex = /^[A-Z]{2}\s?\d{2}\s?[A-Z]{1,2}\s?\d{4}$/;
             
@@ -175,6 +205,7 @@ const Fleet = () => {
             } else if (!/^[A-Z0-9\s-]{5,20}$/i.test(license)) {
                 errors.license_number = "Invalid format (5-20 characters)";
             }
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
         }
         setFormErrors(errors);
         return Object.keys(errors).length === 0;
@@ -310,12 +341,21 @@ const Fleet = () => {
         drivers: (hub.drivers || []).map(d => ({ ...d, name: d.name }))
     });
 
+<<<<<<< HEAD
+    const mapBookingsToEvents = (hub) => {
+        const events = [];
+        (hub?.vehicles || []).forEach(vehicle => {
+            (vehicle.bookings || []).forEach(booking => {
+                const startDate = booking.start_date;
+                const endDate = booking.end_date;
+=======
     const mapVehicleBookingsToEvents = (hub) => {
         const events = [];
         (hub?.vehicles || []).forEach(vehicle => {
             (vehicle.bookings || []).forEach(booking => {
                 const startDate = booking.start_date?.slice(0, 10);
                 const endDate = booking.end_date?.slice(0, 10);
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                 events.push({
                     id: booking.id,
                     vehicleId: vehicle.id,
@@ -324,8 +364,13 @@ const Fleet = () => {
                     startDate,
                     endDate,
                     details: booking.requester_name || '-',
+<<<<<<< HEAD
+                    checkIn: new Date(startDate).toLocaleDateString(),
+                    checkOut: new Date(endDate).toLocaleDateString(),
+=======
                     checkIn: new Date(booking.start_date).toLocaleDateString(),
                     checkOut: new Date(booking.end_date).toLocaleDateString(),
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                     remarks: booking.remarks || ''
                 });
             });
@@ -333,6 +378,8 @@ const Fleet = () => {
         return events.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
     };
 
+<<<<<<< HEAD
+=======
     useEffect(() => {
         if (selectedHub) {
             setCalendarEvents(mapVehicleBookingsToEvents(selectedHub));
@@ -367,6 +414,7 @@ const Fleet = () => {
         return start <= monthEnd && end >= monthStart;
     });
 
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
     const fetchHubs = async () => {
         setIsLoading(true);
         try {
@@ -384,6 +432,13 @@ const Fleet = () => {
         if (isAdmin) fetchHubs();
     }, [isAdmin]);
 
+<<<<<<< HEAD
+    const [selectedHub, setSelectedHub] = useState(null);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [activeTab, setActiveTab] = useState('vehicles');
+    const [fleetRequests, setFleetRequests] = useState([]);
+=======
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
 
     const fetchFleetRequests = async () => {
         try {
@@ -421,6 +476,8 @@ const Fleet = () => {
         }
     };
 
+<<<<<<< HEAD
+=======
     const handleStartFleetBookingFromRequest = (req, hub) => {
         setActiveFleetBookingRequest(req);
         setSelectedHub(hub);
@@ -430,10 +487,38 @@ const Fleet = () => {
         showToast(`Opened calendar for ${hub.name} — click a vehicle cell to book for ${req.trip_id}.`, 'info');
     };
 
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
     useEffect(() => {
         if (activeTab === 'requests') fetchFleetRequests();
     }, [activeTab]);
 
+<<<<<<< HEAD
+    const [assignModal, setAssignModal] = useState({ open: false, trip: null });
+    const [assignForm, setAssignForm] = useState({ vehicleId: '', driverId: '', startDate: '', endDate: '', remarks: '' });
+    const [allVehicles, setAllVehicles] = useState([]);
+    const [allDrivers, setAllDrivers] = useState([]);
+
+    const openAssignModal = (trip) => {
+        const vehicles = fleetHubs.flatMap(h => h.vehicles || []);
+        const drivers = fleetHubs.flatMap(h => h.drivers || []);
+        setAllVehicles(vehicles);
+        setAllDrivers(drivers);
+        setAssignForm({ vehicleId: '', driverId: '', startDate: trip.start_date, endDate: trip.end_date, remarks: '' });
+        setAssignModal({ open: true, trip });
+    };
+
+    const handleAssignVehicle = async () => {
+        const { trip } = assignModal;
+        if (!assignForm.vehicleId || !assignForm.startDate || !assignForm.endDate) {
+            showToast('Please select a vehicle and dates.', 'error');
+            return;
+        }
+        try {
+            await api.post(`/api/fleet/vehicles/${assignForm.vehicleId}/bookings/`, {
+                trip: trip.trip_id,
+                driver: assignForm.driverId || null,
+                booking_type: 'Official',
+=======
 
     const openAssignModal = async (trip, defaultType = 'Official', vehicleId = '') => {
         // Pre-populate form first so the modal opens immediately
@@ -489,11 +574,17 @@ const Fleet = () => {
                 trip: trip.trip_id === 'INTERNAL' ? null : trip.trip_id,
                 driver: assignForm.driverId || null,
                 booking_type: assignForm.booking_type,
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                 start_date: assignForm.startDate,
                 end_date: assignForm.endDate,
                 requester_name: trip.trip_leader,
                 remarks: assignForm.remarks
             });
+<<<<<<< HEAD
+            showToast('Vehicle assigned! Employee notified.', 'success');
+            setAssignModal({ open: false, trip: null });
+            fetchFleetRequests();
+=======
              showToast('Vehicle assigned! Employee notified.', 'success');
              setAssignModal({ open: false, trip: null });
              setActiveFleetBookingRequest(null);
@@ -502,14 +593,37 @@ const Fleet = () => {
                 const res = await api.get(`/api/fleet/hub/${selectedHub.id}/`);
                 setSelectedHub(normalizeHub(res.data));
             }
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
         } catch (err) {
             showToast(getApiErrorMessage(err, 'Failed to assign vehicle'), 'error');
         }
     };
 
+<<<<<<< HEAD
+    const [showHubModal, setShowHubModal] = useState(false);
+    const [showItemModal, setShowItemModal] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [editingId, setEditingId] = useState(null);
+    const [editingItemId, setEditingItemId] = useState(null);
+
+    const [hubFormData, setHubFormData] = useState({
+        name: '', address: '', location: '', pincode: '', isActive: true, latitude: '', longitude: '', image: '', description: ''
+    });
+
+    const [itemFormData, setItemFormData] = useState({
+        name: '', type: 'sedan', phone: '', status: 'Available', fuel_type: 'diesel', capacity: 4, plate_number: '', license_number: '', hubId: ''
+    });
+
+    // Hub transfer state
+    const [hubSearchQuery, setHubSearchQuery] = useState('');
+    const [suggestedHub, setSuggestedHub] = useState(null);   // matched existing hub
+    const [showCreateHubPrompt, setShowCreateHubPrompt] = useState(false);
+    const [newHubForTransfer, setNewHubForTransfer] = useState({ name: '', address: '', pincode: '' });
+=======
 
 
     // Hub transfer state
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
 
     const handleHubSearch = (query) => {
         setHubSearchQuery(query);
@@ -550,6 +664,29 @@ const Fleet = () => {
         }
     };
 
+<<<<<<< HEAD
+    const [showBookingModal, setShowBookingModal] = useState(false);
+    const [bookingTab, setBookingTab] = useState('Official');
+    const [tripSearch, setTripSearch] = useState('');
+    const [showTripResults, setShowTripResults] = useState(false);
+    const [trips, setTrips] = useState([]);
+    const [isLoadingTrips, setIsLoadingTrips] = useState(false);
+    const inputRef = useRef(null);
+
+    const [bookingData, setBookingData] = useState({
+        vehicleId: '', plateNumber: '', status: 'Confirmed', employeeName: '', tripId: '', checkInDate: '', checkOutDate: '', remarks: ''
+    });
+
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const realToday = new Date();
+    realToday.setHours(0, 0, 0, 0);
+
+    const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+    const changeMonth = (offset) => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
+=======
 
     // --- GEO HIERARCHY LOGIC (Cloned from GH) ---
     const GEO_API_URL = "/api/masters/locations/live_hierarchy/";
@@ -657,6 +794,7 @@ const Fleet = () => {
             }
             return newState;
         });
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
     };
 
     const handleHubInputChange = (e) => {
@@ -675,6 +813,9 @@ const Fleet = () => {
             latitude: hub.latitude || '',
             longitude: hub.longitude || '',
             image: hub.image || '',
+<<<<<<< HEAD
+            description: hub.description || ''
+=======
             description: hub.description || '',
             continent_id: hub.continent_id || '',
             country_id: hub.country_id || '',
@@ -683,11 +824,14 @@ const Fleet = () => {
             mandal_id: hub.mandal_id || '',
             cluster_id: hub.cluster_id || '',
             visiting_location_id: hub.visiting_location_id || ''
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
         });
         setFormErrors({});
         setShowHubModal(true);
     };
 
+<<<<<<< HEAD
+=======
     const handleHubImageUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -698,6 +842,7 @@ const Fleet = () => {
         reader.readAsDataURL(file);
     };
 
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
     const handleDeleteHub = (hub) => {
         setDeleteModal({
             isOpen: true,
@@ -743,6 +888,9 @@ const Fleet = () => {
             latitude: hubFormData.latitude || null,
             longitude: hubFormData.longitude || null,
             image: hubFormData.image || null,
+<<<<<<< HEAD
+            description: hubFormData.description || ''
+=======
             description: hubFormData.description || '',
             continent_id: hubFormData.continent_id,
             country_id: hubFormData.country_id,
@@ -751,6 +899,7 @@ const Fleet = () => {
             mandal_id: hubFormData.mandal_id,
             cluster_id: hubFormData.cluster_id,
             visiting_location_id: hubFormData.visiting_location_id,
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
         };
 
         const promise = editingId ? api.put(`/api/fleet/hub/${editingId}/`, payload) : api.post('/api/fleet/hub/', payload);
@@ -822,6 +971,26 @@ const Fleet = () => {
     };
 
     const renderTabContent = () => {
+<<<<<<< HEAD
+        if (activeTab === 'requests') {
+            return (
+                <div className="gh-list-section">
+                    <div className="gh-sub-header"><h3>Employee Fleet Requests</h3><button className="btn-refresh-pill" onClick={fetchFleetRequests}>REFRESH</button></div>
+                    <div className="gh-item-list">
+                        {fleetRequests.length > 0 ? fleetRequests.map(req => {
+                            // Match destination to a hub by location/address (same as GH pattern)
+                            const matchingHub = fleetHubs.find(h =>
+                                h.location?.toLowerCase().includes(req.destination?.toLowerCase()) ||
+                                h.address?.toLowerCase().includes(req.destination?.toLowerCase()) ||
+                                req.destination?.toLowerCase().includes(h.name?.toLowerCase()) ||
+                                req.destination?.toLowerCase().includes(h.location?.toLowerCase())
+                            );
+
+                            // Check if matching hub has at least 1 available vehicle
+                            const hasAvailableVehicle = matchingHub &&
+                                (matchingHub.vehicles || []).some(v => (v.status || '').toLowerCase() === 'available');
+
+=======
         // Helper to match request to hub
         const getMatchingHub = (req) => {
             if (!req.user_base_location || req.user_base_location.toLowerCase() === 'not set' || req.user_base_location.toLowerCase() === 'n/a') {
@@ -859,17 +1028,36 @@ const Fleet = () => {
 
                             const canAssign = hasAvailableVehicle || showAll;
 
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                             return (
                                 <div key={req.trip_id} className="gh-list-item request-card-premium">
                                     <div className="item-info">
                                         <div className="request-header" style={{ marginBottom: '8px' }}>
                                             <span className="trip-id-tag-mini">{req.trip_id}</span>
                                             <span className={`badge ${hasAvailableVehicle ? 'pending' : 'rejected'}`} style={{ fontSize: '10px', padding: '4px 8px' }}>
+<<<<<<< HEAD
+                                                {hasAvailableVehicle ? 'VEHICLE AVAILABLE' : 'NO VEHICLE FOUND'}
+=======
                                                 {hasAvailableVehicle ? 'VEHICLE AT BASE' : 'NO VEHICLE AT BASE'}
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                                             </span>
                                         </div>
                                         <h4 style={{ fontSize: '1.05rem', fontWeight: 800 }}>{req.trip_leader} - {req.purpose}</h4>
                                         <div className="request-meta-grid">
+<<<<<<< HEAD
+                                            <div className="meta-item"><MapPin size={14} /> <span>Dest: {req.destination}</span></div>
+                                            <div className="meta-item"><Calendar size={14} /> <span>{req.start_date} - {req.end_date}</span></div>
+                                        </div>
+                                        {matchingHub && (
+                                            <p className="request-note">Hub: {matchingHub.name} — {matchingHub.address}</p>
+                                        )}
+                                    </div>
+                                    <div className="actions-cell-vertical">
+                                        {hasAvailableVehicle ? (
+                                            <button className="btn-primary-mini" onClick={() => openAssignModal(req)}>Assign Vehicle</button>
+                                        ) : (
+                                            <button className="btn-danger-mini" onClick={() => handleNoVehicleNotify(req)}>Inform: No Vehicle at Location</button>
+=======
                                             <div className="meta-item" title="Trip Route">
                                                 <ArrowRight size={14} className="text-primary" /> 
                                                 <span style={{ fontWeight: 600 }}>{req.source || 'N/A'} &rarr; {req.destination || 'N/A'}</span>
@@ -926,10 +1114,14 @@ const Fleet = () => {
                                                     Inform: No Vehicle
                                                 </button>
                                             </div>
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                                         )}
                                     </div>
                                 </div>
                             );
+<<<<<<< HEAD
+                        }) : <div className="empty-state-vsmall mt-4"><p>No active fleet requests.</p></div>}
+=======
                         }) : <div className="empty-state-vsmall mt-4"><p>No {selectedHub ? 'matching' : 'active'} fleet requests found.</p></div>}
                     </div>
                 </div>
@@ -1080,6 +1272,7 @@ const Fleet = () => {
                                 </div>
                             </div>
                         )) : <div className="empty-state-vsmall mt-4"><p>No assignments found for this hub.</p></div>}
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                     </div>
                 </div>
             );
@@ -1173,15 +1366,21 @@ const Fleet = () => {
                         {[
                             { id: 'vehicles', icon: CarFront, label: 'Vehicles' },
                             { id: 'drivers', icon: Contact, label: 'Drivers' },
+<<<<<<< HEAD
+                            { id: 'requests', icon: Mail, label: 'Fleet Requests' }
+=======
                             { id: 'requests', icon: Mail, label: 'Fleet Requests' },
                             { id: 'calendar', icon: Calendar, label: 'Calendar' },
                             { id: 'assignments', icon: ClipboardList, label: 'Assignments' }
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                         ].map(t => (
                             <button key={t.id} className={`gh-tab ${activeTab === t.id ? 'active' : ''}`} onClick={() => setActiveTab(t.id)}><t.icon size={16} /> {t.label}</button>
                         ))}
                     </div>
                     {renderTabContent()}
                 </>
+<<<<<<< HEAD
+=======
             ) : isGlobalRequestView === true ? (
                 <>
                     <div className="gh-details-header">
@@ -1195,12 +1394,18 @@ const Fleet = () => {
                     </div>
                     {renderTabContent()}
                 </>
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
             ) : (
                 <>
                     <div className="gh-header-section">
                         <div className="header-left">
                             <h1 className="welcome-text">Fleet Management</h1>
                         </div>
+<<<<<<< HEAD
+                        <button className="btn-primary" onClick={() => { setEditingId(null); setHubFormData({ name: '', address: '', location: '', pincode: '', isActive: true, latitude: '', longitude: '', image: '', description: '' }); setShowHubModal(true); }}>
+                            <Plus size={18} /> Add Fleet Hub
+                        </button>
+=======
                         <div className="header-actions" style={{ display: 'flex', gap: '12px' }}>
                             <button className="btn-secondary" onClick={() => {
                                 setIsGlobalRequestView(true);
@@ -1219,6 +1424,7 @@ const Fleet = () => {
                                 <Plus size={18} /> Add Fleet Hub
                             </button>
                         </div>
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                     </div>
                     <div className="gh-search-bar premium-card">
                         <Search size={20} className="search-icon" />
@@ -1274,13 +1480,51 @@ const Fleet = () => {
 
             {showHubModal && (
                 <div className="modal-overlay">
+<<<<<<< HEAD
+                    <div className="modal-content gh-modal premium-card" style={{ maxWidth: '600px' }}>
+=======
                     <div className="modal-content gh-modal premium-card overflow-visible" style={{ maxWidth: '600px' }}>
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                         <div className="modal-header">
                             <h2>{editingId ? 'Edit' : 'Add'} Fleet Hub</h2>
                             <button onClick={() => setShowHubModal(false)} className="close-btn"><X size={24} /></button>
                         </div>
                         <div className="modal-body">
                             <div className="form-grid">
+<<<<<<< HEAD
+                                <div className="form-group full">
+                                    <label>Hub Name*</label>
+                                    <input className={`input-field ${formErrors.name ? 'error' : ''}`} name="name" value={hubFormData.name} onChange={handleHubInputChange} placeholder="e.g. Hyderabad Main Hub" />
+                                    {formErrors.name && <span className="error-text">{formErrors.name}</span>}
+                                </div>
+                                <div className="form-group full">
+                                    <label>Full Address*</label>
+                                    <textarea className={`input-field ${formErrors.address ? 'error' : ''}`} name="address" rows={2} value={hubFormData.address} onChange={handleHubInputChange} placeholder="Street address, landmark, city..." />
+                                    {formErrors.address && <span className="error-text">{formErrors.address}</span>}
+                                </div>
+                                <div className="form-group">
+                                    <label>Pincode*</label>
+                                    <input className={`input-field ${formErrors.pincode ? 'error' : ''}`} name="pincode" value={hubFormData.pincode} onChange={handleHubInputChange} maxLength={6} placeholder="6-digit code" />
+                                    {formErrors.pincode && <span className="error-text">{formErrors.pincode}</span>}
+                                </div>
+                                <div className="form-group">
+                                    <label>Status</label>
+                                    <div className="toggle-switch-group">
+                                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: hubFormData.isActive ? 'var(--success)' : 'var(--text-muted)' }}>{hubFormData.isActive ? 'Active' : 'Standby'}</span>
+                                        <label className="toggle-switch">
+                                            <input type="checkbox" name="isActive" checked={hubFormData.isActive} onChange={handleHubInputChange} />
+                                            <span className="slider round"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div className="form-group">
+                                    <label>Latitude (optional)</label>
+                                    <input className="input-field" name="latitude" value={hubFormData.latitude} onChange={handleHubInputChange} placeholder="e.g. 17.3850" />
+                                </div>
+                                <div className="form-group">
+                                    <label>Longitude (optional)</label>
+                                    <input className="input-field" name="longitude" value={hubFormData.longitude} onChange={handleHubInputChange} placeholder="e.g. 78.4867" />
+=======
                                 {/* BLOCK 1: PRIMARY IDENTITY */}
                                 <div className="form-section-block" style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '1.25rem', borderLeft: '4px solid var(--primary)' }}>
                                     <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1480,6 +1724,7 @@ const Fleet = () => {
                                             </div>
                                         </div>
                                     </div>
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                                 </div>
                             </div>
                         </div>
@@ -1493,6 +1738,118 @@ const Fleet = () => {
 
             {showItemModal && (
                 <div className="modal-overlay">
+<<<<<<< HEAD
+                    <div className="modal-content gh-modal premium-card">
+                        <div className="modal-header"><h2>{editingItemId ? 'Edit' : 'Add'} {activeTab === 'vehicles' ? 'Vehicle' : 'Driver'}</h2><button onClick={() => setShowItemModal(false)} className="close-btn"><X size={20} /></button></div>
+                        <div className="modal-body">
+                            {activeTab === 'vehicles' ? (
+                                <>
+                                    <div className="form-group">
+                                        <label>Plate Number*</label>
+                                        <input className={`input-field ${formErrors.plate_number ? 'error' : ''}`} value={itemFormData.plate_number} onChange={e => setItemFormData({ ...itemFormData, plate_number: e.target.value })} placeholder="e.g. TS 09 EA 1234" />
+                                        {formErrors.plate_number && <span className="error-text">{formErrors.plate_number}</span>}
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Model Name*</label>
+                                        <input className={`input-field ${formErrors.name ? 'error' : ''}`} value={itemFormData.name} onChange={e => setItemFormData({ ...itemFormData, name: e.target.value })} placeholder="e.g. Toyota Innova" />
+                                        {formErrors.name && <span className="error-text">{formErrors.name}</span>}
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group" style={{ flex: 1 }}>
+                                            <label>Vehicle Type</label>
+                                            <select className="input-field" value={itemFormData.type} onChange={e => setItemFormData({ ...itemFormData, type: e.target.value })}>
+                                                <option value="sedan">Sedan (4 to 5)</option>
+                                                <option value="suv">SUV (6 to 7)</option>
+                                                <option value="pickup">Pickup</option>
+                                                <option value="ambulance">Ambulance</option>
+                                            </select>
+                                        </div>
+                                        <div className="form-group" style={{ flex: 1 }}>
+                                            <label>Fuel Type</label>
+                                            <select className="input-field" value={itemFormData.fuel_type} onChange={e => setItemFormData({ ...itemFormData, fuel_type: e.target.value })}>
+                                                <option value="diesel">Diesel</option>
+                                                <option value="petrol">Petrol</option>
+                                                <option value="ev">Electric</option>
+                                                <option value="cng">CNG</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group" style={{ flex: 1 }}>
+                                            <label>Capacity</label>
+                                            <input type="number" className="input-field" value={itemFormData.capacity} onChange={e => setItemFormData({ ...itemFormData, capacity: e.target.value })} min={1} max={20} />
+                                        </div>
+                                        <div className="form-group" style={{ flex: 1 }}>
+                                            <label>Status</label>
+                                            <select className="input-field" value={itemFormData.status} onChange={e => setItemFormData({ ...itemFormData, status: e.target.value })}>
+                                                <option value="Available">Available</option>
+                                                <option value="Maintenance">Maintenance</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* Hub / Location Transfer */}
+                                    {editingItemId && (
+                                        <div className="form-group">
+                                            <label>Location / Hub</label>
+                                            <div style={{ position: 'relative' }}>
+                                                <input
+                                                    className="input-field"
+                                                    placeholder={`Current: ${selectedHub?.name || 'Unknown'} — type to change`}
+                                                    value={hubSearchQuery}
+                                                    onChange={e => handleHubSearch(e.target.value)}
+                                                />
+                                            </div>
+                                            {suggestedHub && (
+                                                <div className="service-alert info" style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem' }}>
+                                                    <MapPin size={14} />
+                                                    <p>Will be moved to: <strong>{suggestedHub.name}</strong> — {suggestedHub.address}</p>
+                                                </div>
+                                            )}
+                                            {showCreateHubPrompt && (
+                                                <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'var(--bg-secondary, #f8fafc)', borderRadius: '10px', border: '1px dashed var(--primary)' }}>
+                                                    <p style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>No hub found for "{hubSearchQuery}". Create one?</p>
+                                                    <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+                                                        <input className="input-field" placeholder="Hub Name*" value={newHubForTransfer.name} onChange={e => setNewHubForTransfer(p => ({ ...p, name: e.target.value }))} />
+                                                    </div>
+                                                    <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+                                                        <input className="input-field" placeholder="Address*" value={newHubForTransfer.address} onChange={e => setNewHubForTransfer(p => ({ ...p, address: e.target.value }))} />
+                                                    </div>
+                                                    <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                                                        <input className="input-field" placeholder="Pincode*" value={newHubForTransfer.pincode} onChange={e => setNewHubForTransfer(p => ({ ...p, pincode: e.target.value }))} />
+                                                    </div>
+                                                    <button className="btn-primary" style={{ width: '100%' }} onClick={handleTransferHubCreate}>Create Hub &amp; Transfer Vehicle</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <div className="form-group">
+                                        <label>Driver Name*</label>
+                                        <input className={`input-field ${formErrors.name ? 'error' : ''}`} value={itemFormData.name} onChange={e => setItemFormData({ ...itemFormData, name: e.target.value })} placeholder="Full Name" />
+                                        {formErrors.name && <span className="error-text">{formErrors.name}</span>}
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Phone*</label>
+                                        <input className={`input-field ${formErrors.phone ? 'error' : ''}`} value={itemFormData.phone} onChange={e => setItemFormData({ ...itemFormData, phone: e.target.value })} maxLength={10} placeholder="10-digit mobile" />
+                                        {formErrors.phone && <span className="error-text">{formErrors.phone}</span>}
+                                    </div>
+                                    <div className="form-group">
+                                        <label>License Number</label>
+                                        <input className="input-field" value={itemFormData.license_number} onChange={e => setItemFormData({ ...itemFormData, license_number: e.target.value })} placeholder="DL Number" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Status</label>
+                                        <select className="input-field" value={itemFormData.status} onChange={e => setItemFormData({ ...itemFormData, status: e.target.value })}>
+                                            <option value="Available">Available</option>
+                                            <option value="On Leave">On Leave</option>
+                                            <option value="Duty">On Duty</option>
+                                        </select>
+                                    </div>
+                                </>
+=======
                     <div className="modal-content gh-modal premium-card overflow-visible">
                         <div className="modal-header"><h2>{editingItemId ? 'Edit' : 'Add'} {activeTab === 'vehicles' ? 'Vehicle' : 'Driver'}</h2><button onClick={() => setShowItemModal(false)} className="close-btn"><X size={20} /></button></div>
                         <div className="modal-body">
@@ -1665,6 +2022,7 @@ const Fleet = () => {
                                         </div>
                                     </div>
                                 </div>
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                             )}
                         </div>
                         <div className="modal-footer"><button className="btn-secondary" onClick={() => setShowItemModal(false)}>Cancel</button><button className="btn-primary" onClick={handleSaveItem}>Save Item</button></div>
@@ -1674,6 +2032,50 @@ const Fleet = () => {
 
             {assignModal.open && (
                 <div className="modal-overlay">
+<<<<<<< HEAD
+                    <div className="modal-content gh-modal premium-card" style={{ maxWidth: '520px' }}>
+                        <div className="modal-header">
+                            <h2>Assign Vehicle</h2>
+                            <button onClick={() => setAssignModal({ open: false, trip: null })} className="close-btn"><X size={20} /></button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="service-alert info" style={{ marginBottom: '1rem' }}>
+                                <Car size={16} />
+                                <p><strong>{assignModal.trip?.trip_leader}</strong> — Trip {assignModal.trip?.trip_id} to <strong>{assignModal.trip?.destination}</strong></p>
+                            </div>
+                            <div className="form-group">
+                                <label>Select Vehicle *</label>
+                                <select className="input-field" value={assignForm.vehicleId} onChange={e => setAssignForm(p => ({ ...p, vehicleId: e.target.value }))}>
+                                    <option value="">-- Choose a vehicle --</option>
+                                    {allVehicles.filter(v => (v.status || '').toLowerCase() === 'available').map(v => (
+                                        <option key={v.id} value={v.id}>{v.plate_number} — {v.model_name} ({toTitleCase(v.vehicle_type)})</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Assign Driver (optional)</label>
+                                <select className="input-field" value={assignForm.driverId} onChange={e => setAssignForm(p => ({ ...p, driverId: e.target.value }))}>
+                                    <option value="">-- No driver assigned --</option>
+                                    {allDrivers.filter(d => (d.availability || '').toLowerCase() === 'available').map(d => (
+                                        <option key={d.id} value={d.id}>{d.name} — {d.phone}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="date-row">
+                                <div className="form-group">
+                                    <label>Start Date *</label>
+                                    <input type="date" className="input-field" value={assignForm.startDate} onChange={e => setAssignForm(p => ({ ...p, startDate: e.target.value }))} />
+                                </div>
+                                <div className="form-group">
+                                    <label>End Date *</label>
+                                    <input type="date" className="input-field" value={assignForm.endDate} onChange={e => setAssignForm(p => ({ ...p, endDate: e.target.value }))} />
+                                </div>
+                            </div>
+                            <div className="form-group">
+                                <label>Remarks</label>
+                                <textarea className="input-field" rows={2} placeholder="Any special instructions..." value={assignForm.remarks} onChange={e => setAssignForm(p => ({ ...p, remarks: e.target.value }))} />
+                            </div>
+=======
                     <div className="modal-content gh-modal premium-card overflow-visible" style={{ maxWidth: '520px' }}>
                         <div className="modal-header">
                             <h2>Assign Vehicle {assignModal.loadingAssets && <span style={{ fontSize: '0.75rem', fontWeight: 500, color: '#94a3b8', marginLeft: '0.5rem' }}>— loading available assets…</span>}</h2>
@@ -1759,6 +2161,7 @@ const Fleet = () => {
                                     </div>
                                 </div>
                             </div>
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                         </div>
                         <div className="modal-footer">
                             <button className="btn-secondary" onClick={() => setAssignModal({ open: false, trip: null })}>Cancel</button>

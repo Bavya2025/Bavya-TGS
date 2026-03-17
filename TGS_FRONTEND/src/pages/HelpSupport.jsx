@@ -15,16 +15,38 @@ import {
     Wallet,
     MapPin,
     X,
-    Send
+    Send,
+    Download,
+    FileSpreadsheet
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../api/api';
+import { useToast } from '../context/ToastContext';
 
 
 const HelpSupport = () => {
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const handleOpenChat = () => {
         window.dispatchEvent(new CustomEvent('open-tgs-chat'));
+    };
+
+    const handleDownloadTemplate = async () => {
+        try {
+            const response = await api.get('/api/bulk-activities/template/', { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'travel_activities_template.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            showToast("Template downloaded successfully", "success");
+        } catch (error) {
+            console.error('Download error:', error);
+            showToast("Failed to download template", "error");
+        }
     };
 
     const faqs = [
@@ -116,6 +138,12 @@ const HelpSupport = () => {
                         <h3>Location Codes</h3>
                         <p>Find ISO and project-specific location codes.</p>
                         <button className="btn-link" onClick={() => navigate('/location-codes')}>View Codes <ChevronRight size={16} /></button>
+                    </div>
+                    <div className="action-card">
+                        <div className="action-icon"><FileSpreadsheet /></div>
+                        <h3>Download data template</h3>
+
+                        <button className="btn-link" onClick={handleDownloadTemplate}>Inspection Tour Schedule Template <Download size={16} style={{ marginLeft: '4px' }} /></button>
                     </div>
                 </div>
 

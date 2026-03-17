@@ -538,6 +538,60 @@ class FuelRateMasterViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(vehicle_type__iexact=vehicle_type)
         return queryset.order_by('state', 'vehicle_type')
 
+    @action(detail=False, methods=['get'], url_path='my_rate')
+    def my_rate(self, request):
+        """
+        Returns the fuel rate per km for the current user's state.
+        Query param: vehicle_type = '2 Wheeler' or '4 Wheeler'
+        """
+        user = getattr(request, 'custom_user', None)
+        if not user:
+            return Response({'error': 'User not found'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Get user's state from their office geo_location
+        try:
+            api_data = user._get_api_data()
+            geo = (api_data or {}).get('office', {}).get('geo_location', {}) or {}
+            state = geo.get('state') or geo.get('State') or ''
+
+            # Fallback: try office name as state hint
+            if not state:
+                # Use office name as last resort
+                office_name = (api_data or {}).get('office', {}).get('name', '')
+                state = office_name
+        except Exception:
+            state = ''
+
+        vehicle_type = request.query_params.get('vehicle_type', '4 Wheeler')
+
+        if not state:
+            return Response({
+                'rate_per_km': None,
+                'state': None,
+                'vehicle_type': vehicle_type,
+                'message': 'Could not determine your state from office data'
+            })
+
+        # Look up rate - try exact match first, then case-insensitive contains
+        rate_obj = (
+            FuelRateMaster.objects.filter(state__iexact=state, vehicle_type__iexact=vehicle_type).first() or
+            FuelRateMaster.objects.filter(state__icontains=state, vehicle_type__iexact=vehicle_type).first()
+        )
+
+        if rate_obj:
+            return Response({
+                'rate_per_km': float(rate_obj.rate_per_km),
+                'state': rate_obj.state,
+                'vehicle_type': rate_obj.vehicle_type,
+            })
+        else:
+            return Response({
+                'rate_per_km': None,
+                'state': state,
+                'vehicle_type': vehicle_type,
+                'message': f'No fuel rate configured for {state} / {vehicle_type}'
+            })
+
 class EligibilityRuleViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdmin]
     queryset = EligibilityRule.objects.all()

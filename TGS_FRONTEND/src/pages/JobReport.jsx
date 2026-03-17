@@ -147,29 +147,52 @@ const JobReport = () => {
     };
 
 
-    const renderBatchData = (batch) => (
-        <div className="bg-white p-3 rounded border mb-3 overflow-auto shadow-inner" style={{ maxHeight: '400px', background: '#f1f5f9' }}>
-            <h6 className="fw-bold border-bottom pb-2 mb-3 text-slate-600">Excel Entries Preview</h6>
-            <table className="table table-sm table-hover" style={{ fontSize: '0.75rem' }}>
-                <thead className="table-light">
-                    <tr>
-                        {batch.data_json && batch.data_json.length > 0 && Object.keys(batch.data_json[0]).map(k => (
-                            <th key={k}>{k.replace(/_/g, ' ')}</th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {(batch.data_json || []).map((row, rIdx) => (
-                        <tr key={rIdx}>
-                            {Object.values(row).map((v, vIdx) => (
-                                <td key={vIdx}>{String(v || '-')}</td>
-                            ))}
+    const renderBatchData = (batch) => {
+        const allowedKeys = ['date', 'time', 'origin_route', 'destination_route', 'visit_intent', 'mode', 'vehicle', '_status', '_remarks'];
+        const rows = batch.data_json || [];
+        const headerKeys = rows.length > 0
+            ? Object.keys(rows[0]).filter(k => allowedKeys.includes(k.toLowerCase()))
+            : [];
+
+        if (!headerKeys.includes('_status') && rows.some(r => r._status)) headerKeys.push('_status');
+        if (!headerKeys.includes('_remarks') && rows.some(r => r._remarks)) headerKeys.push('_remarks');
+
+        return (
+            <div className="bg-white p-3 rounded border mb-3 overflow-auto shadow-inner" style={{ maxHeight: '400px', background: '#f1f5f9' }}>
+                <h6 className="fw-bold border-bottom pb-2 mb-3 text-slate-600">Excel Entries Preview</h6>
+                <table className="table table-sm table-hover" style={{ fontSize: '0.75rem' }}>
+                    <thead className="table-light">
+                        <tr>
+                            {headerKeys.map(k => {
+                                let title = k.replace(/_/g, ' ').toUpperCase();
+                                if (k === '_status') title = 'Row Status';
+                                if (k === '_remarks') title = 'Reject Reason';
+                                return <th key={k}>{title}</th>;
+                            })}
                         </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
+                    </thead>
+                    <tbody>
+                        {rows.map((row, rIdx) => (
+                            <tr key={rIdx} className={row._status === 'Rejected' ? 'bg-danger text-white' : ''} style={{ backgroundColor: row._status === 'Rejected' ? '#fee2e2' : 'inherit', color: row._status === 'Rejected' ? '#991b1b' : 'inherit' }}>
+                                {headerKeys.map(k => {
+                                    let display = row[k];
+                                    if (k.toLowerCase() === 'mode' && !display) display = 'Bike';
+                                    if (k.toLowerCase() === 'vehicle' && !display) display = 'Own Bike';
+                                    if (k === '_status' && !display) display = 'OK';
+                                    return <td key={k}>{String(display || '-')}</td>;
+                                })}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {batch.status === 'Rejected' && (
+                    <div className="mt-3 p-2 border rounded" style={{ backgroundColor: '#fef2f2', borderColor: '#ef4444', color: '#b91c1c' }}>
+                        <strong>Overall Rejection Reason:</strong> {batch.remarks || 'No detailed reason provided'}
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     const handleBatchAction = async (batchId, action) => {
         try {

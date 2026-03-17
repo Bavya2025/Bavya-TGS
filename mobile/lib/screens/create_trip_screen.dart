@@ -6,6 +6,7 @@ import '../services/trip_service.dart';
 import '../services/api_service.dart';
 import '../constants/api_constants.dart';
 import 'trip_story_screen.dart';
+import 'travel_story_screen.dart';
 import 'trip_planner_screen.dart';
 
 class CreateTripScreen extends StatefulWidget {
@@ -615,7 +616,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       'purpose': _purposeController.text,
       'travel_mode': _travelMode,
       'vehicle_type':
-          (['4 Wheeler', '2 Wheeler', '3 Wheeler'].contains(_travelMode))
+          (['Car / Jeep / Van', '2 Wheeler', '3 Wheeler'].contains(_travelMode))
           ? _vehicleType
           : null,
       'reporting_manager':
@@ -731,7 +732,9 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (context) =>
-                              TripStoryScreen(tripId: _encodeId(tripId)),
+                               _considerLocal 
+                                ? TravelStoryScreen(tripId: _encodeId(tripId))
+                                : TripStoryScreen(tripId: _encodeId(tripId)),
                         ),
                       );
                     },
@@ -1004,6 +1007,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             onChanged: (v) {
               setState(() {
                 _logisticsType = v == 'Long Distance Travel' ? 'long' : 'local';
+                _considerLocal = (_logisticsType == 'local');
                 _fromController.clear();
                 _toController.clear();
                 _enRouteController.clear();
@@ -1093,22 +1097,22 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 child: _buildDropdownField(
                   label: 'Travel Mode',
                   value: _travelMode,
-                  items: [
-                    'Airways',
-                    'Train',
-                    'Bus',
-                    '2 Wheeler',
-                    '3 Wheeler',
-                    '4 Wheeler',
-                  ],
-                  onChanged: (v) => setState(() => _travelMode = v!),
+                    items: [
+                      'Airways',
+                      'Train',
+                      'Bus',
+                      'Car / Jeep / Van',
+                      '2 Wheeler',
+                      '3 Wheeler',
+                    ],
+                    onChanged: (v) => setState(() => _travelMode = v!),
                 ),
               ),
-              if ([
-                '2 Wheeler',
-                '3 Wheeler',
-                '4 Wheeler',
-              ].contains(_travelMode)) ...[
+                if ([
+                  '2 Wheeler',
+                  '3 Wheeler',
+                  'Car / Jeep / Van',
+                ].contains(_travelMode)) ...[
                 const SizedBox(width: 16),
                 Expanded(
                   child: _buildDropdownField(
@@ -1575,6 +1579,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             hint: 'State the business objective...',
             isRequired: true,
             maxLines: 3,
+            textCapitalization: TextCapitalization.characters,
             validator: (v) => v!.isEmpty ? 'Purpose is required' : null,
           ),
           const SizedBox(height: 20),
@@ -1792,6 +1797,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     bool isRequired = false,
     int maxLines = 1,
     bool enabled = true,
+    TextCapitalization textCapitalization = TextCapitalization.none,
     String? helper,
     String? Function(String?)? validator,
     void Function(String)? onChanged,
@@ -1828,6 +1834,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           controller: controller,
           enabled: enabled,
           maxLines: maxLines,
+          textCapitalization: textCapitalization,
           onChanged: onChanged,
           validator: validator,
           style: GoogleFonts.plusJakartaSans(

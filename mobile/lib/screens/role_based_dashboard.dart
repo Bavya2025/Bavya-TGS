@@ -52,10 +52,22 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   String? _empId;
   late String _refinedRole;
 
+  Timer? _tripSyncTimer;
+
   @override
   void initState() {
     super.initState();
     _initializeSafe();
+    // Periodically sync tracking (every 10 mins) in case trip status changes
+    _tripSyncTimer = Timer.periodic(const Duration(minutes: 10), (_) {
+      LocationTrackingService.syncTrackingWithTrips();
+    });
+  }
+
+  @override
+  void dispose() {
+    _tripSyncTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _initializeSafe() async {
@@ -397,6 +409,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
       onRefresh: () async {
         await _fetchDashboardData();
         await _fetchNotifications();
+        await LocationTrackingService.syncTrackingWithTrips();
       },
       color: const Color(0xFFBB0633),
       child: Stack(
@@ -643,7 +656,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
             ],
             Expanded(
               child: _buildHeaderBtn(
-                'New Trip',
+                'New Request',
                 Icons.add_circle_outline,
                 const Color(0xFFBB0633),
                 () => Navigator.push(
@@ -1008,7 +1021,6 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
         return const Color(0xFF64748B);
     }
   }
-
 
   Widget _buildWalletDisplay() {
     // show only the advance balance (wallet removed per request)
@@ -1428,7 +1440,6 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
         return const Color(0xFF3B82F6); // Professional Blue
     }
   }
-
 
   Widget _buildModulesGrid(List<NavigationModule> modules) {
     return GridView.builder(

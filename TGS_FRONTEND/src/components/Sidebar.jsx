@@ -16,7 +16,9 @@ import {
     MapPin,
     Car,
     ShieldCheck,
-    Fuel
+    Fuel,
+    Inbox as InboxIcon,
+    Archive
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/api';
@@ -27,12 +29,31 @@ const Sidebar = () => {
     const rawRole = user?.role?.toLowerCase() || 'employee';
     const userRole = rawRole === 'user' ? 'employee' : rawRole;
 
+<<<<<<< HEAD
+    const fetchApprovalCount = async () => {
+        try {
+            const response = await api.get('/api/approvals/count/');
+            setApprovalCount(response.data.total);
+        } catch (error) {
+            console.error("Failed to fetch approval count:", error);
+        }
+    };
+
+    React.useEffect(() => {
+        fetchApprovalCount();
+        const interval = setInterval(fetchApprovalCount, 10000);
+        return () => clearInterval(interval);
+    }, [userRole]);
+
+=======
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
     const sections = [
         {
             label: 'CORE',
             items: [
                 { title: 'Dashboard', icon: <LayoutDashboard size={18} />, path: '/', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo'] },
-                { title: 'My Requests', icon: <ClipboardList size={18} />, path: '/my-requests', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo'] },
+                { title: 'Inbox', icon: <InboxIcon size={18} />, path: '/inbox' },
+                { title: 'Outbox', icon: <Archive size={18} />, path: '/outbox' },
             ]
         },
         {
@@ -51,7 +72,6 @@ const Sidebar = () => {
             items: [
                 { title: 'New Advance', icon: <Wallet size={18} />, path: '/advance', roles: ['employee', 'admin'] },
                 { title: 'Expenses', icon: <IndianRupee size={18} />, path: '/expenses', roles: ['employee', 'reporting_authority', 'admin'] },
-                { title: 'Approvals', icon: <ClipboardCheck size={18} />, path: '/approvals', roles: ['reporting_authority', 'admin'] },
                 { title: 'Finance Hub', icon: <BarChart3 size={18} />, path: '/finance', roles: ['finance', 'admin'] },
                 { title: 'Settlements', icon: <Wallet size={18} />, path: '/settlement', roles: ['finance', 'admin'] },
             ]
@@ -90,7 +110,7 @@ const Sidebar = () => {
             </div>
             <nav className="sidebar-nav">
                 {sections.map((section, sIdx) => {
-                    const filteredItems = section.items.filter(item => item.roles.includes(userRole));
+                    const filteredItems = section.items.filter(item => !item.roles || item.roles.includes(userRole));
                     if (filteredItems.length === 0) return null;
 
                     return (
@@ -105,7 +125,7 @@ const Sidebar = () => {
                                     >
                                         {item.icon}
                                         <span>{item.title}</span>
-                                        {item.title === 'Approvals' && approvalCount > 0 && (
+                                        {item.title === 'Inbox' && approvalCount > 0 && (
                                             <span className="nav-badge animate-pulse">{approvalCount}</span>
                                         )}
                                     </NavLink>

@@ -40,7 +40,7 @@ const CreateTrip = () => {
         enRoute: '',
         routePathId: '',
         distance: '',
-        considerLocal: true,
+        considerLocal: false,
         startDate: '',
         endDate: '',
         composition: 'Alone',
@@ -528,7 +528,7 @@ const CreateTrip = () => {
         }
 
         if (name === 'logisticsType') {
-            setFormData(prev => ({ ...prev, logisticsType: value, from: '', to: '', enRoute: '' }));
+            setFormData(prev => ({ ...prev, logisticsType: value, from: '', to: '', enRoute: '', considerLocal: value === 'local' }));
             return;
         }
 
@@ -536,7 +536,8 @@ const CreateTrip = () => {
             return;
         }
 
-        const newFormData = { ...formData, [name]: value };
+        const val = name === 'purpose' ? value.toUpperCase() : value;
+        const newFormData = { ...formData, [name]: val };
         setFormData(newFormData);
 
         if (errors[name]) {
@@ -668,7 +669,8 @@ const CreateTrip = () => {
         };
 
         try {
-            const response = await api.post('/api/trips/', payload);
+            const endpoint = payload.consider_as_local ? '/api/travels/' : '/api/trips/';
+            const response = await api.post(endpoint, payload);
             const tripId = response.data?.trip_id || 'Unknown';
 
             setModalState({
@@ -681,8 +683,8 @@ const CreateTrip = () => {
                         <button className="btn-secondary" onClick={() => navigate('/trips')}>
                             Go to My Trips
                         </button>
-                        <button className="btn-primary" onClick={() => navigate(`/trip-story/${encodeId(tripId)}`)}>
-                            View Trip Story
+                        <button className="btn-primary" onClick={() => navigate(`/${payload.consider_as_local ? 'travel-story' : 'trip-story'}/${encodeId(tripId)}`)}>
+                            View {payload.consider_as_local ? 'Travel Story' : 'Trip Story'}
                         </button>
                     </div>
                 )

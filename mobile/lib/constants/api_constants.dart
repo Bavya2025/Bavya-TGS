@@ -18,13 +18,16 @@ class ApiConstants {
 
   // Travel/Trip Endpoints
   static const String trips = '$baseUrl/api/trips/';
+  static const String travels = '$baseUrl/api/travels/';
   static const String tripDetails = '$baseUrl/api/trips/{id}/';
+  static const String travelDetails = '$baseUrl/api/travels/{id}/';
   static const String tripApprovals = '$baseUrl/api/trips/approvals/';
   static const String settlement = '$baseUrl/api/settlement/';
   static const String UserAdvances = '$baseUrl/api/advances/';
   static const String geoHierarchy = '$baseUrl/api/geo/hierarchy/';
   static const String locations = '$baseUrl/api/masters/locations/';
   static const String findPaths = '$baseUrl/api/masters/routes/find_paths/';
+  static const String fuelRates = '$baseUrl/api/masters/fuel-rate-masters/my_rate/';
 
   // Expense Endpoints
   static const String expenses = '$baseUrl/api/expenses/';

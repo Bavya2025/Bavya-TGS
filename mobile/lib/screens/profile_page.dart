@@ -90,14 +90,11 @@ class _ProfilePageState extends State<ProfilePage> {
       return;
     }
 
-    if (_profileData == null) {
-      if (mounted) setState(() => _isLoading = true);
-    }
     try {
-      // If for some reason we don't have it yet, fetch ONLY this specific employee
-      final empId = widget.username;
+      // Use employee_id from session for the API filter, exactly like Profile.jsx
+      final empId = _userData?['employee_id'] ?? _userData?['username'] ?? widget.username;
       final response = await _apiService.get(
-        '/api/employees/?employee_id=$empId',
+        '/api/employees/?employee_code=$empId',
       );
 
       List<dynamic> results = [];
@@ -105,9 +102,28 @@ class _ProfilePageState extends State<ProfilePage> {
         results = response['results'];
       }
 
+      // Matching logic similar to Profile.jsx find()
+      dynamic matchedEmployee;
+      if (results.isNotEmpty) {
+        final searchId = empId.toString().toLowerCase();
+        final searchName = (_userData?['name'] ?? widget.username).toString().toLowerCase();
+
+        for (var emp in results) {
+          final code = (emp['employee_code'] ?? emp['employee']?['employee_code'] ?? '').toString().toLowerCase();
+          final name = (emp['name'] ?? emp['employee']?['name'] ?? '').toString().toLowerCase();
+
+          if ((searchId.isNotEmpty && code == searchId) || (searchName.isNotEmpty && name == searchName)) {
+            matchedEmployee = emp;
+            break;
+          }
+        }
+        // Fallback to first if no exact match found
+        matchedEmployee ??= results.first;
+      }
+
       if (mounted) {
         setState(() {
-          _profileData = results.isNotEmpty ? results.first : null;
+          _profileData = matchedEmployee;
           _isLoading = false;
         });
       }
@@ -144,39 +160,97 @@ class _ProfilePageState extends State<ProfilePage> {
     final designation =
         _profileData?['role'] ??
         _profileData?['position']?['name'] ??
+        _userData?['external_profile']?['position']?['name'] ??
+        _userData?['designation'] ??
         _userData?['role'] ??
         '';
     final department =
         _profileData?['department'] ??
         _profileData?['position']?['department'] ??
+        _userData?['external_profile']?['position']?['department'] ??
+        _userData?['department'] ??
         '';
     final section =
-        _profileData?['section'] ?? _profileData?['position']?['section'] ?? '';
-    final List<dynamic> managers =
+        _profileData?['section'] ??
+        _profileData?['position']?['section'] ??
+        _userData?['external_profile']?['position']?['section'] ??
+        '';
+    List<dynamic> managers =
+        _profileData?['positions_details']?[0]?['reporting_to'] ??
         _profileData?['reporting_to'] ??
         _profileData?['position']?['reporting_to'] ??
+        _userData?['external_profile']?['positions_details']?[0]?['reporting_to'] ??
+        _userData?['external_profile']?['reporting_to'] ??
+        _userData?['external_profile']?['position']?['reporting_to'] ??
         [];
 
-    final projectName = _profileData?['project']?['name'] ?? '';
-    final projectCode = _profileData?['project']?['code'] ?? '';
+    // Fallback to top-level manager names if list is empty
+    if (managers.isEmpty) {
+      if (_userData?['reporting_manager'] != null) {
+        managers.add({'name': _userData!['reporting_manager'], 'role': 'Reporting Manager'});
+      }
+      if (_userData?['senior_manager'] != null) {
+        managers.add({'name': _userData!['senior_manager'], 'role': 'Senior Manager'});
+      }
+      if (_userData?['hod_director'] != null) {
+        managers.add({'name': _userData!['hod_director'], 'role': 'HOD / Director'});
+      }
+    }
 
-    final officeName = _profileData?['office']?['name'] ?? '';
-    final officeLevel = _profileData?['office']?['level'] ?? '';
+    final projectName =
+        _profileData?['project']?['name'] ??
+        _userData?['external_profile']?['project']?['name'] ??
+        '';
+
+    // Derive project code if missing, matching Profile.jsx logic
+    String derivedProjectCode =
+        _profileData?['project']?['code'] ??
+        _userData?['external_profile']?['project']?['code'] ??
+        '';
+
+    if (derivedProjectCode.isEmpty && projectName.isNotEmpty) {
+      final numMatch = RegExp(r'(\d+)').firstMatch(projectName);
+      derivedProjectCode = numMatch != null
+          ? 'PROJ-${numMatch.group(1)}'
+          : projectName.length > 6
+              ? projectName.substring(0, 6).toUpperCase()
+              : projectName.toUpperCase();
+    }
+
+    final projectCode = derivedProjectCode;
+
+    final officeName =
+        _profileData?['office']?['name'] ??
+        _userData?['external_profile']?['office']?['name'] ??
+        '';
+    final officeLevel =
+        _profileData?['office']?['level']?.toString() ??
+        _userData?['external_profile']?['office']?['level']?.toString() ??
+        _userData?['office_level']?.toString() ??
+        '';
     final district =
-        _profileData?['office']?['geo_location']?['district'] ?? '';
-    final state = _profileData?['office']?['geo_location']?['state'] ?? '';
-    final country = _profileData?['office']?['geo_location']?['country'] ?? '';
+        _profileData?['office']?['geo_location']?['district'] ??
+        _userData?['external_profile']?['office']?['geo_location']?['district'] ??
+        '';
+    final state =
+        _profileData?['office']?['geo_location']?['state'] ??
+        _userData?['external_profile']?['office']?['geo_location']?['state'] ??
+        '';
+    final country =
+        _profileData?['office']?['geo_location']?['country'] ??
+        _userData?['external_profile']?['office']?['geo_location']?['country'] ??
+        '';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF3F4F6),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: Navigator.canPop(context)
             ? IconButton(
                 icon: const Icon(
                   Icons.arrow_back_ios_new_rounded,
-                  color: Colors.black,
+                  color: Color(0xFF0F172A),
                   size: 20,
                 ),
                 onPressed: () => Navigator.pop(context),
@@ -184,78 +258,131 @@ class _ProfilePageState extends State<ProfilePage> {
             : null,
         title: Text(
           'My Profile',
-          style: GoogleFonts.interTight(
+          style: GoogleFonts.outfit(
             color: const Color(0xFF0F172A),
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+            letterSpacing: -0.5,
           ),
         ),
         centerTitle: true,
       ),
+      extendBodyBehindAppBar: true,
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF7C1D1D)),
+              child: CircularProgressIndicator(color: Color(0xFFBB0633)),
             )
-          : RefreshIndicator(
-              onRefresh: _fetchDetailedProfile,
-              color: const Color(0xFF7C1D1D),
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    _buildPremiumIdentityCard(
-                      employeeName,
-                      designation,
-                      employeeCode,
-                      department,
-                      email,
-                      phone,
-                      photo,
+          : Stack(
+              children: [
+                Positioned(
+                  top: -150,
+                  right: -100,
+                  child: Container(
+                    width: 500,
+                    height: 500,
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        colors: [
+                          const Color(0xFFA9052E).withOpacity(0.04),
+                          Colors.transparent,
+                        ],
+                      ),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(height: 24),
-                    _buildInfoSection(
-                      title: 'Organization Details',
-                      icon: Icons.business_center_rounded,
-                      color: const Color(0xFF7C1D1D),
-                      children: [
-                        _buildInfoItem('Department', department),
-                        _buildInfoItem('Section', section),
-                        _buildInfoItem('Project Name', projectName),
-                        _buildInfoItem('Project Code', projectCode),
-                      ],
-                      managers: managers,
-                    ),
-                    const SizedBox(height: 24),
-                    _buildInfoSection(
-                      title: 'Work Location',
-                      icon: Icons.location_on_rounded,
-                      color: const Color(0xFF1E293B),
-                      children: [
-                        _buildInfoItem('Office Name', officeName),
-                        _buildInfoItem('Base Level', officeLevel),
-                        _buildInfoItem('District', district),
-                        _buildInfoItem(
-                          'State, Country',
-                          '$state${state.isNotEmpty ? ", " : ""}$country',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 32),
-                    const SizedBox(height: 24),
-                    _buildFaceUpdateButton(),
-                    const SizedBox(height: 16),
-                    if (ModuleConstants.normalizeRole(_userData?['role']) ==
-                        'admin') ...[
-                      _buildDiagnosticsButton(),
-                      const SizedBox(height: 16),
-                    ],
-                    _buildLogoutButton(),
-                    const SizedBox(
-                      height: 100,
-                    ), // Extra space for bottom navigation
-                  ],
+                  ),
                 ),
-              ),
+                Positioned(
+                  top: 250,
+                  left: -150,
+                  child: Container(
+                    width: 400,
+                    height: 400,
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        colors: [Colors.orange.withOpacity(0.03), Colors.transparent],
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 100,
+                  right: -100,
+                  child: Container(
+                    width: 350,
+                    height: 350,
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        colors: [
+                          const Color(0xFF3B82F6).withOpacity(0.03),
+                          Colors.transparent,
+                        ],
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+                
+                RefreshIndicator(
+                  onRefresh: _runBackgroundRefresh,
+                  color: const Color(0xFFBB0633),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 100, 20, 20),
+                    child: Column(
+                      children: [
+                        _buildPremiumIdentityCard(
+                          employeeName,
+                          designation,
+                          employeeCode,
+                          department,
+                          email,
+                          phone,
+                          photo,
+                        ),
+                        const SizedBox(height: 24),
+                        _buildInfoSection(
+                          title: 'Organization Details',
+                          icon: Icons.business_center_rounded,
+                          color: const Color(0xFFBB0633),
+                          children: [
+                            _buildInfoItem('Department', department),
+                            _buildInfoItem('Section', section),
+                            _buildInfoItem('Project Name', projectName),
+                            _buildInfoItem('Project Code', projectCode),
+                          ],
+                          managers: managers,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildInfoSection(
+                          title: 'Work Location',
+                          icon: Icons.location_on_rounded,
+                          color: const Color(0xFF0F172A),
+                          children: [
+                            _buildInfoItem('Office Name', officeName),
+                            _buildInfoItem('Base Level', officeLevel),
+                            _buildInfoItem('District', district),
+                            _buildInfoItem(
+                              'State, Country',
+                              '$state${state.isNotEmpty ? ", " : ""}$country',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+                        _buildFaceUpdateButton(),
+                        const SizedBox(height: 16),
+                        if (ModuleConstants.normalizeRole(_userData?['role']) ==
+                            'admin') ...[
+                          _buildDiagnosticsButton(),
+                          const SizedBox(height: 16),
+                        ],
+                        _buildLogoutButton(),
+                        const SizedBox(height: 120),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
     );
   }
@@ -273,12 +400,13 @@ class _ProfilePageState extends State<ProfilePage> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: const Color(0xFF0F172A).withOpacity(0.04),
             blurRadius: 20,
-            offset: const Offset(0, 8),
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -288,58 +416,52 @@ class _ProfilePageState extends State<ProfilePage> {
           Stack(
             children: [
               Container(
-                width: 130,
-                height: 130,
+                width: 120,
+                height: 120,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF0F172A), width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  border: Border.all(color: const Color(0xFFF1F5F9), width: 4),
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(65),
+                  borderRadius: BorderRadius.circular(60),
                   child: ResponsiveImage(
                     imageData: photo,
-                    width: 130,
-                    height: 130,
+                    width: 120,
+                    height: 120,
                     fit: BoxFit.cover,
                   ),
                 ),
               ),
               Positioned(
-                bottom: 5,
-                right: 5,
+                bottom: 8,
+                right: 8,
                 child: Container(
-                  width: 24,
-                  height: 24,
+                  width: 18,
+                  height: 18,
                   decoration: BoxDecoration(
                     color: const Color(0xFF10B981),
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 4),
+                    border: Border.all(color: Colors.white, width: 3),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Text(
             name,
-            style: GoogleFonts.interTight(
-              fontSize: 24,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 22,
               fontWeight: FontWeight.w900,
               color: const Color(0xFF0F172A),
+              letterSpacing: -0.5,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             role,
             style: GoogleFonts.inter(
-              fontSize: 15,
+              fontSize: 14,
               color: const Color(0xFF64748B),
               fontWeight: FontWeight.w600,
             ),
@@ -348,28 +470,28 @@ class _ProfilePageState extends State<ProfilePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (code.isNotEmpty) _profileBadge(Icons.tag, code),
-              const SizedBox(width: 10),
+              if (code.isNotEmpty) _profileBadge(Icons.assignment_ind_rounded, code),
+              const SizedBox(width: 8),
               if (dept.isNotEmpty) _profileBadge(Icons.business_rounded, dept),
             ],
           ),
           const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 30, vertical: 24),
-            child: Divider(color: Color(0xFFF1F5F9)),
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: Divider(color: Color(0xFFF1F5F9), height: 1),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 30),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
               children: [
                 _contactTile(
-                  Icons.alternate_email_rounded,
-                  'Email Address',
+                  Icons.email_outlined,
+                  'EMAIL ADDRESS',
                   email,
                 ),
                 const SizedBox(height: 16),
                 _contactTile(
-                  Icons.phone_android_rounded,
-                  'Mobile Phone',
+                  Icons.phone_iphone_rounded,
+                  'MOBILE PHONE',
                   phone,
                 ),
               ],
@@ -453,11 +575,18 @@ class _ProfilePageState extends State<ProfilePage> {
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,30 +596,32 @@ class _ProfilePageState extends State<ProfilePage> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(10),
+                  color: color.withOpacity(0.1),
+                  shape: BoxShape.circle,
                 ),
-                child: Icon(icon, size: 20, color: color),
+                child: Icon(icon, size: 18, color: color),
               ),
               const SizedBox(width: 12),
               Text(
                 title,
-                style: GoogleFonts.interTight(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
                   color: const Color(0xFF0F172A),
+                  letterSpacing: -0.2,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 2.5,
-            children: children,
-          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(builder: (context, constraints) {
+            final double itemWidth = (constraints.maxWidth - 20) / 2;
+            return Wrap(
+              spacing: 20,
+              runSpacing: 16,
+              children: children.map((c) => SizedBox(width: itemWidth, child: c)).toList(),
+            );
+          }),
           if (managers != null && managers.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
@@ -577,10 +708,11 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               Text(
                 name,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF0F172A),
+                  letterSpacing: -0.2,
                 ),
               ),
               if (role.isNotEmpty)

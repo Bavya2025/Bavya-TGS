@@ -3,7 +3,7 @@ from django.core.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from .models import (
-    Trip, Expense, TravelClaim, TravelAdvance, TripOdometer, Dispute, PolicyDocument, BulkActivityBatch,
+    Trip, Expense, TravelClaim, TravelAdvance, TripOdometer, Dispute, PolicyDocument, BulkActivityBatch, JobReport,
     TravelModeMaster, BookingTypeMaster, AirlineMaster, FlightClassMaster, TrainClassMaster,
     BusOperatorMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
     TrainProviderMaster, BusProviderMaster, IntercityCabProviderMaster,
@@ -13,7 +13,7 @@ from .models import (
 )
 from .serializers import (
     TripSerializer, ExpenseSerializer, TravelClaimSerializer, TravelAdvanceSerializer,
-    TripOdometerSerializer, DisputeSerializer, PolicyDocumentSerializer, BulkActivityBatchSerializer,
+    TripOdometerSerializer, DisputeSerializer, PolicyDocumentSerializer, BulkActivityBatchSerializer, JobReportSerializer,
     TravelModeMasterSerializer, BookingTypeMasterSerializer, AirlineMasterSerializer,
     FlightClassMasterSerializer, TrainClassMasterSerializer, BusOperatorMasterSerializer,
     BusTypeMasterSerializer, IntercityCabVehicleMasterSerializer, TravelProviderMasterSerializer,
@@ -211,6 +211,7 @@ from core.models import User
 from notifications.models import Notification
 from core.permissions import IsCustomAuthenticated
 import requests
+import datetime
 
 def decode_id(encoded_id):
     import base64
@@ -221,7 +222,7 @@ def decode_id(encoded_id):
         
     try:
         # Check if it's already a numeric-looking ID or doesn't look like base64
-        if encoded_id.isdigit() or encoded_id.startswith('TRP-'):
+        if encoded_id.isdigit() or encoded_id.startswith('TRP-') or encoded_id.startswith('ITS-'):
             return encoded_id
             
         padding = 4 - (len(encoded_id) % 4)
@@ -340,6 +341,52 @@ def update_trip_lifecycle(trip, title, description):
 
 
 
+def resolve_approver(user, members_data=None):
+    """Helper to resolve the first approver in the management hierarchy."""
+    def is_admin(u):
+        if not u or not u.role:
+            return False
+        return u.role.name.lower() in ['admin', 'it-admin', 'superuser', 'it admin', 'system administrator']
+    
+    reporting_manager = user.reporting_manager
+    senior_manager = user.senior_manager
+    hod_director = user.hod_director
+    
+    current_approver = reporting_manager if not is_admin(reporting_manager) else None
+    h_level = 1
+    
+    if not current_approver:
+        current_approver = senior_manager if not is_admin(senior_manager) else None
+        h_level = 2
+    
+    if not current_approver:
+        current_approver = hod_director if not is_admin(hod_director) else None
+        h_level = 3
+        
+    if not current_approver:
+        # Fallback to members' managers if applicable
+        potential_managers = []
+        if members_data:
+            import re
+            for m_str in members_data:
+                match = re.search(r'\((.*?)\)', m_str)
+                if match:
+                    member_id = match.group(1)
+                    member_user = User._get_or_create_shell_user(member_id)
+                    manager = member_user.reporting_manager if member_user else None
+                    if manager and not is_admin(manager):
+                        potential_managers.append(manager)
+            
+        if potential_managers:
+            potential_managers.sort(key=lambda m: getattr(m, 'level_rank', 99))
+            current_approver = potential_managers[0]
+            h_level = 1
+        else:
+            current_approver = get_hr_head(user)
+            h_level = 1
+            
+    return current_approver, h_level, reporting_manager, senior_manager, hod_director
+
 class TripListCreateView(generics.ListCreateAPIView):
     serializer_class = TripSerializer
     permission_classes = [IsCustomAuthenticated]
@@ -356,22 +403,19 @@ class TripListCreateView(generics.ListCreateAPIView):
             if user_role in ['admin', 'guesthousemanager', 'finance', 'cfo']:
                 return Trip.objects.all().order_by('-created_at')
             
-            # Managers/Approvers should see trips they are involved in
             from django.db.models import Q
             return Trip.objects.filter(
                 Q(user=user) | 
                 Q(current_approver=user)
             ).distinct().order_by('-created_at')
             
-        return Trip.objects.filter(user=user).order_by('-created_at')
+        return Trip.objects.filter(user=user, consider_as_local=False).order_by('-created_at')
 
-    def perform_create(self, serializer):
+    def perform_create(self, serializer, is_local=False):
         user = getattr(self.request, 'custom_user', None)
-        
         if not user:
             from rest_framework.exceptions import AuthenticationFailed
-            raise AuthenticationFailed("Authentication required. Please login to create a trip.")
-        
+            raise AuthenticationFailed("Authentication required.")
         
         # Admin / Superuser skip approvals
         user_role = user.role.name.lower() if user.role else ''
@@ -380,101 +424,85 @@ class TripListCreateView(generics.ListCreateAPIView):
                 user=user,
                 status='Approved',
                 current_approver=None,
-                hierarchy_level=0
+                hierarchy_level=0,
+                consider_as_local=is_local
             )
-            update_trip_lifecycle(trip, "Auto-Approved", "Trip request auto-approved for Administrator.")
+            label = "Travel" if is_local else "Trip"
+            update_trip_lifecycle(trip, "Auto-Approved", f"{label} request auto-approved for Administrator.")
             return
 
-        # Use dynamic properties for managers
-        reporting_manager = user.reporting_manager
-        senior_manager = user.senior_manager
-        hod_director = user.hod_director
+        members_data = serializer.validated_data.get('members', [])
+        current_approver, h_level, rm, sm, hod = resolve_approver(user, members_data)
         
-        def is_admin(u):
-            if not u or not u.role:
-                return False
-            return u.role.name.lower() in ['admin', 'it-admin', 'superuser', 'it admin', 'system administrator']
-        
-        # Logic to find first available approver
-        current_approver = reporting_manager if not is_admin(reporting_manager) else None
-        h_level = 1
-        
-        if not current_approver:
-            current_approver = senior_manager if not is_admin(senior_manager) else None
-            h_level = 2
-        
-        if not current_approver:
-            current_approver = hod_director if not is_admin(hod_director) else None
-            h_level = 3
-            
-        if not current_approver:
-            # User is likely an Admin or doesn't have a manager in HR
-            # Check for selected users' reporting manager with high seniority
-            members_list = serializer.validated_data.get('members', [])
-            potential_managers = []
-            
-            import re
-            for m_str in members_list:
-                # Extract ID from "Name (ID) - Desig"
-                match = re.search(r'\((.*?)\)', m_str)
-                if match:
-                    member_id = match.group(1)
-                    # We don't use objects.get because user might not be in our DB yet
-                    # Shell user uses _get_or_create_shell_user which is safe
-                    member_user = User._get_or_create_shell_user(member_id)
-                    manager = member_user.reporting_manager if member_user else None
-                    if manager and not is_admin(manager):
-                        potential_managers.append(manager)
-            
-            if potential_managers:
-                # Sort by level_rank (lower is more senior)
-                potential_managers.sort(key=lambda m: getattr(m, 'level_rank', 99))
-                current_approver = potential_managers[0]
-                h_level = 1 # Start level 1 for the team's manager
-            else:
-                # Absolute fallback: If no managers even for team, go to HR
-                current_approver = get_hr_head(user)
-                h_level = 1
-        
-        # Set status to 'Pending' so it shows up in manager's 'Pending' filters
-        trip = serializer.save(
-            user=user,
-            status='Pending',
-            current_approver=current_approver,
-            hierarchy_level=h_level,
-            # Populate snapshots for resilience
-            user_name=user.name,
-            user_designation=user.designation,
-            user_department=user.department,
-            reporting_manager_name=reporting_manager.name if reporting_manager else None,
-            senior_manager_name=senior_manager.name if senior_manager else None,
-            hod_director_name=hod_director.name if hod_director else None
-        )
+        try:
+            trip = serializer.save(
+                user=user,
+                status='Pending',
+                current_approver=current_approver,
+                hierarchy_level=h_level,
+                consider_as_local=is_local,
+                # Snapshots
+                user_name=user.name,
+                user_designation=user.designation,
+                user_department=user.department,
+                reporting_manager_name=rm.name if rm else None,
+                senior_manager_name=sm.name if sm else None,
+                hod_director_name=hod.name if hod else None
+            )
+        except Exception as e:
+            # convert DB errors to validation error so frontend sees message
+            # also log full traceback on server for diagnostics
+            import traceback
+            traceback.print_exc()
+            from rest_framework.exceptions import ValidationError
+            msg = str(e)
+            print("ERROR IN TRIP CREATION:", msg)
+            raise ValidationError({"detail": msg})
 
+        label = "Travel" if is_local else "Trip"
         if current_approver:
             Notification.objects.create(
                 user=current_approver,
+<<<<<<< HEAD
+                title=f"New {label} Request",
+                message=f"{user.name} has submitted a new {label.lower()} request to {trip.destination}.",
+                type='info'
+=======
                 title="New Trip Request",
                 message=f"{user.name} has submitted a new trip request to {trip.destination}.",
                 type='info',
                 link='/approvals'
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
             )
         
-        # Notify Guest House Managers if room is requested
         if trip.accommodation_requests and any('Room' in r for r in trip.accommodation_requests):
             gh_managers = User.objects.filter(role__name='GuestHouseManager', is_active=True)
             for manager in gh_managers:
                 Notification.objects.create(
                     user=manager,
                     title="Room Request Received",
+<<<<<<< HEAD
+                    message=f"{user.name} has requested a room for {label.lower()} {trip.trip_id}.",
+                    type='info'
+=======
                     message=f"{user.name} has requested a room for trip {trip.trip_id} to {trip.destination}.",
                     type='info',
                     link='/guesthouse?tab=requests'
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
                 )
 
-        # Notify HR
-        notify_hr("New Trip Request", f"{user.name} has raised a new trip request to {trip.destination} (ID: {trip.trip_id}).")
+        notify_hr(f"New {label} Request", f"{user.name} has raised a {label.lower()} request to {trip.destination} (ID: {trip.trip_id}).")
 
+<<<<<<< HEAD
+class TravelListCreateView(TripListCreateView):
+    def get_queryset(self):
+        user = getattr(self.request, 'custom_user', None)
+        if not user: return Trip.objects.none()
+        return Trip.objects.filter(user=user, consider_as_local=True).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer, is_local=True)
+=======
         # Notify Fleet Managers if vehicle is requested
         if trip.accommodation_requests and any('Vehicle' in r for r in trip.accommodation_requests):
             fleet_notifees = User.objects.filter(Q(role__name='Admin') | Q(role__name='GuestHouseManager'), is_active=True)
@@ -486,6 +514,7 @@ class TripListCreateView(generics.ListCreateAPIView):
                     type='info',
                     link='/fleet'
                 )
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
 
 class TripBookingSearchView(generics.ListAPIView):
     serializer_class = TripSerializer
@@ -736,6 +765,7 @@ class ApprovalsView(APIView):
                     "status": t.status, "date": t.created_at.strftime("%b %d, %Y"),
                     "hierarchy_level": t.hierarchy_level,
                     "trip_id": t.trip_id,
+                    "is_local": t.consider_as_local,
                     "cost": t.cost_estimate,
                     "details": {
                         "source": t.source, "destination": t.destination, 
@@ -744,7 +774,24 @@ class ApprovalsView(APIView):
                         "travel_mode": t.travel_mode,
                         "composition": t.composition,
                         "vehicle_type": t.vehicle_type,
-                        "purpose": t.purpose
+                        "purpose": t.purpose,
+                        "project_code": t.project_code,
+                        "job_reports": [
+                            {
+                                "id": jr.id,
+                                "created_at": jr.created_at.strftime("%b %d, %Y"),
+                                "user_name": jr.user.name if jr.user else "N/A",
+                                "description": jr.description,
+                                "attachment": jr.attachment,
+                                "file_name": jr.file_name
+                            } for jr in t.job_reports.all()
+                        ],
+                        "odometer": {
+                            "start_reading": str(t.odometer_details.start_odo_reading) if hasattr(t, 'odometer_details') and t.odometer_details.start_odo_reading else None,
+                            "start_image": decrypt_key(t.odometer_details.start_odo_image) if hasattr(t, 'odometer_details') and t.odometer_details.start_odo_image else None,
+                            "end_reading": str(t.odometer_details.end_odo_reading) if hasattr(t, 'odometer_details') and t.odometer_details.end_odo_reading else None,
+                            "end_image": decrypt_key(t.odometer_details.end_odo_image) if hasattr(t, 'odometer_details') and t.odometer_details.end_odo_image else None,
+                        } if hasattr(t, 'odometer_details') else None
                     }
                 })
             
@@ -757,6 +804,7 @@ class ApprovalsView(APIView):
                     "status": a.status, "date": a.created_at.strftime("%b %d, %Y"),
                     "hierarchy_level": a.hierarchy_level,
                     "trip_id": a.trip.trip_id,
+                    "is_local": a.trip.consider_as_local,
                     "details": {
                         "source": a.trip.source,
                         "destination": a.trip.destination,
@@ -781,6 +829,7 @@ class ApprovalsView(APIView):
                     "status": c.status, "date": c.created_at.strftime("%b %d, %Y"),
                     "hierarchy_level": c.hierarchy_level,
                     "trip_id": c.trip.trip_id,
+                    "is_local": c.trip.consider_as_local,
                     "details": {
                         "source": c.trip.source,
                         "destination": c.trip.destination,
@@ -801,12 +850,28 @@ class ApprovalsView(APIView):
                                 "amount": str(e.amount),
                                 "description": e.description,
                                 "status": e.status,
-                                "receipt_image": e.receipt_image,
+                                "receipt_image": decrypt_key(e.receipt_image) if e.receipt_image else "",
                                 "rm_remarks": e.rm_remarks or "",
                                 "hr_remarks": e.hr_remarks or "",
                                 "finance_remarks": e.finance_remarks or ""
                             } for e in c.trip.expenses.all()
-                        ]
+                        ],
+                        "job_reports": [
+                            {
+                                "id": jr.id,
+                                "created_at": jr.created_at.strftime("%b %d, %Y"),
+                                "user_name": jr.user.name if jr.user else "N/A",
+                                "description": jr.description,
+                                "attachment": jr.attachment,
+                                "file_name": jr.file_name
+                            } for jr in c.trip.job_reports.all()
+                        ],
+                        "odometer": {
+                            "start_reading": str(c.trip.odometer_details.start_odo_reading) if hasattr(c.trip, 'odometer_details') and c.trip.odometer_details.start_odo_reading else None,
+                            "start_image": decrypt_key(c.trip.odometer_details.start_odo_image) if hasattr(c.trip, 'odometer_details') and c.trip.odometer_details.start_odo_image else None,
+                            "end_reading": str(c.trip.odometer_details.end_odo_reading) if hasattr(c.trip, 'odometer_details') and c.trip.odometer_details.end_odo_reading else None,
+                            "end_image": decrypt_key(c.trip.odometer_details.end_odo_image) if hasattr(c.trip, 'odometer_details') and c.trip.odometer_details.end_odo_image else None,
+                        } if hasattr(c.trip, 'odometer_details') else None
                     }
                 })
 
@@ -875,6 +940,33 @@ class ApprovalsView(APIView):
         requester = obj.user if hasattr(obj, 'user') else obj.trip.user
         request_type = "Trip" if isinstance(obj, Trip) else ("Advance" if isinstance(obj, TravelAdvance) else "Expense Claim")
         
+        # Security Check: Determine roles and check authorization early
+        user_role = user.role.name.lower() if user.role else ''
+        is_admin = user_role in ['admin', 'it-admin', 'superuser']
+        is_hr = _is_hr(user)
+        is_finance_exec = _is_finance_executive(user)
+        is_finance_head = _is_finance_head(user)
+        is_finance = is_finance_exec or is_finance_head
+
+        if not is_admin:
+            authorized = False
+            # 1. Primary approver check
+            if obj.current_approver == user:
+                authorized = True
+            # 2. Functional role check (allow acting on specific statuses even if not the explicit current_approver)
+            elif is_hr and obj.status == 'Manager Approved':
+                authorized = True
+            elif is_finance_exec and obj.status in ['PENDING_EXECUTIVE', 'REJECTED_BY_HEAD', 'PENDING_FINAL_RELEASE', 'HR Approved', 'Approved', 'Under Process']:
+                authorized = True
+            elif is_finance_head and obj.status in ['PENDING_HEAD', 'PENDING_EXECUTIVE', 'REJECTED_BY_HEAD', 'PENDING_FINAL_RELEASE', 'HR Approved', 'Approved', 'Under Process']:
+                authorized = True
+            # 3. Finance-specific actions check
+            elif is_finance and action in ['Transfer', 'Pay', 'UnderProcess', 'RejectByFinance']:
+                authorized = True
+
+            if not authorized:
+                raise Exception("You are not authorized to perform this action on this request.")
+
         from core.models import AuditLog
         if action == 'Reject':
             obj.status = 'Rejected'
@@ -886,28 +978,6 @@ class ApprovalsView(APIView):
                 object_id=str(obj.pk), object_repr=str(obj),
                 details={'reason': data.get('remarks') if data else ''}
             )
-
-        # Security Check: Only current_approver or assigned role can perform actions
-        user_role = user.role.name.lower() if user.role else ''
-        is_admin = user_role in ['admin', 'it-admin', 'superuser']
-        is_hr = _is_hr(user)
-        is_finance_exec = _is_finance_executive(user)
-        is_finance_head = _is_finance_head(user)
-        is_finance = is_finance_exec or is_finance_head
-
-        if not is_admin:
-            authorized = False
-            if obj.current_approver == user:
-                authorized = True
-            elif is_hr and obj.status == 'Manager Approved':
-                authorized = True
-            elif is_finance_exec and obj.status in ['PENDING_EXECUTIVE', 'REJECTED_BY_HEAD', 'PENDING_FINAL_RELEASE']:
-                authorized = True
-            elif is_finance_head and obj.status == 'PENDING_HEAD':
-                authorized = True
-            
-            if not authorized:
-                raise Exception("You are not authorized to perform this action on this request.")
 
         if action == 'Forward':
             # This is now mostly handled by 'Approve' automatic progression, 
@@ -1198,13 +1268,22 @@ class ApprovalsView(APIView):
                 if hasattr(obj, 'finance_remarks'): obj.finance_remarks = data.get('remarks', '')
                 if hasattr(obj, 'processed_by'): obj.processed_by = user
             
-            obj.status = 'COMPLETED'
+            # Set target status based on model type
+            if isinstance(obj, TravelClaim):
+                obj.status = 'Paid'
+            else:
+                obj.status = 'COMPLETED'
+                
             obj.current_approver = None
             obj.save()
             
             # Record Lifecycle Event
             trip = obj if isinstance(obj, Trip) else getattr(obj, 'trip', None)
             if trip:
+                # If this is a claim settlement, also update the trip status to 'Settled'
+                if isinstance(obj, TravelClaim):
+                    trip.status = 'Settled'
+                    trip.save()
                 update_trip_lifecycle(trip, "Settlement", f"Final Transfer completed by {user.name}.")
             
             Notification.objects.create(
@@ -1213,7 +1292,7 @@ class ApprovalsView(APIView):
                 message=f"Your {request_type} has been fully approved and the amount has been credited to your account.",
                 type='success'
             )
-            return Response({"message": "Transfer completed and phase closed."})
+            return Response({"message": f"{action} completed and phase closed."})
 
         if action == 'RejectByFinance':
             obj.status = 'Rejected by Finance'
@@ -1346,11 +1425,16 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
             # If no managers at all, go to HR
             current_approver = get_hr_head(user)
 
+        from django.db.models import Sum
+        total_expense_sum = trip.expenses.aggregate(s=Sum('amount'))['s'] or 0
+
         claim = serializer.save(
             status='Submitted',
             current_approver=current_approver,
             hierarchy_level=h_level,
             submitted_at=timezone.now(),
+            total_amount=total_expense_sum,
+            approved_amount=total_expense_sum,
             # Populate snapshots for resilience
             user_name=user.name,
             user_designation=user.designation,
@@ -1376,6 +1460,13 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         claim = serializer.save()
+        
+        from django.db.models import Sum
+        total_amount = claim.trip.expenses.aggregate(s=Sum('amount'))['s'] or 0
+        claim.total_amount = total_amount
+        claim.approved_amount = total_amount
+        claim.save()
+        
         if claim.status == 'Submitted':
             self._update_trip_lifecycle(claim.trip)
 
@@ -1542,8 +1633,12 @@ class DashboardStatsView(APIView):
         
         is_admin = user.role.name.lower() == 'admin'
         is_gh_manager = user.role.name.lower() == 'guesthousemanager'
-        
-        if is_admin or is_gh_manager:
+        is_fin_head = _is_finance_head(user)
+        is_fin_exec = _is_finance_executive(user)
+        is_finance = is_fin_head or is_fin_exec
+        is_cfo = 'cfo' in (user.role.name.lower() if user.role else '')
+
+        if is_admin or is_gh_manager or is_finance or is_cfo:
             trips = Trip.objects.all()
             base_expenses = Expense.objects.all()
         else:
@@ -1555,10 +1650,7 @@ class DashboardStatsView(APIView):
         
         # Count tasks awaiting this user's approval
         pending_action = 0
-        is_hr = _is_hr(user)
-        is_fin_head = _is_finance_head(user)
-        is_fin_exec = _is_finance_executive(user)
-        is_finance = is_fin_head or is_fin_exec
+        # variables already defined above
 
         if not is_admin:
             pending_action += Trip.objects.filter(current_approver=user).count()
@@ -1597,20 +1689,31 @@ class DashboardStatsView(APIView):
         
         wallet_balance = float(total_approved_advances) - float(total_expenses)
         
-        approved_expenses = base_expenses.filter(
-            trip__claim__status__in=['Approved', 'Paid']
-        ).aggregate(Sum('amount'))['amount__sum'] or 0
+        approved_expenses_qs = base_expenses.filter(
+            Q(trip__claim__status__in=['Approved', 'Paid']) |
+            Q(trip__status__in=['Approved', 'Completed', 'Settled'], trip__consider_as_local=True)
+        )
+        approved_expenses = approved_expenses_qs.aggregate(Sum('amount'))['amount__sum'] or 0
         
         categories = base_expenses.values('category').annotate(total=Sum('amount'))
         
         recent_trips = trips.order_by('-created_at')[:5]
-        recent_data = [{
-            "id": t.trip_id,
-            "title": f"Trip to {t.destination}",
-            "subtitle": f"{t.user.name} - {t.purpose}" if (is_admin or is_gh_manager) and t.user else t.purpose,
-            "status": t.status,
-            "amount": t.cost_estimate
-        } for t in recent_trips]
+        recent_data = []
+        for t in recent_trips:
+            # If trip is approved/completed, show actual total instead of estimate
+            if t.status in ['Approved', 'Completed', 'Settled']:
+                actual_total = Expense.objects.filter(trip=t).aggregate(Sum('amount'))['amount__sum'] or 0
+                display_amount = f"₹{actual_total:,.0f}" if actual_total > 0 else t.cost_estimate
+            else:
+                display_amount = t.cost_estimate
+
+            recent_data.append({
+                "id": t.trip_id,
+                "title": f"{'Travel' if t.consider_as_local else 'Trip'} to {t.destination}",
+                "subtitle": f"{t.user.name} - {t.purpose}" if (is_admin or is_gh_manager) and t.user else t.purpose,
+                "status": t.status,
+                "amount": display_amount
+            })
 
         kpis = [
             { "title": 'Total Trips', "value": str(total_trips), "label": 'Managed trips' if is_admin or is_finance or is_gh_manager else 'Your trips', "icon": 'Briefcase', "color": 'orange' },
@@ -1918,37 +2021,24 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         user = getattr(request, 'custom_user', None)
         manager_code = user.employee_id if user else None
         
-        # gather locations starting from employees reporting to this manager
-        locations = []
+        # Gather clusters from all employees in the reporting chain
+        team_locs = set()
         if manager_code:
-            locations = get_manager_reports_locations(manager_code)
+            for loc in get_manager_reports_locations(manager_code):
+                if loc:
+                    team_locs.add(loc)
 
-        # --- add the manager's own base location if available ---
+        # Add the manager's own cluster/district (using geo_location priority)
         if user:
-            own_loc = (user.base_location or '').strip()
-            if own_loc and own_loc not in locations:
-                locations.append(own_loc)
+            own_loc = (user.office_location or '').strip()
+            if own_loc:
+                team_locs.add(own_loc)
 
-        # --- also merge in any locations already present on trips in the DB ---
-        # this ensures sites like "Client Site" appear even when the
-        # external service returns nothing (or a limited set)
-        from .models import Trip
-        existing_locs = set(locations)  # start with whatever we already have
-        for t in Trip.objects.values('source', 'destination'):
-            if t['source'] and t['source'].strip():
-                existing_locs.add(t['source'].strip())
-            if t['destination'] and t['destination'].strip():
-                existing_locs.add(t['destination'].strip())
-
-        if existing_locs:
-            locations = sorted(existing_locs)
+        # Build final sorted list – strictly team clusters only, no trip history
+        if team_locs:
+            locations = sorted(team_locs)
         else:
-            # still empty? use generic fallback list
-            locations = [
-                "Head Office", "Field Office", "Client Site", "Warehouse",
-                "Airport", "Railway Station", "Bus Stand", "Guest House",
-                "Project Site", "Branch Office", "Regional Office", "Vendor Location"
-            ]
+            locations = ["Head Office", "Field Office", "Client Site"]
 
         for i, loc in enumerate(locations, start=1):
             loc_sheet.cell(row=i, column=1, value=loc)
@@ -2100,30 +2190,6 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         ws.add_data_validation(dv_to)
         dv_to.sqref = "D3:D103"   # Column D
 
-        # ── Validation 5: Prevent same From & To ────────────────────────────
-        # This validation only applies to the "To" column (D); it references
-        # the corresponding "From" cell so we avoid overlapping the existing
-        # list validations which would otherwise be replaced.
-        dv_not_same = DataValidation(
-            type="custom",
-            formula1="=$C3<>$D3",  # row relative
-            showDropDown=False,
-            showErrorMessage=True,
-            errorStyle="stop",
-            errorTitle="Invalid Entry",
-            error="From and To locations cannot be the same.",
-            showInputMessage=True,
-            promptTitle="Distinct Locations",
-            prompt="Destination must differ from origin."
-        )
-        ws.add_data_validation(dv_not_same)
-        dv_not_same.sqref = "D3:D103"  # only column D
-
-        # ── Conditional formatting to highlight invalid rows ───────────────
-        red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-        rule = FormulaRule(formula=["$C3=$D3"], fill=red_fill)
-        ws.conditional_formatting.add("C3:D103", rule)
-
         # Column E (Purpose) – no list validation, free text; just an input hint
         dv_purpose = DataValidation(
             type="textLength",
@@ -2162,12 +2228,25 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
             return Response({"error": "No file uploaded"}, status=400)
             
         try:
-            df = pd.read_excel(file)
-            # Map columns to internal JSON
+            # drop the instruction row that sits just below the header
+            df = pd.read_excel(file, skiprows=[1])
+
+            # Map columns to internal JSON; ignore completely empty rows or
+            # any row where the date field clearly contains the word "instruc"
             rows = []
             for _, row in df.iterrows():
+                # treat rows with no data as blanks
+                if row.dropna().empty:
+                    continue
+
                 # Support both new column names and old legacy names
-                date_val = str(row.get('Date', row.get('Date (YYYY-MM-DD)', ''))).strip()
+                date_raw = row.get('Date', row.get('Date (YYYY-MM-DD)', ''))
+                if pd.isna(date_raw):
+                    continue
+                date_val = str(date_raw).strip()
+                if 'instruc' in date_val.lower():
+                    # skip the instructions/sample row
+                    continue
                 if len(date_val) > 10:
                     date_val = date_val[:10]
 
@@ -2191,20 +2270,12 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 rows.append({
                     "date": date_val,
                     "time": time_str,
-                    "mode": "Car / Cab",
+                    "mode": "Bike",
                     "origin_route": str(row.get('From Location', row.get('from location', ''))),
                     "destination_route": str(row.get('To Location', row.get('to location', ''))),
-                    "odo_start": "-",
-                    "odo_end": "-",
-                    "vehicle": "Own Car",
-                    "visit_intent": str(row.get('Purpose', row.get('purpose', ''))),
-                    "remarks": "-"
+                    "vehicle": "Own Bike",
+                    "visit_intent": str(row.get('Purpose', row.get('purpose', '')))
                 })
-            # enforce server‑side validation: origin and destination must differ
-            for idx, r in enumerate(rows, start=1):
-                if r.get('origin_route', '').strip() and r.get('destination_route', '').strip():
-                    if r['origin_route'].strip() == r['destination_route'].strip():
-                        raise ValueError(f"Row {idx}: From and To locations cannot be the same.")
             
             user = request.custom_user
             
@@ -2262,45 +2333,85 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         batch = self.get_object()
         user = getattr(request, 'custom_user', None)
         
-        if batch.status != 'Submitted':
-            return Response({"error": "Batch is not in Submitted status"}, status=400)
+        if batch.status not in ['Submitted', 'Manager Approved']:
+            return Response({"error": "Batch is not in a valid status for approval"}, status=400)
             
         if batch.current_approver != user:
              return Response({"error": "Unauthorized: You are not the designated approver."}, status=403)
             
-        # --- Hierarchy Progression Logic ---
-        # Look for the next manager in the chain
-        next_approver = None
-        next_level = batch.hierarchy_level
-        
-        # Determine roles/managers
+        is_hr = _is_hr(user)
         requester = batch.user
-        rm = requester.reporting_manager
-        sm = requester.senior_manager
-        hod = requester.hod_director
         
-        if batch.hierarchy_level == 1:
-            next_approver = sm if sm and sm != user else hod
-            next_level = 2 if next_approver == sm else 3
-        elif batch.hierarchy_level == 2:
-            next_approver = hod if hod and hod != user else None
-            next_level = 3
-
-        # If there's a next approver, forward it instead of final approval
-        if next_approver and next_approver != user:
-            batch.current_approver = next_approver
-            batch.hierarchy_level = next_level
-            batch.save()
+        # If the approver is not HR, do management chain logic
+        if not is_hr:
+            next_approver = None
             
-            Notification.objects.create(
-                user=next_approver,
-                title="Management Approved: Bulk Log",
-                message=f"{batch.user.name}'s activity log has been approved by {user.name} and forwarded to you for level {next_level} review.",
-                type='info'
-            )
-            return Response({"message": f"Batch approved and forwarded to {next_approver.name}."})
+            # Try explicit levels first
+            if batch.hierarchy_level == 1:
+                next_approver = getattr(batch, 'senior_manager', None) or getattr(batch, 'hod_director', None)
+            elif batch.hierarchy_level == 2:
+                next_approver = getattr(batch, 'hod_director', None)
+            
+            # DYNAMIC FALLBACK: If no explicit level but current user has a manager
+            if not next_approver:
+                potential_manager = user.reporting_manager
+                # Ensure we don't route back to requester or to a non-existent manager
+                if potential_manager and potential_manager != user and potential_manager != requester:
+                    next_approver = potential_manager
 
+            if next_approver:
+                # Move to next manager in chain
+                batch.current_approver = next_approver
+                batch.hierarchy_level += 1
+                batch.save()
+                
+                Notification.objects.create(
+                    user=next_approver,
+                    title="Pending Approval: Bulk Travel Log",
+                    message=f"{requester.name}'s bulk travel log requires your review (Forwarded from {user.name}).",
+                    type='info'
+                )
+                Notification.objects.create(
+                    user=requester,
+                    title=f"Approved by {user.name}",
+                    message=f"Your bulk travel log has been approved by {user.name} and forwarded to {next_approver.name} for the next level review.",
+                    type='success'
+                )
+                return Response({"message": f"Batch approved and forwarded to {next_approver.name}."})
+            else:
+                # End of Management Chain -> Move to HR Approval
+                hr_head = get_hr_head(requester)
+                batch.status = 'Manager Approved'
+                batch.current_approver = hr_head
+                batch.save()
+                
+                Notification.objects.create(
+                    user=requester,
+                    title="Management Approved",
+                    message="Your bulk travel log has been approved by management and sent to HR for verification.",
+                    type='success'
+                )
+                
+                if hr_head:
+                    Notification.objects.create(
+                        user=hr_head,
+                        title="HR Verification Required",
+                        message=f"{requester.name}'s bulk travel log is management-approved and awaits your verification.",
+                        type='info'
+                    )
+                return Response({"message": "Sent to HR for verification"})
+
+        # --- STAGE 2: HR Approval ---
+        # If we reach here, it's the final approval (HR)
         # --- Final Approval Side Effects ---
+        # Activate Trip Story
+        if batch.trip:
+            update_trip_lifecycle(batch.trip, "Trip Story Activated", "Bulk activity log approved. Trip story and claims are now active.")
+            # If there's a status that signifies 'Ready for Claim', we could set it here.
+            # Usually 'Approved' or 'Completed' works.
+            if batch.trip.consider_as_local:
+                batch.trip.status = 'Approved' # Active for local
+                batch.trip.save()
         # Create Expenses (Activities) for each row only when the final manager approves
         created_ids = []
         for row in batch.data_json:
@@ -2330,8 +2441,19 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 elif 'ride' in excel_vehicle or 'uber' in excel_vehicle or 'ola' in excel_vehicle or 'taxi' in excel_mode: 
                     mapped_subType = "Ride Hailing"
 
-             # Construct the JSON description for the grid
+            # Pull and normalise the date. skip any bogus rows (e.g. the
+            # instruction/sample line that sneaked in from earlier uploads).
             clean_date = str(row.get('date', '')).strip()
+            if not clean_date or 'instruc' in clean_date.lower():
+                # invalid/empty date – skip this row entirely
+                continue
+            # ensure format is YYYY-MM-DD; try parsing to detect bad values
+            try:
+                # this will raise ValueError for non‑ISO strings like "?  Instruc"
+                datetime.date.fromisoformat(clean_date)
+            except Exception:
+                continue
+
             if len(clean_date) > 10:
                 clean_date = clean_date[:10]
 
@@ -2399,6 +2521,9 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         
         if batch.current_approver != user:
              return Response({"error": "Unauthorized"}, status=403)
+             
+        if 'data_json' in request.data:
+            batch.data_json = request.data['data_json']
              
         batch.status = 'Rejected'
         batch.remarks = request.data.get('remarks', 'Rejected by Manager')
@@ -2474,6 +2599,20 @@ class IntercityCabProviderMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = IntercityCabProviderMaster.objects.all()
     serializer_class = IntercityCabProviderMasterSerializer
+
+class JobReportViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = JobReport.objects.all()
+    serializer_class = JobReportSerializer
+
+    def get_queryset(self):
+        trip_id = self.request.query_params.get('trip_id')
+        if trip_id:
+            return self.queryset.filter(trip_id=trip_id)
+        return self.queryset
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.custom_user)
 
 class LocalTravelModeMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
@@ -2584,6 +2723,8 @@ class CustomMasterValueViewSet(viewsets.ModelViewSet):
     serializer_class = CustomMasterValueSerializer
     filterset_fields = ['definition']
 
+<<<<<<< HEAD
+=======
     def get_queryset(self):
         ensure_default_master_setup()
         queryset = CustomMasterValue.objects.all().select_related('definition')
@@ -2594,4 +2735,5 @@ class CustomMasterValueViewSet(viewsets.ModelViewSet):
         if definition_key is not None:
             queryset = queryset.filter(definition__key=definition_key)
         return queryset.order_by('name')
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
 

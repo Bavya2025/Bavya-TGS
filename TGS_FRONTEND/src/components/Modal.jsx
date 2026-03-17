@@ -43,7 +43,28 @@ const Modal = ({ isOpen, onClose, title, children, type = 'info', actions, size 
                 </div>
 
                 <div className="modal-actions">
-                    {actions ? actions : (
+                    {actions ? (
+                        // support either React nodes or simple descriptor objects
+                        Array.isArray(actions) ? (
+                            <div className="flex gap-2 justify-center">
+                                {actions.map((act, idx) => {
+                                    // if user provided React element directly, render it
+                                    if (React.isValidElement(act)) return <React.Fragment key={idx}>{act}</React.Fragment>;
+
+                                    // descriptor object fallback
+                                    const { label, onClick, variant } = act;
+                                    const btnClass = variant === 'primary' ? 'btn-primary' : 'btn-secondary';
+                                    return (
+                                        <button key={idx} className={btnClass} onClick={onClick}>
+                                            {label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            actions
+                        )
+                    ) : (
                         <button className="btn-primary" onClick={onClose}>Close</button>
                     )}
                 </div>

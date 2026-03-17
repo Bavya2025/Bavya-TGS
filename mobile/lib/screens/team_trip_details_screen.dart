@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import '../services/trip_service.dart';
 import '../models/trip_model.dart';
 
@@ -21,6 +22,8 @@ class _TeamTripDetailsScreenState extends State<TeamTripDetailsScreen> {
   List<Trip> _ongoingTrips = [];
   List<Trip> _allTripsFoundForDebug = [];
   final Map<String, Map<String, dynamic>?> _latestPoints = {};
+  final Map<String, String> _geofenceStatus = {};
+  final Map<String, List<double>?> _destCoords = {};
   Timer? _refreshTimer;
 
   @override
@@ -179,20 +182,66 @@ class _TeamTripDetailsScreenState extends State<TeamTripDetailsScreen> {
       for (var trip in _ongoingTrips) {
         final point = await _tripService.fetchLatestTrackingPoint(trip.id);
         if (mounted && point != null) {
+          // Geofencing Check: Try to find coordinates for destination
+          if (_destCoords[trip.id] == null) {
+            try {
+              final locations = await locationFromAddress(trip.destination)
+                  .timeout(const Duration(seconds: 5));
+              if (locations.isNotEmpty) {
+                _destCoords[trip.id] = [
+                  locations[0].latitude,
+                  locations[0].longitude,
+                ];
+              }
+            } catch (e) {
+              debugPrint('GEOFENCING_GEOCODE_ERROR for ${trip.id}: $e');
+            }
+          }
+
+          // Distance Check Logic
+          if (_destCoords[trip.id] != null) {
+            final dest = _destCoords[trip.id]!;
+            final lat = double.tryParse(point['latitude'].toString()) ?? 0.0;
+            final lng = double.tryParse(point['longitude'].toString()) ?? 0.0;
+
+            if (lat != 0.0 && lng != 0.0) {
+              final dist = Geolocator.distanceBetween(
+                lat,
+                lng,
+                dest[0],
+                dest[1],
+              );
+
+              String status = "ON TRACK";
+              if (dist < 1000) {
+                status = "ARRIVED (AT DEST)";
+              } else if (dist > 50000) {
+                 status = "OUT OF BOUNDS";
+              }
+
+              setState(() {
+                _geofenceStatus[trip.id] = status;
+              });
+            }
+          }
+
           // Attempt reverse geocoding for a "Wow" experience
           try {
             final lat = double.tryParse(point['latitude'].toString()) ?? 0.0;
             final lng = double.tryParse(point['longitude'].toString()) ?? 0.0;
-            
+
             if (lat != 0.0 && lng != 0.0) {
               // Add timeout to prevent hanging the UI thread if geocoding service is unresponsive
-              final placemarks = await placemarkFromCoordinates(lat, lng)
-                  .timeout(const Duration(seconds: 5));
-              
+              final placemarks = await placemarkFromCoordinates(
+                lat,
+                lng,
+              ).timeout(const Duration(seconds: 5));
+
               if (mounted && placemarks.isNotEmpty) {
                 final p = placemarks[0];
                 setState(() {
-                  point['address'] = "${p.name}, ${p.subLocality}, ${p.locality}";
+                  point['address'] =
+                      "${p.name}, ${p.subLocality}, ${p.locality}";
                 });
               }
             }
@@ -401,6 +450,36 @@ class _TeamTripDetailsScreenState extends State<TeamTripDetailsScreen> {
                         ],
                       ),
                     ),
+                    if (_geofenceStatus[trip.id] != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _geofenceStatus[trip.id] == 'ARRIVED (AT DEST)'
+                              ? const Color(0xFFEFF6FF)
+                              : (_geofenceStatus[trip.id] == 'OUT OF BOUNDS'
+                                  ? const Color(0xFFFEF2F2)
+                                  : const Color(0xFFF0FDF4)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          _geofenceStatus[trip.id]!,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: _geofenceStatus[trip.id] ==
+                                    'ARRIVED (AT DEST)'
+                                ? const Color(0xFF1D4ED8)
+                                : (_geofenceStatus[trip.id] == 'OUT OF BOUNDS'
+                                    ? Colors.red
+                                    : const Color(0xFF15803D)),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -417,9 +496,32 @@ class _TeamTripDetailsScreenState extends State<TeamTripDetailsScreen> {
   }
 
   Future<void> _openGoogleMaps(double lat, double lng) async {
-    final url = 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    final geoUrl = 'geo:$lat,$lng?q=$lat,$lng';
+    final webUrl = 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+
+    try {
+      // Try native maps first
+      debugPrint('LAUNCHING_MAPS: Trying geo scheme');
+      await launchUrl(
+        Uri.parse(geoUrl),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (e) {
+      debugPrint('GEO_FAILED: $e. Falling back to web URL.');
+      try {
+        // Fallback to browser
+        await launchUrl(
+          Uri.parse(webUrl),
+          mode: LaunchMode.externalApplication,
+        );
+      } catch (e2) {
+        debugPrint('WEB_FAILED: $e2');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open map application')),
+          );
+        }
+      }
     }
   }
 
@@ -516,7 +618,11 @@ class _TeamTripDetailsScreenState extends State<TeamTripDetailsScreen> {
 
     return GestureDetector(
       onTap: hasCoord
-          ? () => _openGoogleMaps(point['latitude'], point['longitude'])
+          ? () {
+              final lat = double.tryParse(point['latitude'].toString()) ?? 0.0;
+              final lng = double.tryParse(point['longitude'].toString()) ?? 0.0;
+              _openGoogleMaps(lat, lng);
+            }
           : null,
       child: Container(
         height: 150,

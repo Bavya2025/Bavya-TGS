@@ -31,19 +31,25 @@ import {
     AlertTriangle,
     FileText,
     ArrowRight,
+<<<<<<< HEAD
+    Upload
+=======
     Bell
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
 } from 'lucide-react';
 import ReminderModal from '../components/ReminderModal';
 import { encodeId, decodeId } from '../utils/idEncoder';
 import api from '../api/api';
 import { useToast } from '../context/ToastContext.jsx';
 import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
-import { useAuth } from '../context/AuthContext';
-import DynamicExpenseGrid from '../components/trips/DynamicExpenseGrid.jsx';
+import TripExpenseGrid from '../components/trips/TripExpenseGrid.jsx';
 import TripWalletModal from '../components/trips/TripWalletModal';
 import ExpenseReportPDF from '../components/trips/ExpenseReportPDF';
 import { formatIndianCurrency } from '../utils/formatters';
+import { useAuth } from '../context/AuthContext';
+import './TripStory.css';
+import './gmail_compose.css';
+
 
 
 const TripStory = () => {
@@ -68,6 +74,12 @@ const TripStory = () => {
     const reportRef = useRef(null);
     const [isExportingPDF, setIsExportingPDF] = useState(false);
     const [isExportingExcel, setIsExportingExcel] = useState(false);
+
+    // Job Report state
+    const [showJobReportModal, setShowJobReportModal] = useState(false);
+    const [jobReportDescription, setJobReportDescription] = useState('');
+    const [jobReportFile, setJobReportFile] = useState(null);
+    const [isSubmittingJobReport, setIsSubmittingJobReport] = useState(false);
 
     useEffect(() => {
         fetchTripStory();
@@ -169,6 +181,51 @@ const TripStory = () => {
             showToast(`Failed to generate ${format.toUpperCase()}`, "error");
         } finally {
             setter(false);
+        }
+    };
+
+    const handleJobReportFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (file.type !== 'application/pdf') {
+                showToast("Please upload only PDF files", "error");
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setJobReportFile({
+                    name: file.name,
+                    data: reader.result
+                });
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleJobReportSubmit = async () => {
+        if (!jobReportDescription.trim()) {
+            showToast("Please enter a description", "error");
+            return;
+        }
+
+        setIsSubmittingJobReport(true);
+        try {
+            await api.post('/api/job-reports/', {
+                trip: trip.trip_id,
+                description: jobReportDescription,
+                attachment: jobReportFile?.data || null,
+                file_name: jobReportFile?.name || null
+            });
+            showToast("Job Report saved successfully", "success");
+            setShowJobReportModal(false);
+            setJobReportDescription('');
+            setJobReportFile(null);
+            fetchTripStory(); // Refresh to show in grid
+        } catch (error) {
+            console.error("Failed to save job report:", error);
+            showToast("Failed to save job report", "error");
+        } finally {
+            setIsSubmittingJobReport(false);
         }
     };
 
@@ -511,7 +568,8 @@ const TripStory = () => {
                                                                                 title={`View Bill ${idx + 1}`}
                                                                                 onClick={() => {
                                                                                     const nw = window.open();
-                                                                                    nw.document.write(`<img src="${b}" style="max-width:100%;" />`);
+                                                                                    const src = (b.startsWith('data:') || b.startsWith('http')) ? b : `data:image/jpeg;base64,${b}`;
+                                                                                    nw.document.write(`<img src="${src}" style="max-width:100%;" />`);
                                                                                 }}
                                                                             >
                                                                                 <FileText size={12} />
@@ -584,7 +642,12 @@ const TripStory = () => {
                     )}
 
                     {!(String(user?.id) === String(trip.current_approver) || String(user?.id) === String(trip.claim?.current_approver)) && (
-                        <DynamicExpenseGrid
+                        // interpret trip_id prefix to decide which natures are allowed.
+                        // requests whose ID **starts with 'TRP-' are full travel trips**;
+                        // display all categories for them. any other prefix (e.g. ITS-)
+                        // denotes a local‑conveyance request and should be filtered to
+                        // local travel only.
+                        <TripExpenseGrid
                             tripId={trip.trip_id}
                             startDate={trip.start_date}
                             endDate={trip.end_date}
@@ -593,6 +656,10 @@ const TripStory = () => {
                             onUpdate={fetchTripStory}
                             tripStatus={trip.status}
                             claimStatus={trip.claim?.status}
+                            allowedNatures={trip.trip_id?.startsWith('TRP-') ? null : ['Local Travel']}
+                            // only show bulk button for full travel requests (TRP-)
+                            showBulkUpload={trip.trip_id?.startsWith('TRP-')}
+                            onJobReportClick={() => setShowJobReportModal(true)}
                         />
                     )}
                 </div>
@@ -624,6 +691,51 @@ const TripStory = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* SECTION 6: Job Reports Grid */}
+                {trip.job_reports?.length > 0 && (
+                    <div className="story-section span-3">
+                        <div className="section-header">
+                            <FileText size={20} />
+                            <h3>Job Reports</h3>
+                        </div>
+                        <div className="expense-breakdown-table-wrapper">
+                            <table className="breakdown-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Submitted By</th>
+                                        <th>Description</th>
+                                        <th>Attachment</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {trip.job_reports.map(report => (
+                                        <tr key={report.id}>
+                                            <td className="mono" style={{ width: '120px' }}>{formatDate(report.created_at)}</td>
+                                            <td style={{ width: '150px' }}>{report.user_name}</td>
+                                            <td>{report.description}</td>
+                                            <td style={{ width: '100px' }}>
+                                                {report.attachment ? (
+                                                    <button
+                                                        className="bill-preview-icon"
+                                                        onClick={() => {
+                                                            const nw = window.open();
+                                                            nw.document.write(`<iframe src="${report.attachment}" style="width:100%; height:100vh; border:none;"></iframe>`);
+                                                        }}
+                                                    >
+                                                        <FileText size={16} />
+                                                        <span style={{ marginLeft: '4px', fontSize: '0.75rem' }}>View PDF</span>
+                                                    </button>
+                                                ) : 'N/A'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* REPORT EXPORT ACTIONS AT BOTTOM */}
@@ -722,6 +834,55 @@ const TripStory = () => {
                                     setShowLuggagePopup(false);
                                     showToast("Additional Luggage info saved locally.", "success");
                                 }} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#db2777', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>Save</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showJobReportModal && (
+                <div className="custom-confirm-overlay">
+                    <div className="custom-confirm-modal" style={{ maxWidth: '500px' }}>
+                        <div className="modal-content-p" style={{ padding: '1.5rem', textAlign: 'left' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>Add Job Report</h3>
+                                <button onClick={() => setShowJobReportModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                                    <XCircle size={20} color="#94a3b8" />
+                                </button>
+                            </div>
+                            <div className="field-group mb-4" style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>
+                                    Report Description <span style={{ color: 'red' }}>*</span>
+                                </label>
+                                <textarea
+                                    placeholder="Enter your detailed job/activity report here..."
+                                    value={jobReportDescription}
+                                    onChange={(e) => setJobReportDescription(e.target.value)}
+                                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', minHeight: '120px', fontSize: '0.9rem', resize: 'vertical' }}
+                                />
+                            </div>
+                            <div className="field-group mb-4" style={{ marginBottom: '1.5rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>
+                                    Attach PDF Report
+                                </label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <label className="upload-btn-styled" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '6px', background: '#f1f5f9', border: '1px dashed #cbd5e1', fontSize: '0.85rem', color: '#475569' }}>
+                                        <Upload size={16} />
+                                        <span>{jobReportFile ? jobReportFile.name : 'Choose PDF File'}</span>
+                                        <input type="file" accept="application/pdf" hidden onChange={handleJobReportFileChange} />
+                                    </label>
+                                    {jobReportFile && (
+                                        <button onClick={() => setJobReportFile(null)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer' }}>
+                                            <XCircle size={16} />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="modal-actions-p" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                <button className="modal-btn cancel" onClick={() => setShowJobReportModal(false)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>Cancel</button>
+                                <button className="modal-btn confirm" onClick={handleJobReportSubmit} disabled={isSubmittingJobReport} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#dc2626', color: '#fff', cursor: 'pointer', fontWeight: 600, opacity: isSubmittingJobReport ? 0.7 : 1 }}>
+                                    {isSubmittingJobReport ? 'Saving...' : 'Save Report'}
+                                </button>
                             </div>
                         </div>
                     </div>

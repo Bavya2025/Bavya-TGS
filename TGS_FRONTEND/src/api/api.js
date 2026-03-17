@@ -1,5 +1,6 @@
 import axios from 'axios';
 
+
 // Use the current origin if deployed on the same server, or an environment variable
 const BASE_URL = import.meta.env.VITE_API_URL || window.location.origin;
 
@@ -34,6 +35,18 @@ api.interceptors.request.use((config) => {
 });
 
 api.interceptors.response.use((response) => {
+<<<<<<< HEAD
+    return response;
+}, (error) => {
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        if (!error.config.url.includes('/auth/login')) {
+            console.warn("Session expired or unauthorized. Logging out...");
+            sessionStorage.removeItem('tgs_user');
+            if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+                window.location.href = '/';
+            }
+        }
+=======
     // 1. Check if the response is actually JSON if we expect data
     const contentType = response.headers['content-type'] || '';
     if (response.config.url.includes('/api/') && contentType.includes('text/html')) {
@@ -61,6 +74,7 @@ api.interceptors.response.use((response) => {
         const msg = "Network Error: Backend server is unreachable.";
         console.error(msg);
         if (toastHandler) toastHandler(msg, 'error');
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
     }
     return Promise.reject(error);
 });
