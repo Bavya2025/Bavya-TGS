@@ -23,7 +23,7 @@ import api from '../api/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { formatIndianCurrency } from '../utils/formatters';
-import './JobReport.css';
+
 
 const JobReport = () => {
     const { showToast } = useToast();

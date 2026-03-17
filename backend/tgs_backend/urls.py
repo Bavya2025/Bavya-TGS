@@ -8,5 +8,7 @@ urlpatterns = [
     path('api/guesthouse/', include(('guest_house.urls', 'guest_house'), namespace='guest_house')),
     path('api/masters/', include(('travel_masters.urls', 'travel_masters'), namespace='travel_masters')),
     path('api/fleet/', include(('fleet.urls', 'fleet'), namespace='fleet')),
+    path('api/bot/', include(('chatbot.urls', 'chatbot'), namespace='chatbot')),
+    path('api/notifications/', include(('notifications.urls', 'notifications'), namespace='notifications')),
     path('apikey/', ApiKeyUpdateView.as_view(), name='update-api-key'),
 ]

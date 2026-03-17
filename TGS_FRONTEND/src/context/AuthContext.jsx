@@ -8,6 +8,12 @@ export const AuthProvider = ({ children }) => {
   const { showToast } = useToast();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [heartbeatData, setHeartbeatData] = useState({
+    notifications: [],
+    unread_notification_count: 0,
+    approval_counts: { total: 0, trips: 0, advances: 0, claims: 0 },
+    due_reminders: []
+  });
 
   const login = async (username, password) => {
     try {
@@ -17,6 +23,12 @@ export const AuthProvider = ({ children }) => {
       });
 
       const { token, user: userDetails } = response.data;
+
+      // 1. Validate response structure to prevent "partial login" white pages
+      if (!token || !userDetails || typeof userDetails !== 'object') {
+          console.error("Invalid login response structure:", response.data);
+          throw new Error('CORRUPT_RESPONSE');
+      }
 
       const userData = {
         ...userDetails,
@@ -67,8 +79,16 @@ export const AuthProvider = ({ children }) => {
             });
           } catch (error) {
             console.error('Session verification failed:', error);
-            sessionStorage.removeItem('tgs_user');
-            setUser(null);
+            if (!error.response) {
+                // Network error - backend is down
+                showToast('Backend server is unreachable. Working in offline mode.', 'warning');
+                // We keep the limited session data we have to prevent immediate logout if possible, 
+                // but mark as offline or just let subsequent requests fail gracefully.
+                setUser(parsedUser); 
+            } else {
+                sessionStorage.removeItem('tgs_user');
+                setUser(null);
+            }
           }
         }
       }
@@ -78,8 +98,26 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
+  const fetchHeartbeat = async () => {
+    if (!user || document.visibilityState !== 'visible') return;
+    try {
+      const response = await api.get('/api/heartbeat');
+      setHeartbeatData(response.data);
+    } catch (error) {
+      console.error("Heartbeat failed:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchHeartbeat();
+      const interval = setInterval(fetchHeartbeat, 60000); // 1 minute
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, heartbeatData, fetchHeartbeat }}>
       {children}
     </AuthContext.Provider>
   );

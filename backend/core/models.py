@@ -23,11 +23,28 @@ class User(models.Model):
     allow_photo_reset = models.BooleanField(default=False)
     frs_logs_cleared_at = models.DateTimeField(null=True, blank=True)
 
+    # Mandatory Django auth fields
+    USERNAME_FIELD = 'employee_id'
+    REQUIRED_FIELDS = []
+    
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+
     def __str__(self):
         return f"{self.name} ({self.employee_id})"
 
     def _get_api_data(self):
-        # Guard for purely local users by ID and Role
+        # 0. Check if we should skip external API for performance (Pure DB Mode)
+        from .middleware import should_skip_external_api
+        if should_skip_external_api():
+            return None
+
+        # 1. Guard for purely local users by ID and Role
         lower_id = self.employee_id.lower()
         role_name = (self.role.name if self.role else '').lower()
         
@@ -255,19 +272,7 @@ class Session(models.Model):
         return self.is_active and self.expires_at > timezone.now()
 
 
-class Notification(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
-    title = models.CharField(max_length=100)
-    message = models.TextField()
-    type = models.CharField(max_length=20, default='info')
-    unread = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f"{self.title} for {self.user.name}"
-
-    class Meta:
-        ordering = ['-created_at']
 
 
 class LoginHistory(models.Model):

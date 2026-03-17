@@ -28,40 +28,8 @@ const HelpSupport = () => {
     const navigate = useNavigate();
     const { showToast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
-    const [isChatOpen, setIsChatOpen] = useState(false);
-    const [chatInput, setChatInput] = useState('');
-    const [messages, setMessages] = useState([
-        { sender: 'bot', text: 'Hi there! I am your TGS Virtual Support Assistant. How can I help you today?' }
-    ]);
-
-    const handleSendChat = () => {
-        if (!chatInput.trim()) return;
-
-        const newMsg = { sender: 'user', text: chatInput };
-        setMessages(prev => [...prev, newMsg]);
-        setChatInput('');
-
-        // Bot logic
-        setTimeout(() => {
-            const inputLower = newMsg.text.toLowerCase();
-            let reply = "I'm a virtual assistant! I couldn't find an exact match for your question. You can submit a ticket to it.support@tgs.com if you need a human touch.";
-
-            if (inputLower.includes('policy') || inputLower.includes('policies')) {
-                reply = "All company policies can be found in the Policy Center. Go to the dashboard and navigate to 'Policy'!";
-            } else if (inputLower.includes('expense') || inputLower.includes('claim')) {
-                reply = "To file an expense, click on 'Expenses & Claims' in your dashboard.";
-            } else if (inputLower.includes('advance')) {
-                reply = "Need cash beforehand? Check out the 'Travel Advance' page to raise a request.";
-            } else if (inputLower.includes('approval') || inputLower.includes('approve')) {
-                reply = "You can view pending approvals in the 'Approval Inbox'.";
-            } else if (inputLower.includes('booking') || inputLower.includes('guest house')) {
-                reply = "You can book accommodations directly from the 'Guest House Booking' module.";
-            } else if (inputLower.includes('hi') || inputLower.includes('hello')) {
-                reply = "Hello! What can I assist you with regarding the Travel Governance System?";
-            }
-
-            setMessages(prev => [...prev, { sender: 'bot', text: reply }]);
-        }, 600);
+    const handleOpenChat = () => {
+        window.dispatchEvent(new CustomEvent('open-tgs-chat'));
     };
 
     const handleDownloadTemplate = async () => {
@@ -163,7 +131,7 @@ const HelpSupport = () => {
                         <div className="action-icon"><MessageCircle /></div>
                         <h3>Live Chat</h3>
                         <p>Talk to our support agents in real-time.</p>
-                        <button className="btn-link" onClick={() => setIsChatOpen(true)}>Start Chat <ChevronRight size={16} /></button>
+                        <button className="btn-link" onClick={handleOpenChat}>Start Chat <ChevronRight size={16} /></button>
                     </div>
                     <div className="action-card">
                         <div className="action-icon"><MapPin /></div>
@@ -239,33 +207,6 @@ const HelpSupport = () => {
                 </div>
             </footer>
 
-            {isChatOpen && (
-                <div className="chat-widget-overlay">
-                    <div className="chat-widget-header">
-                        <h3><MessageCircle size={20} /> TGS Support</h3>
-                        <button className="chat-close-btn" onClick={() => setIsChatOpen(false)}><X size={20} /></button>
-                    </div>
-                    <div className="chat-widget-body">
-                        {messages.map((msg, idx) => (
-                            <div key={idx} className={`chat-message ${msg.sender}`}>
-                                {msg.text}
-                            </div>
-                        ))}
-                    </div>
-                    <div className="chat-widget-footer">
-                        <input
-                            type="text"
-                            placeholder="Type your message..."
-                            value={chatInput}
-                            onChange={(e) => setChatInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                        />
-                        <button className="chat-send-btn" onClick={handleSendChat}>
-                            <Send size={18} />
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

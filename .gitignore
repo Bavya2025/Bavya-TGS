@@ -1,0 +1,40 @@
+# --- DEPLOYMENT TOOLS & INFRA ---
+tools/
+nginx.conf
+*.bat
+!start_tgs.bat
+!stop_tgs.bat
+
+# --- PYTHON / BACKEND ---
+backend/venv/
+**/__pycache__/
+*.py[cod]
+*$py.class
+backend/.env
+backend/db.sqlite3
+backend/staticfiles/
+backend/media/
+
+# --- FRONTEND / NODE ---
+**/node_modules/
+**/dist/
+.DS_Store
+
+# --- IDEs ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Windows installer / shortcuts
+*.lnk
+*.tmp
+
+# Windows logs
+*.log

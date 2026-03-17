@@ -58,6 +58,7 @@ class RoutePath(SoftDeleteModel):
     via_locations = models.JSONField(default=list, help_text="Ordered list of location IDs")
     is_default = models.BooleanField(default=False)
     distance_km = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    segment_data = models.JSONField(default=dict, blank=True, help_text="Distances between segments")
     latitude = models.DecimalField(max_digits=12, decimal_places=9, null=True, blank=True)
     longitude = models.DecimalField(max_digits=12, decimal_places=9, null=True, blank=True)
     
@@ -145,5 +146,27 @@ class EligibilityRule(SoftDeleteModel):
 
     class Meta:
         unique_together = ('cadre', 'category', 'city_type', 'is_deleted')
-        ordering = ['cadre__name', 'category', 'city_type']
+class Circle(SoftDeleteModel):
+    name = models.CharField(max_length=100)
+    state = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='circles', limit_choices_to={'location_type': 'State'})
+    
+    def __str__(self):
+        return f"{self.name} ({self.state.name})"
+
+    class Meta:
+        unique_together = ('name', 'state', 'is_deleted')
+        ordering = ['state__name', 'name']
+
+class Jurisdiction(SoftDeleteModel):
+    project_name = models.CharField(max_length=200)
+    project_code = models.CharField(max_length=100)
+    circle = models.ForeignKey(Circle, on_delete=models.CASCADE, related_name='jurisdictions')
+    districts = models.ManyToManyField(Location, related_name='jurisdiction_districts', limit_choices_to={'location_type': 'District'})
+    
+    def __str__(self):
+        return f"{self.project_name} - {self.circle.name}"
+
+    class Meta:
+        unique_together = ('project_code', 'circle', 'is_deleted')
+        ordering = ['project_name', 'circle__name']
 

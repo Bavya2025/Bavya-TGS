@@ -4,6 +4,7 @@ import datetime
 import re
 from django.conf import settings
 from django.utils import timezone
+from django.utils.text import slugify
 
 class SoftDeleteManager(models.Manager):
     def get_queryset(self):
@@ -494,96 +495,118 @@ class JobReport(SoftDeleteModel):
 
 class TravelModeMaster(SoftDeleteModel):
     mode_name = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class BookingTypeMaster(SoftDeleteModel):
     booking_type = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class AirlineMaster(SoftDeleteModel):
     airline_name = models.CharField(max_length=100, unique=True)
     airline_code = models.CharField(max_length=50, blank=True, null=True, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class FlightClassMaster(SoftDeleteModel):
     class_name = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class TrainClassMaster(SoftDeleteModel):
     class_name = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class BusOperatorMaster(SoftDeleteModel):
     operator_name = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class BusTypeMaster(SoftDeleteModel):
     bus_type = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class IntercityCabVehicleMaster(SoftDeleteModel):
     vehicle_type = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class TravelProviderMaster(SoftDeleteModel):
     provider_name = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class TrainProviderMaster(SoftDeleteModel):
     provider_name = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class BusProviderMaster(SoftDeleteModel):
     provider_name = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class IntercityCabProviderMaster(SoftDeleteModel):
     provider_name = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 # --- MASTER TABLES (LOCAL CONVEYANCE MODULE) ---
 
 class LocalTravelModeMaster(SoftDeleteModel):
     mode_name = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class LocalCarSubTypeMaster(SoftDeleteModel):
     sub_type = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class LocalBikeSubTypeMaster(SoftDeleteModel):
     sub_type = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class LocalProviderMaster(SoftDeleteModel):
     provider_name = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 # --- MASTER TABLES (STAY & LODGING MODULE) ---
 
 class StayTypeMaster(SoftDeleteModel):
     stay_type = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class RoomTypeMaster(SoftDeleteModel):
     room_type = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 # --- MASTER TABLES (FOOD & REFRESHMENTS MODULE) ---
 
 class MealCategoryMaster(SoftDeleteModel):
     category_name = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 class MealTypeMaster(SoftDeleteModel):
     meal_type = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 # --- MASTER TABLES (INCIDENTAL MODULE) ---
 
 class IncidentalTypeMaster(SoftDeleteModel):
     expense_type = models.CharField(max_length=100, unique=True)
+    lookup_key = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
+
 
 # --- DYNAMIC MASTER SYSTEM ---
 
@@ -597,12 +620,18 @@ class MasterModule(SoftDeleteModel):
 
 class CustomMasterDefinition(SoftDeleteModel):
     table_name = models.CharField(max_length=100, unique=True)
+    key = models.CharField(max_length=100, unique=True, null=True, blank=True)
     module_ref = models.ForeignKey(MasterModule, on_delete=models.CASCADE, related_name='tables', null=True, blank=True)
-    module = models.CharField(max_length=50, blank=True, null=True) # Legacy
-    api_endpoint = models.CharField(max_length=255, blank=True, null=True) # For system tables
-    fields_list = models.TextField(default='name,code') # Comma separated list of fields
+    module = models.CharField(max_length=50, blank=True, null=True)
+    api_endpoint = models.CharField(max_length=255, blank=True, null=True)
+    fields_list = models.TextField(default='name,code')
     is_system = models.BooleanField(default=False)
     status = models.BooleanField(default=True)
+
+    def save(self, *args, **kwargs):
+        if not self.key and self.table_name:
+            self.key = slugify(self.table_name).replace('-', '_')
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.table_name
@@ -611,11 +640,13 @@ class CustomMasterValue(SoftDeleteModel):
     definition = models.ForeignKey(CustomMasterDefinition, on_delete=models.CASCADE, related_name='values')
     name = models.CharField(max_length=200)
     code = models.CharField(max_length=100, blank=True, null=True)
+    extra_data = models.JSONField(default=dict, blank=True)
     status = models.BooleanField(default=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=['definition', 'name'], name='unique_name_per_definition')
+            models.UniqueConstraint(fields=['definition', 'name'], name='unique_name_per_definition'),
+            models.UniqueConstraint(fields=['definition', 'code'], name='unique_code_per_definition')
         ]
 
     def __str__(self):

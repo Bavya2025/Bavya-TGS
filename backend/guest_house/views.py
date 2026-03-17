@@ -7,10 +7,13 @@ from .serializers import (
 )
 from rest_framework.permissions import IsAuthenticated
 from core.permissions import IsAdmin, IsCustomAuthenticated, IsGuestHouseManager
-from core.models import Notification
+from notifications.models import Notification
 
 class GuestHouseView(APIView):
-    permission_classes = [IsGuestHouseManager]
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsCustomAuthenticated()]
+        return [IsGuestHouseManager()]
 
     def get(self, request):
         gh_qs = GuestHouse.objects.all()
@@ -26,7 +29,10 @@ class GuestHouseView(APIView):
 
 
 class GuestHouseDetailView(APIView):
-    permission_classes = [IsGuestHouseManager]
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsCustomAuthenticated()]
+        return [IsGuestHouseManager()]
 
     def decode_id(self, encoded_id):
         import base64
@@ -80,7 +86,10 @@ class GuestHouseDetailView(APIView):
 
 
 class RoomBookingView(APIView):
-    permission_classes = [IsGuestHouseManager]
+    def get_permissions(self):
+        # Allow both GET and POST for authenticated users 
+        # (POST will be validated against trip ownership in the method)
+        return [IsCustomAuthenticated()]
 
     def get(self, request, room_id):
         bookings = RoomBooking.objects.filter(room_id=room_id).order_by('-created_at')
@@ -88,9 +97,21 @@ class RoomBookingView(APIView):
         return Response(serializer.data)
 
     def post(self, request, room_id):
+        user = getattr(request, 'custom_user', None)
+        is_manager = any(kw in (user.role.name.lower() if user and user.role else '') 
+                         for kw in ['admin', 'superuser', 'guesthousemanager'])
+        
         data = request.data.copy()
         serializer = RoomBookingSerializer(data=data)
         if serializer.is_valid():
+            trip = serializer.validated_data.get('trip')
+            
+            # Security: If not a manager, ensure the trip belongs to the logged-in user
+            if not is_manager:
+                if not trip or trip.user != user:
+                    return Response({'error': 'You can only book rooms for your own trips.'}, 
+                                    status=status.HTTP_403_FORBIDDEN)
+
             start = serializer.validated_data['start_date']
             end = serializer.validated_data['end_date']
             

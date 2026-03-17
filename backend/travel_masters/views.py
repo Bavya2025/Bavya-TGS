@@ -2,13 +2,19 @@ from django.db import models
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, FuelRateMaster, Cadre, EligibilityRule
+from .models import (
+    Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, 
+    FuelRateMaster, EligibilityRule, Cadre, Circle, Jurisdiction
+)
 from .serializers import (
-    LocationSerializer, RouteSerializer, RoutePathSerializer, 
-    TollGateSerializer, TollRateSerializer, RoutePathTollSerializer, FuelRateMasterSerializer,
-    EligibilityRuleSerializer, CadreSerializer
+    LocationSerializer, RouteSerializer, RoutePathSerializer,
+    TollGateSerializer, TollRateSerializer, RoutePathTollSerializer,
+    FuelRateMasterSerializer, EligibilityRuleSerializer, CadreSerializer,
+    CircleSerializer, JurisdictionSerializer
 )
 from .services import sync_geo_locations, sync_cadres
+from api_management.services import fetch_employee_data
+from core.permissions import IsAdmin, IsCustomAuthenticated
 
 class LocationViewSet(viewsets.ModelViewSet):
     serializer_class = LocationSerializer
@@ -20,12 +26,10 @@ class LocationViewSet(viewsets.ModelViewSet):
         last_sync = getattr(self.__class__, '_last_sync_time', 0)
         if time.time() - last_sync > 60: # 1 minute cooldown
             try:
-                print(f"DEBUG AUTH: Starting Geo Sync triggered by {request.path}...")
                 sync_geo_locations()
-                print("DEBUG AUTH: Geo Sync completed.")
                 self.__class__._last_sync_time = time.time()
             except Exception as e:
-                print(f"Auto-sync failed: {e}")
+                pass
             
         return super().list(request, *args, **kwargs)
 
@@ -231,21 +235,92 @@ class RouteViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def find_paths(self, request):
-        source_name = request.query_params.get('source')
-        dest_name = request.query_params.get('destination')
+        source_name = request.query_params.get('source', '').strip()
+        dest_name = request.query_params.get('destination', '').strip()
         
         if not source_name or not dest_name:
             return Response({"error": "Source and destination are required"}, status=400)
+
+        # Strip code suffix if present (e.g. "Nellore - NLR" -> "Nellore")
+        source_base = source_name.split(' - ')[0].strip()
+        dest_base = dest_name.split(' - ')[0].strip()
             
         # Find routes that match source and destination names
         matching_routes = Route.objects.filter(
-            source__name__iexact=source_name, 
-            destination__name__iexact=dest_name
+            models.Q(source__name__iexact=source_base) | models.Q(source__name__iexact=source_name),
+            models.Q(destination__name__iexact=dest_base) | models.Q(destination__name__iexact=dest_name)
         )
         
         paths = RoutePath.objects.filter(route__in=matching_routes)
         serializer = RoutePathSerializer(paths, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='toll-lookup')
+    def toll_lookup(self, request):
+        source_name = (request.query_params.get('source') or '').strip()
+        dest_name = (request.query_params.get('destination') or '').strip()
+
+        if not source_name or not dest_name:
+            return Response({"error": "Source and destination are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        route = Route.objects.filter(
+            source__name__iexact=source_name,
+            destination__name__iexact=dest_name
+        ).first()
+
+        if not route:
+            return Response({
+                "has_route": False,
+                "has_toll_record": False,
+                "has_rate_record": False,
+                "manual_entry_allowed": False,
+                "amount": 0,
+            })
+
+        path = route.paths.filter(is_default=True).first() or route.paths.order_by('id').first()
+        if not path:
+            return Response({
+                "has_route": True,
+                "has_toll_record": False,
+                "has_rate_record": False,
+                "manual_entry_allowed": False,
+                "amount": 0,
+            })
+
+        assignments = path.toll_assignments.select_related('toll_gate').prefetch_related('toll_gate__rates')
+        if not assignments.exists():
+            return Response({
+                "has_route": True,
+                "has_toll_record": False,
+                "has_rate_record": False,
+                "manual_entry_allowed": False,
+                "amount": 0,
+                "path_id": path.id,
+                "path_name": path.path_name,
+            })
+
+        total_amount = 0
+        has_rate_record = False
+        missing_rate_gate_codes = []
+
+        for assignment in assignments:
+            rate = assignment.toll_gate.rates.filter(travel_mode__iexact='4 Wheeler (Single)').first()
+            if rate:
+                has_rate_record = True
+                total_amount += float(rate.rate or 0)
+            else:
+                missing_rate_gate_codes.append(assignment.toll_gate.gate_code)
+
+        return Response({
+            "has_route": True,
+            "has_toll_record": True,
+            "has_rate_record": has_rate_record,
+            "manual_entry_allowed": not has_rate_record,
+            "amount": total_amount if has_rate_record else 0,
+            "path_id": path.id,
+            "path_name": path.path_name,
+            "missing_rate_gate_codes": [code for code in missing_rate_gate_codes if code],
+        })
 
 class RoutePathViewSet(viewsets.ModelViewSet):
     queryset = RoutePath.objects.all()
@@ -375,6 +450,12 @@ class TollGateViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsCustomAuthenticated()]
+        return [IsAdmin()]
+
+
     def update(self, request, *args, **kwargs):
         loc_val = request.data.get('location')
         loc = self.resolve_location(loc_val) if loc_val else None
@@ -443,6 +524,7 @@ class RoutePathTollViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 class FuelRateMasterViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdmin]
     queryset = FuelRateMaster.objects.all()
     serializer_class = FuelRateMasterSerializer
 
@@ -511,8 +593,52 @@ class FuelRateMasterViewSet(viewsets.ModelViewSet):
             })
 
 class EligibilityRuleViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdmin]
     queryset = EligibilityRule.objects.all()
     serializer_class = EligibilityRuleSerializer
+
+    @action(detail=False, methods=['post'], url_path='bulk-save')
+    def bulk_save(self, request):
+        rules_data = request.data
+        if not isinstance(rules_data, list):
+            return Response({"error": "Expected a list of rules"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        results = {"created": 0, "updated": 0, "errors": []}
+        
+        for index, data in enumerate(rules_data):
+            rule_id = data.get('id')
+            try:
+                if rule_id:
+                    instance = EligibilityRule.objects.get(pk=rule_id)
+                    serializer = EligibilityRuleSerializer(instance, data=data, partial=True)
+                else:
+                    # Check for duplicates before creation to avoid integrity errors
+                    existing = EligibilityRule.objects.filter(
+                        cadre_id=data.get('cadre'),
+                        category=data.get('category'),
+                        city_type=data.get('city_type', 'N/A')
+                    ).first()
+                    
+                    if existing:
+                        instance = existing
+                        serializer = EligibilityRuleSerializer(instance, data=data, partial=True)
+                    else:
+                        serializer = EligibilityRuleSerializer(data=data)
+                
+                if serializer.is_valid():
+                    serializer.save()
+                    if rule_id or existing:
+                        results["updated"] += 1
+                    else:
+                        results["created"] += 1
+                else:
+                    results["errors"].append({"index": index, "errors": serializer.errors})
+            except Exception as e:
+                results["errors"].append({"index": index, "error": str(e)})
+        
+        if results["errors"]:
+            return Response(results, status=status.HTTP_207_MULTI_STATUS)
+        return Response(results, status=status.HTTP_200_OK)
 
     def get_queryset(self):
         queryset = EligibilityRule.objects.all()
@@ -530,6 +656,7 @@ class EligibilityRuleViewSet(viewsets.ModelViewSet):
         return queryset.order_by('cadre__name', 'category', 'city_type')
 
 class CadreViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdmin]
     queryset = Cadre.objects.all()
     serializer_class = CadreSerializer
 
@@ -547,4 +674,107 @@ class CadreViewSet(viewsets.ModelViewSet):
             return Response(stats, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(stats)
 
+class CircleViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdmin]
+    queryset = Circle.objects.all()
+    serializer_class = CircleSerializer
 
+    def get_queryset(self):
+        queryset = Circle.objects.all()
+        state_id = self.request.query_params.get('state')
+        if state_id:
+            queryset = queryset.filter(state_id=state_id)
+        return queryset
+
+class JurisdictionViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdmin]
+    queryset = Jurisdiction.objects.all()
+    serializer_class = JurisdictionSerializer
+
+    def get_queryset(self):
+        queryset = Jurisdiction.objects.all()
+        search = self.request.query_params.get('search', '')
+        if search:
+            queryset = queryset.filter(
+                models.Q(project_name__icontains=search) | 
+                models.Q(project_code__icontains=search) |
+                models.Q(circle__name__icontains=search)
+            )
+        return queryset.order_by('project_name', 'circle__name')
+
+    @action(detail=False, methods=['post'], url_path='bulk-save')
+    def bulk_save(self, request):
+        data_list = request.data
+        if not isinstance(data_list, list):
+            return Response({"error": "Expected a list of jurisdictions"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        results = {"created": 0, "updated": 0, "errors": []}
+        
+        for index, data in enumerate(data_list):
+            try:
+                juris_id = data.get('id')
+                districts = data.pop('districts', [])
+                
+                if juris_id:
+                    instance = Jurisdiction.objects.get(pk=juris_id)
+                    serializer = JurisdictionSerializer(instance, data=data, partial=True)
+                else:
+                    # Check for duplicates (Project + Circle)
+                    existing = Jurisdiction.objects.filter(
+                        project_code=data.get('project_code'),
+                        circle=data.get('circle')
+                    ).first()
+                    
+                    if existing:
+                        instance = existing
+                        serializer = JurisdictionSerializer(instance, data=data, partial=True)
+                    else:
+                        serializer = JurisdictionSerializer(data=data)
+                
+                if serializer.is_valid():
+                    instance = serializer.save()
+                    # Districts are many-to-many, serializer.save() handles them if passed correctly
+                    # but sometimes it's cleaner to handle M2M explicitly if needed
+                    # serializer.save() with M2M requires the data to be in the dict
+                    if districts:
+                        instance.districts.set(districts)
+                    
+                    if juris_id or (not juris_id and existing):
+                        results["updated"] += 1
+                    else:
+                        results["created"] += 1
+                else:
+                    results["errors"].append({"index": index, "errors": serializer.errors})
+            except Exception as e:
+                results["errors"].append({"index": index, "error": str(e)})
+        
+        if results["errors"]:
+            return Response(results, status=status.HTTP_207_MULTI_STATUS)
+        return Response(results, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
+    def projects(self, request):
+        """
+        Custom endpoint to get unique projects from external API (Employees API)
+        """
+        try:
+            # Fetch all employees to extract unique projects
+            data = fetch_employee_data(fetch_all_pages=True, page_size=100)
+            
+            if not data or "error" in data:
+                return Response({"error": "Failed to fetch project data from Employee API"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            results = data.get('results', [])
+            unique_projects = {} # Use code as key to ensure uniqueness
+            
+            for emp in results:
+                proj = emp.get('project', {})
+                if proj and isinstance(proj, dict):
+                    name = proj.get('name')
+                    code = proj.get('code')
+                    if name and code:
+                        unique_projects[code] = {"name": name, "code": code}
+            
+            return Response(list(unique_projects.values()))
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

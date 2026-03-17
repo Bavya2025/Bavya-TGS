@@ -1,0 +1,28 @@
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local settings/Secrets
+.env
+db.sqlite3
+db.sqlite3-journal
+
+# Logs
+*.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Media & Static (if uploaded locally)
+media/
+static_root/

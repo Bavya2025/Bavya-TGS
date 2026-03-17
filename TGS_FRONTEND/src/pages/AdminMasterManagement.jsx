@@ -3,8 +3,9 @@ import api from '../api/api';
 import {
     Plus, Edit2, Trash2, CheckCircle, XCircle, ChevronDown, AlignLeft, Settings, Layers, AlertCircle
 } from 'lucide-react';
-import '../styles/AdminMasterManagement.css';
 import { useToast } from '../context/ToastContext';
+
+
 
 // Config layout for managing the system architecture itself
 const CONFIG_GROUP = {
@@ -12,12 +13,13 @@ const CONFIG_GROUP = {
     label: 'Config (Add Masters)',
     tables: [
         { id: 'master_module', name: 'Manage Modules', endpoint: 'master-modules', fields: ['name', 'display_order'] },
-        { id: 'custom_master_def', name: 'Manage Master Tables', endpoint: 'custom-master-definitions', fields: ['table_name', 'module_ref', 'api_endpoint', 'fields_list'] },
+        { id: 'custom_master_def', name: 'Manage Master Tables', endpoint: 'custom-master-definitions', fields: ['table_name', 'module_ref'] },
     ]
 };
 
 export default function AdminMasterManagement() {
     const { showToast } = useToast() || { showToast: () => { } };
+    const PAGE_SIZE = 10;
 
     // UI State
     const [groups, setGroups] = useState([CONFIG_GROUP]);
@@ -35,6 +37,15 @@ export default function AdminMasterManagement() {
     const [formData, setFormData] = useState({});
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    const getVisibleFields = (tab = activeTab) => {
+        if (!tab) return [];
+        return tab.fields || [];
+    };
+
+    const totalPages = Math.max(1, Math.ceil(data.length / PAGE_SIZE));
+    const paginatedData = data.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
     // Initial load: Fetch the structure from the database
     useEffect(() => {
@@ -45,6 +56,10 @@ export default function AdminMasterManagement() {
     useEffect(() => {
         fetchData();
     }, [activeTab]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTab, data.length]);
 
     /**
      * Fetches modules and table definitions from the database to build the UI navigation.
@@ -68,9 +83,9 @@ export default function AdminMasterManagement() {
                     .map(def => ({
                         id: `table_${def.id}`,
                         name: def.table_name,
-                        endpoint: def.api_endpoint || 'custom-master-values',
-                        fields: def.fields_list ? def.fields_list.split(',') : ['name', 'code'],
-                        definitionId: def.api_endpoint ? null : def.id, // Only send definitionId for custom values table
+                        endpoint: 'custom-master-values',
+                        fields: ['name', 'code'],
+                        definitionId: def.id,
                         isCustom: !def.is_system
                     }));
 
@@ -79,7 +94,7 @@ export default function AdminMasterManagement() {
                     label: mod.name,
                     tables: tables
                 };
-            }).filter(g => g.tables.length > 0); // Keep modules that have tables
+            });
 
             // 4. Add the configuration management group
             newGroups.push(CONFIG_GROUP);
@@ -90,11 +105,15 @@ export default function AdminMasterManagement() {
                 const updatedActive = newGroups.find(g => g.id === activeGroup.id);
                 if (updatedActive) {
                     setActiveGroup(updatedActive);
+                    setActiveTab(currentTab => {
+                        if (!currentTab) return updatedActive.tables[0] || null;
+                        return updatedActive.tables.find(t => t.id === currentTab.id) || updatedActive.tables[0] || null;
+                    });
                 } else {
                     const first = newGroups[0];
                     if (first) {
                         setActiveGroup(first);
-                        setActiveTab(first.tables[0]);
+                        setActiveTab(first.tables[0] || null);
                     }
                 }
             }
@@ -105,13 +124,18 @@ export default function AdminMasterManagement() {
     };
 
     const fetchData = async () => {
+        if (!activeTab) {
+            setData([]);
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
             let url = `/api/${activeTab.endpoint}/`;
 
             // If it's a generic custom value table, we must filter by the specific definition ID
             if (activeTab.definitionId) {
-                url += `?definition_id=${activeTab.definitionId}`;
+                url += `?definition=${activeTab.definitionId}`;
             }
 
             const res = await api.get(url);
@@ -124,16 +148,31 @@ export default function AdminMasterManagement() {
         }
     };
 
+    const handleGroupChange = (group) => {
+        setActiveGroup(group);
+        setActiveTab(group.tables[0] || null);
+    };
+
     const handleOpenForm = (item = null) => {
         setEditingItem(item);
         if (item) {
-            setFormData(item);
+            const initialData = { ...item };
+            if (activeTab.endpoint === 'custom-master-definitions') {
+                initialData.api_endpoint = item.api_endpoint || '';
+                initialData.fields_list = item.fields_list || '';
+            }
+            setFormData(initialData);
         } else {
             const initial = {};
-            activeTab.fields.forEach(f => {
+            const visibleFields = getVisibleFields(activeTab);
+            visibleFields.forEach(f => {
                 if (f === 'module_ref' && activeGroup.id !== 'config') initial[f] = activeGroup.id;
                 else initial[f] = '';
             });
+            if (activeTab.endpoint === 'custom-master-definitions') {
+                initial.api_endpoint = '';
+                initial.fields_list = '';
+            }
             setFormData(initial);
         }
         setIsFormOpen(true);
@@ -143,10 +182,30 @@ export default function AdminMasterManagement() {
         e.preventDefault();
         try {
             const payload = { ...formData };
+            const requiredFields = getVisibleFields(activeTab);
+
+            for (const field of requiredFields) {
+                if (field === 'display_order' || field === 'code') continue;
+                if (payload[field] === undefined || payload[field] === null || payload[field] === '') {
+                    showToast(`${field.replace(/_/g, ' ')} is required`, 'error');
+                    return;
+                }
+            }
 
             // Inject definition ID for custom value records
             if (activeTab.definitionId) {
                 payload.definition = activeTab.definitionId;
+            }
+
+            if (activeTab.endpoint === 'custom-master-definitions') {
+                delete payload.api_endpoint;
+                delete payload.fields_list;
+                delete payload.key;
+                delete payload.module;
+                delete payload.is_system;
+                delete payload.deleted_at;
+                delete payload.deleted_by;
+                delete payload.is_deleted;
             }
 
             if (editingItem) {
@@ -163,7 +222,19 @@ export default function AdminMasterManagement() {
                 fetchStructure();
             }
         } catch (error) {
-            showToast("Operation failed. Check inputs.", "error");
+            let errorMsg = "Operation failed. Check inputs.";
+            if (error.response && error.response.data) {
+                // DRF typically returns errors as { field: [messages] } or { non_field_errors: [messages] }
+                const data = error.response.data;
+                if (typeof data === 'object') {
+                    const firstField = Object.keys(data)[0];
+                    const msg = data[firstField];
+                    errorMsg = Array.isArray(msg) ? msg[0] : (typeof msg === 'string' ? msg : errorMsg);
+                } else if (typeof data === 'string') {
+                    errorMsg = data;
+                }
+            }
+            showToast(errorMsg, "error");
         }
     };
 
@@ -199,10 +270,7 @@ export default function AdminMasterManagement() {
                     <button
                         key={group.id}
                         className={`module-btn ${activeGroup.id === group.id ? 'active' : ''}`}
-                        onClick={() => {
-                            setActiveGroup(group);
-                            setActiveTab(group.tables[0]);
-                        }}
+                        onClick={() => handleGroupChange(group)}
                     >
                         {group.id === 'config' ? <Settings size={18} /> : <Layers size={18} />}
                         {group.label}
@@ -218,7 +286,7 @@ export default function AdminMasterManagement() {
                         {activeGroup.tables.map(table => (
                             <button
                                 key={table.id}
-                                className={`master-selector-btn ${activeTab.id === table.id ? 'active' : ''}`}
+                                className={`master-selector-btn ${activeTab?.id === table.id ? 'active' : ''}`}
                                 onClick={() => setActiveTab(table)}
                             >
                                 <AlignLeft size={16} style={{ marginRight: '10px' }} />
@@ -231,8 +299,8 @@ export default function AdminMasterManagement() {
                 {/* Main Data Panel */}
                 <div className="main-table-panel">
                     <div className="panel-header">
-                        <h2>{activeTab.name}</h2>
-                        <button className="add-btn" onClick={() => handleOpenForm()}>
+                        <h2>{activeTab?.name || 'Master Tables'}</h2>
+                        <button className="add-btn" onClick={() => handleOpenForm()} disabled={!activeTab}>
                             <Plus size={18} />
                             Add Record
                         </button>
@@ -245,21 +313,21 @@ export default function AdminMasterManagement() {
                                 <p>Fetching data...</p>
                             </div>
                         ) : (
-                            <table className="modern-table">
+                            activeTab ? <table className="modern-table">
                                 <thead>
                                     <tr>
                                         <th>ID</th>
-                                        {activeTab.fields.map(f => (
+                                        {getVisibleFields(activeTab).map(f => (
                                             <th key={f}>{f.replace(/_/g, ' ').toUpperCase()}</th>
                                         ))}
                                         <th style={{ textAlign: 'right' }}>ACTIONS</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {data.length > 0 ? data.map(item => (
+                                    {data.length > 0 ? paginatedData.map(item => (
                                         <tr key={item.id}>
                                             <td><span className="id-badge">{item.id}</span></td>
-                                            {activeTab.fields.map(f => (
+                                            {getVisibleFields(activeTab).map(f => (
                                                 <td key={f}>
                                                     {f === 'module_ref' ?
                                                         (allModules.find(m => m.id === item[f])?.name || item[f]) :
@@ -280,13 +348,43 @@ export default function AdminMasterManagement() {
                                         </tr>
                                     )) : (
                                         <tr>
-                                            <td colSpan={activeTab.fields.length + 2} className="empty-row">No records found.</td>
+                                            <td colSpan={getVisibleFields(activeTab).length + (activeGroup.id !== 'config' ? 3 : 2)} className="empty-row">No records found.</td>
                                         </tr>
                                     )}
                                 </tbody>
-                            </table>
+                            </table> : (
+                                <div className="empty-row">
+                                    {activeGroup?.id !== 'config'
+                                        ? `No master tables added under ${activeGroup?.label || 'this module'} yet. Use "Config (Add Masters) > Manage Master Tables" to add one.`
+                                        : 'Select a table from the sidebar to manage records.'}
+                                </div>
+                            )
                         )}
                     </div>
+                    {!loading && activeTab && data.length > 0 && (
+                        <div className="pagination-bar">
+                            <div className="pagination-summary">
+                                Showing {(currentPage - 1) * PAGE_SIZE + 1} to {Math.min(currentPage * PAGE_SIZE, data.length)} of {data.length} records
+                            </div>
+                            <div className="pagination-controls">
+                                <button
+                                    className="pagination-btn"
+                                    onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+                                    disabled={currentPage === 1}
+                                >
+                                    Previous
+                                </button>
+                                <span className="pagination-page">Page {currentPage} of {totalPages}</span>
+                                <button
+                                    className="pagination-btn"
+                                    onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
+                                    disabled={currentPage === totalPages}
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -296,7 +394,7 @@ export default function AdminMasterManagement() {
                     <div className="modal-content">
                         <h2 className="modal-title">{editingItem ? 'Edit Record' : 'Add New Record'}</h2>
                         <form onSubmit={handleSave}>
-                            {activeTab.fields.map(field => (
+                            {getVisibleFields(activeTab).map(field => (
                                 <div key={field} className="form-field">
                                     <label>{field.replace(/_/g, ' ').toUpperCase()}</label>
                                     {field === 'module_ref' ? (

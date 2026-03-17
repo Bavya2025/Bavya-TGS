@@ -24,11 +24,12 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api/api';
 
 const Sidebar = () => {
-    const { user } = useAuth();
-    const [approvalCount, setApprovalCount] = React.useState(0);
+    const { user, heartbeatData } = useAuth();
+    const approvalCount = heartbeatData?.approval_counts?.total || 0;
     const rawRole = user?.role?.toLowerCase() || 'employee';
     const userRole = rawRole === 'user' ? 'employee' : rawRole;
 
+<<<<<<< HEAD
     const fetchApprovalCount = async () => {
         try {
             const response = await api.get('/api/approvals/count/');
@@ -44,6 +45,8 @@ const Sidebar = () => {
         return () => clearInterval(interval);
     }, [userRole]);
 
+=======
+>>>>>>> ef1d260ab4f0ff0c66d819ad5b78dde9435b14da
     const sections = [
         {
             label: 'CORE',
@@ -60,7 +63,7 @@ const Sidebar = () => {
                 { title: 'Trip Planner', icon: <MapPin size={18} />, path: '/planner', roles: ['employee', 'admin'] },
                 { title: 'Mileage Log', icon: <MapPin size={18} />, path: '/mileage', roles: ['employee', 'admin'] },
                 { title: 'Job Report', icon: <ClipboardList size={18} />, path: '/job-report', roles: ['employee', 'reporting_authority', 'admin'] },
-                { title: 'Guest House', icon: <Building2 size={18} />, path: '/guesthouse', roles: ['employee', 'admin'] },
+                { title: 'Guest House', icon: <Building2 size={18} />, path: '/guesthouse', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo', 'guesthousemanager'] },
                 { title: 'Fleet Management', icon: <Car size={18} />, path: '/fleet', roles: ['employee', 'admin'] },
             ]
         },
@@ -92,6 +95,7 @@ const Sidebar = () => {
                 { title: 'Route Masters', icon: <MapPin size={18} />, path: '/route-management', roles: ['admin'] },
                 { title: 'Master Management', icon: <Settings size={18} />, path: '/master-management', roles: ['admin'] },
                 { title: 'Fuel Rate Master', icon: <Fuel size={18} />, path: '/fuel-master', roles: ['admin'] },
+                { title: 'Masters', icon: <Settings size={18} />, path: '/AdminMasters', roles: ['admin'] },
             ]
         }
     ];

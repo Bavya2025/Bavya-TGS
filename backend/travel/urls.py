@@ -13,7 +13,8 @@ from .views import (
     LocalTravelModeMasterViewSet, LocalCarSubTypeMasterViewSet, LocalBikeSubTypeMasterViewSet,
     LocalProviderMasterViewSet, StayTypeMasterViewSet, RoomTypeMasterViewSet,
     MealCategoryMasterViewSet, MealTypeMasterViewSet, IncidentalTypeMasterViewSet,
-    CustomMasterDefinitionViewSet, CustomMasterValueViewSet, MasterModuleViewSet
+    CustomMasterDefinitionViewSet, CustomMasterValueViewSet, MasterModuleViewSet,
+    DynamicMasterBundleView
 )
 from .views_export import ExpenseStatementPDFView, ExpenseStatementExcelView
 
@@ -75,6 +76,7 @@ urlpatterns = [
     path('trips/<str:trip_id>/export/pdf/',   ExpenseStatementPDFView.as_view(),   name='trip-export-pdf'),
     path('trips/<str:trip_id>/export/excel/', ExpenseStatementExcelView.as_view(), name='trip-export-excel'),
     path('dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('dynamic-masters/', DynamicMasterBundleView.as_view(), name='dynamic-masters'),
     path('approvals/', ApprovalsView.as_view(), name='approvals'),
     path('approvals/count/', ApprovalCountView.as_view(), name='approvals-count'),
     path('settlement/', TripSettlementView.as_view(), name='trip-settlement'),

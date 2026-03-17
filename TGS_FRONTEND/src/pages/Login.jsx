@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Lock, User, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import api from '../api/api';
+import { Lock, User, Eye, EyeOff, ShieldCheck, Wifi, WifiOff } from 'lucide-react';
 
 const Login = () => {
     const [username, setUsername] = useState('');
@@ -10,10 +12,25 @@ const Login = () => {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isIntro, setIsIntro] = useState(true);
+    const [isBackendDown, setIsBackendDown] = useState(false);
     const { login } = useAuth();
+    const { showToast } = useToast();
     const navigate = useNavigate();
 
+    const checkConnection = async (silent = false) => {
+        try {
+            await api.get('/api/health');
+            setIsBackendDown(false);
+            if (!silent) showToast('Backend connected successfully', 'success');
+        } catch (err) {
+            setIsBackendDown(true);
+            showToast('Backend server is unreachable. Please ensure the backend is running.', 'error');
+        }
+    };
+
     useEffect(() => {
+        checkConnection(true); // check on mount
+
         const startTimer = setTimeout(() => {
             const timer = setTimeout(() => {
                 setIsIntro(false);
@@ -54,7 +71,16 @@ const Login = () => {
                     navigate('/');
             }
         } catch (err) {
-            setError('Invalid username or password. Please try again.');
+            console.error('Login error detail:', err);
+            if (err.message === 'CORRUPT_RESPONSE' || err.code === 'ERR_NOT_JSON') {
+                setError('Server configuration error. Received invalid response from backend.');
+            } else if (!err.response) {
+                setError('Server is unreachable. Please check if the backend is running.');
+            } else if (err.response.status === 500) {
+                setError('Internal Server Error. Please contact support.');
+            } else {
+                setError('Invalid username or password. Please try again.');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -84,6 +110,19 @@ const Login = () => {
                     <div className="login-header">
                         <div className="app-logo">
                             <img src="/bavya.png" alt="Logo" className="login-logo-img" />
+                        </div>
+                        <div className="connection-status-area" style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
+                            {isBackendDown ? (
+                                <div onClick={() => checkConnection()} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' }}>
+                                    <WifiOff size={16} />
+                                    <span>Backend Offline - Click to Retry</span>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', backgroundColor: '#f0fdf4', color: '#16a34a', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' }}>
+                                    <Wifi size={16} />
+                                    <span>Server Connected</span>
+                                </div>
+                            )}
                         </div>
                         <h3>Welcome Back</h3>
                         <p>Sign in to your corporate account</p>

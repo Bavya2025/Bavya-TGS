@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     LocationViewSet, RouteViewSet, RoutePathViewSet, 
     TollGateViewSet, TollRateViewSet, RoutePathTollViewSet, FuelRateMasterViewSet,
-    EligibilityRuleViewSet, CadreViewSet
+    EligibilityRuleViewSet, CadreViewSet, CircleViewSet, JurisdictionViewSet
 )
 
 router = DefaultRouter()
@@ -16,6 +16,8 @@ router.register(r'route-path-tolls', RoutePathTollViewSet)
 router.register(r'fuel-rate-masters', FuelRateMasterViewSet)
 router.register(r'eligibility-rules', EligibilityRuleViewSet)
 router.register(r'cadres', CadreViewSet)
+router.register(r'circles', CircleViewSet)
+router.register(r'jurisdictions', JurisdictionViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

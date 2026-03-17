@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, FuelRateMaster, Cadre, EligibilityRule
+from .models import (
+    Location, Route, RoutePath, TollGate, TollRate, RoutePathToll, 
+    FuelRateMaster, Cadre, EligibilityRule, Circle, Jurisdiction
+)
 
 class FuelRateMasterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -92,10 +95,16 @@ class RoutePathSerializer(serializers.ModelSerializer):
     source_name = serializers.ReadOnlyField(source='route.source.name')
     destination_name = serializers.ReadOnlyField(source='route.destination.name')
     via_location_names = serializers.SerializerMethodField()
+    via_locations_data = serializers.SerializerMethodField()
     
     class Meta:
         model = RoutePath
-        fields = '__all__'
+        fields = [
+            'id', 'route', 'path_name', 'via_locations', 'is_default', 
+            'distance_km', 'segment_data', 'latitude', 'longitude', 
+            'toll_assignments', 'source_name', 'destination_name', 
+            'via_location_names', 'via_locations_data'
+        ]
 
     def get_via_location_names(self, obj):
         if not obj.via_locations or not isinstance(obj.via_locations, list):
@@ -115,19 +124,42 @@ class RoutePathSerializer(serializers.ModelSerializer):
                 names.append(str(vid))
         return names
 
+    def get_via_locations_data(self, obj):
+        if not obj.via_locations or not isinstance(obj.via_locations, list):
+            return []
+        
+        data = []
+        for vid in obj.via_locations:
+            loc = None
+            if str(vid).isdigit():
+                loc = Location.objects.filter(pk=vid).first()
+            else:
+                loc = Location.objects.filter(external_id=vid).first()
+            
+            if loc:
+                data.append({
+                    'id': loc.id,
+                    'name': loc.name,
+                    'code': loc.code or 'HUB',
+                    'location_type': loc.location_type
+                })
+        return data
+
 class RouteSerializer(serializers.ModelSerializer):
     paths = RoutePathSerializer(many=True, read_only=True)
     source_name = serializers.ReadOnlyField(source='source.name')
     destination_name = serializers.ReadOnlyField(source='destination.name')
     source_external_id = serializers.ReadOnlyField(source='source.external_id')
     destination_external_id = serializers.ReadOnlyField(source='destination.external_id')
+    variant_count = serializers.SerializerMethodField()
     
-    class Meta:
-        model = Route
     class Meta:
         model = Route
         fields = '__all__'
         extra_kwargs = {'name': {'required': False}}
+
+    def get_variant_count(self, obj):
+        return obj.paths.count()
 
 class CadreSerializer(serializers.ModelSerializer):
     class Meta:
@@ -140,4 +172,25 @@ class EligibilityRuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = EligibilityRule
         fields = '__all__'
+
+class CircleSerializer(serializers.ModelSerializer):
+    state_name = serializers.ReadOnlyField(source='state.name')
+    
+    class Meta:
+        model = Circle
+        fields = '__all__'
+
+class JurisdictionSerializer(serializers.ModelSerializer):
+    circle_name = serializers.ReadOnlyField(source='circle.name')
+    state_name = serializers.ReadOnlyField(source='circle.state.name')
+    state_id = serializers.ReadOnlyField(source='circle.state.id')
+    state_external_id = serializers.ReadOnlyField(source='circle.state.external_id')
+    district_names = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Jurisdiction
+        fields = '__all__'
+
+    def get_district_names(self, obj):
+        return [d.name for d in obj.districts.all()]
 
