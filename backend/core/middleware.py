@@ -9,7 +9,7 @@ class CustomAuthMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path.startswith('/api/auth/login') or request.path.startswith('/api/health') or request.path.startswith('/admin'):
+        if request.path.startswith('/api/auth/login') or request.path.startswith('/api/health'):
             return self.get_response(request)
 
         # 1. Capture Authorization header

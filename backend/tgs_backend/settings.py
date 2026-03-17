@@ -15,8 +15,6 @@ ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
-    "django.contrib.staticfiles",
-    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.messages",
     "django.contrib.sessions",
@@ -72,20 +70,16 @@ WSGI_APPLICATION = "tgs_backend.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": os.environ.get("DB_NAME", "tgs_b2"),
-        "USER": os.environ.get("DB_USER", "root"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", "Ramprasad1819@"),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
-        "PORT": os.environ.get("DB_PORT", "3306"),
+        "NAME": os.environ.get("DB_NAME"),
+        "USER": os.environ.get("DB_USER"),
+        "PASSWORD": os.environ.get("DB_PASSWORD"),
+        "HOST": os.environ.get("DB_HOST"),
+        "PORT": os.environ.get("DB_PORT"),
     }
 }
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = "static/"
-STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-
-MEDIA_URL = "media/"
-MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 # CORS Configuration
 CORS_ALLOW_ALL_ORIGINS = True # Set to False in strict production

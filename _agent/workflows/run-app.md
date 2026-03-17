@@ -47,19 +47,35 @@ Your **[nginx.conf](file:///E:/TGS-V1.1/nginx.conf)** is already configured to l
 
 ---
 
-## 4. Stopping the Applications
-To shut down all backend workers safely:
+## 3. Containerized Mode (Docker)
 
-1. Open the file **[stop_tgs.bat](file:///E:/TGS-V1.1/stop_tgs.bat)**.
-2. The script will automatically search for and terminate all processes running on the backend ports (4567, 4568, 4570, etc.).
-3. Once completed, all backend windows will close.
+Use this for the most robust, reproducible environment. It handles the database, backend, and frontend as isolated services.
 
-### Why use this instead of closing windows?
-- **Ensures Port Release**: Sometimes closing a window leaves a "ghost" process that keeps the port busy. The stop script ensures the port is fully released for the next run.
+### Prerequisites
+- Install **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** for Windows.
+
+### Build and Launch
+1. Ensure your **[.env](file:///E:/TGS-V1.1/.env)** file is in the root directory with correct database credentials.
+2. Open a terminal in the root directory (`e:\TGS-V1.1`).
+3. Run the following command:
+   ```powershell
+   docker-compose up --build -d
+   ```
+   - *This will build the images, start the MySQL database, run migrations, start the scheduler, and serve the frontend via Nginx.*
+
+### Access the Apps
+- **TGS Web Dashboard**: [http://localhost:6785](http://localhost:6785)
+- **Database**: Port `3307` on localhost.
+
+### Useful Docker Commands
+- **View Logs**: `docker-compose logs -f` (or specify service: `docker-compose logs -f backend`)
+- **Restart a Service**: `docker-compose restart backend`
+- **Rebuild and Sync Changes**: `docker-compose up --build -d`
+- **Stop and Remove Containers**: `docker-compose down`
 
 ---
 
-## 3. Load Balanced Mode (High Traffic)
+## 4. Load Balanced Mode (High Traffic)
 
 Use this to test the system's ability to handle multiple concurrent users across three separate applications.
 
@@ -75,8 +91,47 @@ For each application, you can start multiple workers on different ports:
 
 ---
 
-## Troubleshooting
+## 5. Stopping the Applications (Legacy/Local Scripts)
 
-- **Backend Offline**: Ensure the port in `nginx.conf` (upstream) matches the port in your `runserver` command.
-- **CSRF Error**: Ensure the origin/port you are using (e.g., `http://localhost:6786` or `http://IP:6785`) is listed in `CSRF_TRUSTED_ORIGINS` in `settings.py`.
-- **404 Not Found**: Verify that `proxy_pass` in `nginx.conf` points to the correct `upstream` cluster name.
+If you are running the apps via the `.bat` scripts:
+
+1. Open the file **[stop_tgs.bat](file:///E:/TGS-V1.1/stop_tgs.bat)**.
+2. The script will automatically search for and terminate all processes running on the backend ports (4567, 4568, 4570, etc.).
+
+### Why use this instead of closing windows?
+- **Ensures Port Release**: Sometimes closing a window leaves a "ghost" process that keeps the port busy.
+
+---
+
+## 6. Configuration Management (IP & Ports)
+ 
+### Using an IP Address (Network Access)
+To access the app via your system IP (e.g., `192.168.1.10`) instead of `localhost`:
+1. **Find your IP**: Run `ipconfig` in your Windows terminal.
+2. **Update Backend Settings**: Open `backend/tgs_backend/settings.py`:
+   - Add your IP to `ALLOWED_HOSTS`.
+   - Add `http://YOUR_IP:6785` to `CSRF_TRUSTED_ORIGINS`.
+3. **Restart**: Run `docker-compose up -d`.
+ 
+### Changing Ports
+#### **Method 1: Change External Port (Easy)**
+If port `6785` is in use, change how you access the app from outside Docker.
+- **File**: `docker-compose.yml`
+- **Action**: Change the first number in the `ports` mapping.
+  - Frontend: `"9000:80"` (Accessible at `http://localhost:9000`)
+  - Backend: `"8001:8000"` (Accessible at `http://localhost:8001`)
+ 
+#### **Method 2: Change Internal Port (Advanced)**
+To change the port inside the container (e.g., changing `8000` to `9000`):
+1. **Entrypoint**: Update `backend/entrypoint.sh` to bind Gunicorn to the new port.
+2. **Nginx**: Update `TGS_FRONTEND/nginx.conf` (`proxy_pass`) to point to the new internal port.
+3. **Compose**: Update `docker-compose.yml` to match the new internal port.
+ 
+---
+ 
+## Troubleshooting
+ 
+- **View Backend Logs**: `docker-compose logs -f backend` (Best for debugging Python errors).
+- **View Nginx Logs**: `docker-compose logs -f frontend` (Best for debugging routing/404/502 errors).
+- **Docker Migration Errors**: If the database fails to start, check logs with `docker-compose logs -f db`.
+- **CSRF Error**: Ensure the origin/port you are using (e.g., `http://your-ip:6785`) is listed in `CSRF_TRUSTED_ORIGINS` in `settings.py`.

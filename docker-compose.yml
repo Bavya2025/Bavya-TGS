@@ -1,0 +1,35 @@
+services:
+  db:
+    image: mysql:8
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  backend:
+    build: ./backend
+    restart: always
+    depends_on:
+      - db
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+    ports:
+      - "8001:8000"
+
+  frontend:
+    build: ./TGS_FRONTEND
+    restart: always
+    ports:
+      - "6785:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
