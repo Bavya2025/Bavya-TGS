@@ -1,17 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/trip_model.dart';
 import '../services/trip_service.dart';
 import '../services/api_service.dart';
-import 'package:intl/intl.dart';
-import 'dart:convert';
-import 'dart:io';
-import 'package:http/http.dart' as http;
-import '../constants/api_constants.dart';
-import '../components/trip_wallet_sheet.dart';
-import '../components/claim_sheet.dart';
-import 'package:image_picker/image_picker.dart';
-import '../services/expense_reminder_service.dart';
+import 'trip_expense_grid_screen.dart';
+import 'trip_expense_form_detailed.dart';
 
 class TripStoryScreen extends StatefulWidget {
   final String tripId;
@@ -24,177 +18,770 @@ class TripStoryScreen extends StatefulWidget {
 class _TripStoryScreenState extends State<TripStoryScreen> {
   final TripService _tripService = TripService();
   final ApiService _apiService = ApiService();
+  final Map<String, String> _auditRemarks = {};
   bool _isLoading = true;
   bool _isActionLoading = false;
   Trip? _trip;
-  Map<String, dynamic>? _currentUser;
-  final Map<String, String> _auditRemarks = {};
-
-  // Travel details state
-  String _travelMode = 'Airways';
-  String _vehicleType = 'Own';
-
-  // Odometer state
-  late TextEditingController _startOdometerController;
-  late TextEditingController _endOdometerController;
-  File? _startOdometerImage;
-  File? _endOdometerImage;
-  bool _isEditingOdometer = false;
-  bool _isSavingOdometer = false;
-  final ImagePicker _imagePicker = ImagePicker();
-  
-  // Additional Luggage state
-  String _luggageWeight = '';
-  String _luggageRemarks = '';
 
   @override
   void initState() {
     super.initState();
-    _startOdometerController = TextEditingController();
-    _endOdometerController = TextEditingController();
-    _currentUser = _apiService.getUser();
-    _fetchTripStory();
+    _fetchDetails();
   }
 
-  Widget _buildHero() {
-    final bool isPayable = (_trip?.walletBalance ?? 0) < 0;
-    final status = _trip?.status.toLowerCase() ?? '';
+  Future<void> _fetchDetails() async {
+    setState(() => _isLoading = true);
+    try {
+      final trip = await _tripService.fetchTripDetails(widget.tripId);
+      setState(() {
+        _trip = trip;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading trip story: $e')));
+      }
+    }
+  }
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
+  bool _isApprover() {
+    if (_trip == null) return false;
+    final user = _apiService.getUser();
+    if (user == null) return false;
+    final currentApprover =
+        _trip!.currentApprover ?? _trip!.claim?['current_approver'];
+    return user['id'].toString() == currentApprover.toString();
+  }
+
+  bool _isOwner() {
+    if (_trip == null) return false;
+    final user = _apiService.getUser();
+    if (user == null) return false;
+    return user['id'].toString() == _trip!.userId.toString();
+  }
+
+  Future<void> _handleAction(String action) async {
+    setState(() => _isActionLoading = true);
+    try {
+      if (action == 'Submit' && _trip!.claim == null) {
+        // Create new claim initially
+        await _tripService.createClaim({'trip': _trip!.id});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Claim submitted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // Process existing claim or other actions
+        final taskId = _trip!.claim != null
+            ? "CLAIM-${_trip!.claim!['id']}"
+            : "TRIP-${_trip!.tripId}";
+        await _tripService.performApproval(taskId, action);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$action successful'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      _fetchDetails();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to $action: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isActionLoading = false);
+    }
+  }
+
+  Future<void> _handleItemAction(dynamic itemId, String itemStatus) async {
+    if (_trip!.claim == null) return;
+    try {
+      final remarks = _auditRemarks[itemId.toString()] ?? "";
+      await _tripService.performApproval(
+        "CLAIM-${_trip!.claim!['id']}",
+        'UpdateItem',
+        extraData: {
+          'item_id': itemId,
+          'item_status': itemStatus,
+          'remarks': remarks,
+        },
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Item updated'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _fetchDetails();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update item: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F4F6),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFBB0633)),
+            )
+          : _trip == null
+          ? const Center(child: Text('Trip not found'))
+          : _buildContent(),
+    );
+  }
+
+  Widget _buildContent() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildFinanceGrid(),
+                if (_isApprover()) ...[
+                  const SizedBox(height: 24),
+                  _buildQuickApprovalActions(),
+                ],
+                const SizedBox(height: 24),
+                _buildSectionHeader(Icons.layers_rounded, 'TRIP CORE DETAILS'),
+                const SizedBox(height: 12),
+                _buildOverviewCard(),
+                if (_trip!.odometer != null) ...[
+                  const SizedBox(height: 24),
+                  _buildSectionHeader(
+                    Icons.speed_rounded,
+                    'ODOMETER TELEMETRY',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildOdoCard(),
+                ],
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildSectionHeader(
+                      Icons.account_balance_wallet_rounded,
+                      'DETAILED EXPENSE REGISTRY',
+                    ),
+                    IconButton(
+                      onPressed: () async {
+                        final refresh = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => TripExpenseGridScreen(tripId: widget.tripId),
+                          ),
+                        );
+                        if (refresh == true) _fetchDetails();
+                      },
+                      icon: const Icon(Icons.add_circle_rounded, size: 24, color: Color(0xFF0F172A)),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _buildExpenseSection(),
+                if (_trip!.claim != null) ...[
+                  const SizedBox(height: 24),
+                  _buildSectionHeader(
+                    Icons.check_circle_outline_rounded,
+                    'SETTLEMENT & PAYOUT LIFECYCLE',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildSettlementCard(),
+                ],
+                if (_trip!.jobReports != null &&
+                    _trip!.jobReports!.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  _buildSectionHeader(
+                    Icons.description_outlined,
+                    'JOB REPORTS',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildJobReportsSection(),
+                ],
+                const SizedBox(height: 32),
+                _buildActionButtons(),
+                const SizedBox(height: 32),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  void _showTopUpModal() {
+    final amountController = TextEditingController();
+    final purposeController = TextEditingController();
+    String paymentMode = 'Bank Transfer';
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          padding: EdgeInsets.fromLTRB(24, 12, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 24),
+              Text('REQUEST TOP-UP', style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
+              const SizedBox(height: 8),
+              Text('Request additional advance for this trip', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF64748B))),
+              const SizedBox(height: 24),
+              TextField(
+                controller: amountController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Amount (₹)',
+                  prefixIcon: const Icon(Icons.currency_rupee_rounded),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: paymentMode,
+                decoration: InputDecoration(
+                  labelText: 'Payment Mode',
+                  prefixIcon: const Icon(Icons.payment_rounded),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                ),
+                items: ['Bank Transfer', 'NEFT', 'UPI', 'Cash']
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                    .toList(),
+                onChanged: (v) => setModalState(() => paymentMode = v!),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: purposeController,
+                decoration: InputDecoration(
+                  labelText: 'Reason for Top-up',
+                  prefixIcon: const Icon(Icons.description_outlined),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: isSubmitting ? null : () async {
+                    if (amountController.text.isEmpty || purposeController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
+                      return;
+                    }
+                    setModalState(() => isSubmitting = true);
+                    try {
+                      await _tripService.requestAdvance(
+                        widget.tripId,
+                        double.parse(amountController.text),
+                        purposeController.text,
+                        paymentMode: paymentMode,
+                      );
+                      if (mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Top-up request submitted'), backgroundColor: Colors.green));
+                        _fetchDetails();
+                      }
+                    } catch (e) {
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                    } finally {
+                      setModalState(() => isSubmitting = false);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFBB0633),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: isSubmitting
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('SUBMIT REQUEST'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _footerBtn(
+                Icons.picture_as_pdf_rounded,
+                'PDF STATEMENT',
+                const Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _footerBtn(
+                Icons.table_view_rounded,
+                'EXPORT EXCEL',
+                const Color(0xFF1E293B),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: _footerBtn(
+            Icons.print_rounded,
+            'PRINT SUMMARY',
+            const Color(0xFF64748B),
+            outline: true,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _footerBtn(
+    IconData icon,
+    String label,
+    Color color, {
+    bool outline = false,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: () {},
+      icon: Icon(icon, size: 18, color: outline ? color : Colors.white),
+      label: Text(
+        label,
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: outline ? color : Colors.white,
+        ),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: outline ? Colors.white : color,
+        foregroundColor: outline ? color : Colors.white,
+        side: outline ? BorderSide(color: color.withOpacity(0.3)) : null,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: outline ? 0 : 2,
+      ),
+    );
+  }
+
+  Widget _buildQuickApprovalActions() {
+    final expenses = _trip!.expenses ?? [];
+    final double totalClaimed = expenses.fold(
+      0.0,
+      (s, e) => s + (double.tryParse(e['amount']?.toString() ?? '0') ?? 0),
+    );
+    final double approvedNet = expenses
+        .where((e) => e['status'] != 'Rejected')
+        .fold(
+          0.0,
+          (s, e) => s + (double.tryParse(e['amount']?.toString() ?? '0') ?? 0),
+        );
+    final double rejectedTotal = expenses
+        .where((e) => e['status'] == 'Rejected')
+        .fold(
+          0.0,
+          (s, e) => s + (double.tryParse(e['amount']?.toString() ?? '0') ?? 0),
+        );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(24),
+                topRight: Radius.circular(24),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _summaryAuditBox(
+                  'CLAIMED',
+                  '₹${totalClaimed.toStringAsFixed(0)}',
+                  const Color(0xFF64748B),
+                ),
+                _summaryAuditBox(
+                  'APPROVED',
+                  '₹${approvedNet.toStringAsFixed(0)}',
+                  const Color(0xFF10B981),
+                ),
+                _summaryAuditBox(
+                  'REJECTED',
+                  '₹${rejectedTotal.toStringAsFixed(0)}',
+                  const Color(0xFFEF4444),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isActionLoading
+                        ? null
+                        : () => _handleAction('Reject'),
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    label: const Text('REJECT ALL'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: const BorderSide(color: Color(0xFFFFE4E6)),
+                      backgroundColor: const Color(0xFFFFF1F2),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isActionLoading
+                        ? null
+                        : () => _handleAction('Approve'),
+                    icon: const Icon(
+                      Icons.check_circle_outline_rounded,
+                      size: 18,
+                    ),
+                    label: const Text('FINAL APPROVE'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F172A),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 4,
+                      shadowColor: const Color(0xFF0F172A).withOpacity(0.3),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryAuditBox(String label, String value, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 8,
+            fontWeight: FontWeight.w800,
+            color: color.withOpacity(0.7),
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(IconData icon, String title) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: const Color(0xFF64748B)),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF64748B),
+            letterSpacing: 1.2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader() {
+    final double totalExpenses = _trip!.totalExpenses ?? 0;
+    final double walletBalance = _trip!.walletBalance ?? 0;
+    final bool isPayable = walletBalance < 0;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 50, 16, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
+              IconButton(
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: Color(0xFF1E293B),
+                  size: 18,
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
+                onPressed: () => Navigator.pop(context),
+              ),
+              _officialReportTag(),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.fingerprint_rounded,
-                      color: Colors.white70,
-                      size: 12,
+                    Row(
+                      children: [
+                        Image.asset(
+                          'assets/bavya_logo.png',
+                          height: 16,
+                          errorBuilder: (c, e, s) => const Icon(
+                            Icons.business_rounded,
+                            size: 16,
+                            color: Color(0xFFBB0633),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 1,
+                          height: 12,
+                          color: const Color(0xFFE2E8F0),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            _trip!.tripId,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(height: 8),
                     Text(
-                      _trip?.tripId ?? 'N/A',
+                      'Trip Story',
                       style: GoogleFonts.plusJakartaSans(
-                        color: Colors.white,
-                        fontSize: 10,
+                        fontSize: 28,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 0.5,
+                        color: const Color(0xFF0F172A),
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    Text(
+                      _trip!.purpose,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF64748B),
                       ),
                     ),
                   ],
                 ),
               ),
-              _buildStatusPill(_trip?.status ?? 'Unknown'),
+              _buildStatusPill(_trip!.status),
             ],
           ),
-          const SizedBox(height: 20),
-          Text(
-            _trip?.purpose ?? 'Business Trip',
-            style: GoogleFonts.plusJakartaSans(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              height: 1.2,
-            ),
+          const SizedBox(height: 24),
+          _buildHeroStats(totalExpenses, walletBalance, isPayable),
+          const SizedBox(height: 16),
+          const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _officialReportTag() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.verified_user_rounded,
+            size: 12,
+            color: Color(0xFF94A3B8),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(width: 6),
           Text(
-            'OFFICIAL EXECUTED ITINERARY',
+            'OFFICIAL REPORT',
             style: GoogleFonts.plusJakartaSans(
-              color: Colors.white54,
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: FontWeight.w800,
-              letterSpacing: 1.2,
+              color: const Color(0xFF94A3B8),
+              letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 28),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.05)),
-            ),
-            child: Row(
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroStats(double investment, double wallet, bool isPayable) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.2),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'INVESTMENT',
-                        style: GoogleFonts.plusJakartaSans(
-                          color: Colors.white38,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatCurrency(_trip?.totalExpenses),
-                        style: GoogleFonts.plusJakartaSans(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
+                Text(
+                  'TOTAL INVESTMENT',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white.withOpacity(0.5),
+                    letterSpacing: 0.5,
                   ),
                 ),
-                Container(width: 1, height: 32, color: Colors.white10),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'WALLET STATUS',
-                        style: GoogleFonts.plusJakartaSans(
-                          color: Colors.white38,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        isPayable
-                            ? '- ${_formatCurrency(_trip?.walletBalance?.abs())}'
-                            : '+ ${_formatCurrency(_trip?.walletBalance)}',
-                        style: GoogleFonts.plusJakartaSans(
-                          color: isPayable
-                              ? const Color(0xFFFB7185)
-                              : const Color(0xFF34D399),
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 4),
+                Text(
+                  '₹${investment.toStringAsFixed(2)}',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(width: 1, height: 32, color: Colors.white.withOpacity(0.1)),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'SETTLEMENT STATUS',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white.withOpacity(0.5),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isPayable
+                      ? 'Payable: ₹${wallet.abs().toStringAsFixed(2)}'
+                      : 'Surplus: ₹${wallet.toStringAsFixed(2)}',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: isPayable
+                        ? const Color(0xFFF87171)
+                        : const Color(0xFF34D399),
                   ),
                 ),
               ],
@@ -206,1929 +793,231 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
   }
 
   Widget _buildStatusPill(String status) {
-    Color color = _getStatusColor(status);
+    bool isApproved = status.toLowerCase().contains('approved');
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(8),
+        color: isApproved ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isApproved ? const Color(0xFFBBF7D0) : const Color(0xFFE2E8F0),
+        ),
       ),
       child: Text(
         status.toUpperCase(),
         style: GoogleFonts.plusJakartaSans(
-          color: color,
           fontSize: 9,
           fontWeight: FontWeight.w900,
-          letterSpacing: 0.5,
+          color: isApproved ? const Color(0xFF166534) : const Color(0xFF475569),
         ),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _startOdometerController.dispose();
-    _endOdometerController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleAuditAction(String action) async {
-    if (_trip == null) return;
-    setState(() => _isActionLoading = true);
-    try {
-      final String taskId = _trip!.claim != null
-          ? 'CLAIM-${_trip!.claim!['id']}'
-          : 'TRIP-${_trip!.tripId}';
-      await _tripService.performApproval(taskId, action);
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$action Successful')));
-      _fetchTripStory();
-    } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed: $e')));
-    } finally {
-      setState(() => _isActionLoading = false);
-    }
-  }
-
-  Future<void> _handleItemAction(dynamic itemId, String itemStatus) async {
-    if (_trip?.claim == null) return;
-    final remarks = _auditRemarks[itemId.toString()] ?? "";
-
-    if (itemStatus == 'Rejected' && remarks.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please provide remarks for rejection')),
-      );
-      return;
-    }
-
-    setState(() => _isActionLoading = true);
-    try {
-      await _tripService.performApproval(
-        'CLAIM-${_trip!.claim!['id']}',
-        'UpdateItem',
-        extraData: {
-          'item_id': itemId,
-          'item_status': itemStatus,
-          'remarks': remarks,
-        },
-      );
-      _fetchTripStory();
-    } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Update failed: $e')));
-    } finally {
-      setState(() => _isActionLoading = false);
-    }
-  }
-
-  String _formatCurrency(dynamic amount) {
-    if (amount == null) return '₹0';
-
-    double? numAmount;
-    if (amount is num) {
-      numAmount = amount.toDouble();
-    } else if (amount is String) {
-      numAmount = double.tryParse(amount);
-    }
-
-    if (numAmount == null) return '₹0';
-
-    final formatter = NumberFormat.currency(
-      locale: 'en_IN',
-      symbol: '₹',
-      decimalDigits: 0,
-    );
-    return formatter.format(numAmount);
-  }
-
-  Future<void> _fetchTripStory() async {
-    setState(() => _isLoading = true);
-    try {
-      final trip = await _tripService.fetchTripDetails(widget.tripId);
-
-      List<dynamic> expenses = trip.expenses ?? [];
-      if (expenses.isEmpty) {
-        expenses = await _tripService.fetchExpenses(tripId: widget.tripId);
-      }
-
-      List<dynamic> advances = trip.advances ?? [];
-      if (advances.isEmpty) {
-        final allAdvances = await _apiService.get(
-          '${ApiConstants.baseUrl}/api/advances/?trip_id=${widget.tripId}',
-        );
-        if (allAdvances is List) advances = allAdvances;
-      }
-
-      setState(() {
-        _trip = Trip(
-          id: trip.id,
-          tripId: trip.tripId,
-          userId: trip.userId,
-          purpose: trip.purpose,
-          destination: trip.destination,
-          source: trip.source,
-          dates: trip.dates,
-          startDate: trip.startDate,
-          endDate: trip.endDate,
-          status: trip.status,
-          costEstimate: trip.costEstimate,
-          travelMode: trip.travelMode,
-          vehicleType: trip.vehicleType,
-          employee: trip.employee,
-          title: trip.title,
-          projectCode: trip.projectCode,
-          reportingManagerName: trip.reportingManagerName,
-          composition: trip.composition,
-          tripLeader: trip.tripLeader,
-          leaderDesignation: trip.leaderDesignation,
-          leaderEmployeeId: trip.leaderEmployeeId,
-          members: trip.members,
-          lifecycleEvents: trip.lifecycleEvents,
-          accommodationRequests: trip.accommodationRequests,
-          odometer: trip.odometer,
-          totalApprovedAdvance: trip.totalApprovedAdvance,
-          totalExpenses: trip.totalExpenses,
-          walletBalance: trip.walletBalance,
-          advances: advances,
-          expenses: expenses,
-          enRoute: trip.enRoute,
-          claim: trip.claim,
-          currentApprover: trip.currentApprover,
-          userBankName: trip.userBankName,
-          userAccountNo: trip.userAccountNo,
-        );
-
-        // Initialize travel details
-        _travelMode = trip.travelMode ?? 'Airways';
-        _vehicleType = trip.vehicleType ?? 'Own';
-
-        _isLoading = false;
-        if (_trip?.expenses != null) {
-          final role = _currentUser?['role']?.toString().toLowerCase() ?? '';
-          _auditRemarks.clear(); // Clear before refill
-          for (var exp in _trip!.expenses!) {
-            final String expId = exp['id'].toString();
-            if (role.contains('finance')) {
-              _auditRemarks[expId] = exp['finance_remarks'] ?? '';
-            } else if (role.contains('hr')) {
-              _auditRemarks[expId] = exp['hr_remarks'] ?? '';
-            } else {
-              _auditRemarks[expId] = exp['rm_remarks'] ?? '';
-            }
-          }
-        }
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-    }
-  }
-
-  Future<void> _updateTravelDetails() async {
-    if (_trip == null) return;
-
-    setState(() => _isActionLoading = true);
-    try {
-      final payload = {
-        'travel_mode': _travelMode,
-        'vehicle_type':
-            ['2 Wheeler', '3 Wheeler', '4 Wheeler'].contains(_travelMode)
-            ? _vehicleType
-            : null,
-      };
-
-      await _apiService.patch(
-        '${ApiConstants.baseUrl}/api/trips/${_trip!.tripId}/',
-        body: payload,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Travel details updated successfully')),
-        );
-        _fetchTripStory();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating travel details: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      setState(() => _isActionLoading = false);
-    }
-  }
-
-  Widget _buildRichDescription(String? desc) {
-    if (desc == null || desc.isEmpty)
-      return Text(
-        'No description',
-        style: GoogleFonts.inter(fontSize: 12, color: Colors.black26),
-      );
-
-    if (!desc.startsWith('{')) {
-      return Text(
-        desc,
-        style: GoogleFonts.inter(
-          fontSize: 12,
-          color: Colors.black54,
-          fontWeight: FontWeight.w500,
-        ),
-      );
-    }
-
-    try {
-      final d = jsonDecode(desc);
-      if (d is! Map)
-        return Text(
-          desc,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            color: Colors.black54,
-            fontWeight: FontWeight.w500,
-          ),
-        );
-
-      List<Widget> rows = [];
-
-      // Booking Details
-      final bookingDate = d['bookingDate'] ?? '';
-      final bookingTime = d['bookingTime'] ?? '';
-      final bookedBy = d['bookedBy'] ?? d['bookingType'] ?? '';
-      if (bookingDate.isNotEmpty) {
-        rows.add(
-          _descRow(
-            Icons.event_available_rounded,
-            'Booked: $bookingDate ${bookingTime.isNotEmpty ? '@ $bookingTime' : ''} ${bookedBy.isNotEmpty ? '($bookedBy)' : ''}',
-          ),
-        );
-      }
-
-      // Route
-      final origin = d['origin'] ?? '';
-      final dest = d['destination'] ?? '';
-      final boardingPoint = d['boardingPoint'] ?? '';
-      if (origin.isNotEmpty || dest.isNotEmpty) {
-        String route = '$origin → $dest';
-        if (boardingPoint.isNotEmpty) route += ' (Boarding: $boardingPoint)';
-        rows.add(_descRow(Icons.map_outlined, route, isTitle: true));
-      }
-
-      // Carrier & Ticket
-      final carrier = d['carrierName'] ?? d['provider'] ?? '';
-      final travelNo = d['ticketNo'] ?? d['travelNo'] ?? '';
-      final pnr = d['pnr'] ?? '';
-      final cls = d['class'] ?? '';
-      final driver = d['driverName'] ?? '';
-      if (carrier.isNotEmpty || pnr.isNotEmpty || driver.isNotEmpty) {
-        String info = carrier;
-        if (travelNo.isNotEmpty) info += ' ($travelNo)';
-        if (cls.isNotEmpty) info += ' | $cls';
-        if (pnr.isNotEmpty) info += ' | PNR: $pnr';
-        if (driver.isNotEmpty) info += ' | Driver: $driver';
-        rows.add(_descRow(Icons.commute_rounded, info));
-      }
-
-      // Pax & Vehicle No
-      final pax = d['pax'] ?? '';
-      final vehicleNo = d['vehicleNo'] ?? '';
-      if (pax != null && pax.toString().isNotEmpty && pax != 0) {
-        rows.add(_descRow(Icons.groups_outlined, 'Pax: $pax'));
-      }
-      if (vehicleNo.isNotEmpty) {
-        rows.add(
-          _descRow(Icons.directions_car_outlined, 'Vehicle No: $vehicleNo'),
-        );
-      }
-
-      // Options (Meal, Baggage, Tatkal)
-      List<String> options = [];
-      if (d['mealIncluded'] == true || d['mealIncluded'] == 'Yes')
-        options.add('Meal Included');
-      if (d['excessBaggage'] == true || d['excessBaggage'] == 'Yes')
-        options.add('Excess Baggage');
-      if (d['isTatkal'] == true || d['isTatkal'] == 'Yes')
-        options.add('Tatkal Ticket');
-      if (options.isNotEmpty) {
-        rows.add(_descRow(Icons.verified_outlined, options.join(' • ')));
-      }
-
-      // Invoice
-      final invNo = d['invoiceNo'] ?? '';
-      if (invNo.isNotEmpty) {
-        rows.add(_descRow(Icons.description_outlined, 'Invoice: $invNo'));
-      }
-
-      // Location
-      final loc =
-          d['location'] ??
-          d['hotelName'] ??
-          d['hotel_name'] ??
-          d['restaurant'] ??
-          '';
-      if (loc.isNotEmpty) {
-        rows.add(_descRow(Icons.location_on_outlined, loc));
-      }
-
-      // Mode/Type
-      final mode = d['mode'] ?? d['mealType'] ?? d['roomType'] ?? '';
-      final mealCat = d['mealCategory'] ?? '';
-      final mealTime = d['mealTime'] ?? '';
-      final purpose = d['purpose'] ?? '';
-
-      if (mealCat.isNotEmpty) {
-        rows.add(
-          _descRow(
-            Icons.restaurant_menu_rounded,
-            'Category: $mealCat ${mealTime.isNotEmpty ? "@ $mealTime" : ""}',
-          ),
-        );
-      }
-
-      if (mode.isNotEmpty) {
-        rows.add(_descRow(Icons.info_outline_rounded, 'Type: $mode'));
-      }
-
-      if (purpose.isNotEmpty) {
-        rows.add(_descRow(Icons.place_outlined, 'Address: $purpose'));
-      }
-
-      // Time (Journey) / Local Times
-      final startTime = d['startTime'] ?? '';
-      final endTime = d['endTime'] ?? '';
-      if (startTime.isNotEmpty || endTime.isNotEmpty) {
-        rows.add(
-          _descRow(
-            Icons.access_time_rounded,
-            'Start: $startTime — End: $endTime',
-          ),
-        );
-      }
-
-      if (d['time'] != null && d['time'] is Map) {
-        final t = d['time'];
-        final b = t['boardingTime'] ?? '';
-        final s = t['scheduledTime'] ?? '';
-        final a = t['actualTime'] ?? '';
-        final delay = t['delay'] ?? 0;
-        if (b.isNotEmpty || s.isNotEmpty) {
-          rows.add(
-            _descRow(
-              Icons.access_time_rounded,
-              'Dep: $b | Arr: $s ${a.isNotEmpty ? '| Act: $a' : ''} ${delay > 0 ? '| Delay: ${delay}m' : ''}',
-            ),
-          );
-        }
-      }
-
-      // Toll, Parking, Fuel
-      final toll = d['toll']?.toString() ?? '';
-      final parking = d['parking']?.toString() ?? '';
-      final fuel = d['fuel']?.toString() ?? '';
-      if ((toll.isNotEmpty && toll != '0' && toll != '0.00') ||
-          (parking.isNotEmpty && parking != '0' && parking != '0.00') ||
-          (fuel.isNotEmpty && fuel != '0' && fuel != '0.00')) {
-        List<String> finance = [];
-        if (toll.isNotEmpty && toll != '0' && toll != '0.00')
-          finance.add('Toll: $toll');
-        if (parking.isNotEmpty && parking != '0' && parking != '0.00')
-          finance.add('Pkg: $parking');
-        if (fuel.isNotEmpty && fuel != '0' && fuel != '0.00')
-          finance.add('Fuel: $fuel');
-        rows.add(_descRow(Icons.payments_outlined, finance.join(' • ')));
-      }
-
-      // Remarks
-      final remarks = d['remarks'] ?? d['description'] ?? '';
-      if (remarks.isNotEmpty && remarks != desc) {
-        rows.add(
-          Padding(
-            padding: const EdgeInsets.only(top: 4, left: 18),
-            child: Text(
-              'Note: $remarks',
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                color: Colors.black38,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
-        );
-      }
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: rows,
-      );
-    } catch (e) {
-      return Text(
-        desc,
-        style: GoogleFonts.inter(
-          fontSize: 12,
-          color: Colors.black54,
-          fontWeight: FontWeight.w500,
-        ),
-      );
-    }
-  }
-
-  Widget _descRow(IconData icon, String text, {bool isTitle = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            icon,
-            size: 12,
-            color: isTitle ? const Color(0xFF0F172A) : Colors.black26,
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              text,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: isTitle ? const Color(0xFF0F172A) : Colors.black54,
-                fontWeight: isTitle ? FontWeight.w800 : FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: Stack(
-        children: [
-          // Executive mesh blobs
-          Positioned(
-            top: -150,
-            right: -100,
-            child: Container(
-              width: 500,
-              height: 500,
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFFA9052E).withOpacity(0.04),
-                    Colors.transparent,
-                  ],
-                ),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 100,
-            left: -150,
-            child: Container(
-              width: 400,
-              height: 400,
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF3B82F6).withOpacity(0.03),
-                    Colors.transparent,
-                  ],
-                ),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-
-          Column(
-            children: [
-              _buildCustomHeader(),
-              Expanded(
-                child: _isLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: Color(0xFFBB0633),
-                        ),
-                      )
-                    : _trip == null
-                    ? const Center(child: Text('Story not found'))
-                    : _buildContent(),
-              ),
-            ],
-          ),
-          if (_isActionLoading)
-            Container(
-              color: Colors.black26,
-              child: const Center(
-                child: CircularProgressIndicator(color: Color(0xFFBB0633)),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCustomHeader() {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFFA9052E),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(36),
-          bottomRight: Radius.circular(36),
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -30,
-            top: -20,
-            child: Container(
-              width: 140,
-              height: 140,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 15, 25, 30),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(
-                      Icons.public_rounded,
-                      color: Color(0xFFBB0633),
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              'OFFICIAL REPORT',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white.withOpacity(0.7),
-                                letterSpacing: 1.5,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.verified_rounded,
-                              color: Colors.white.withOpacity(0.9),
-                              size: 10,
-                            ),
-                          ],
-                        ),
-                        Text(
-                          'Trip Story',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () {},
-                    icon: const Icon(
-                      Icons.share_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContent() {
-    return Stack(
-      children: [
-        RefreshIndicator(
-          onRefresh: _fetchTripStory,
-          color: const Color(0xFF7C1D1D),
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHero(),
-                const SizedBox(height: 30),
-                _buildCoreDetails(),
-                const SizedBox(height: 30),
-                _buildFinancialSummary(),
-                const SizedBox(height: 30),
-                _buildExpenseRegistry(),
-                const SizedBox(height: 30),
-                if (_shouldShowOdometerSection()) ...[
-                  _buildOdometerSection(),
-                  const SizedBox(height: 30),
-                ],
-                _buildSettlementLifecycle(),
-                const SizedBox(height: 30),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _bankInfoRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Row(
-        children: [
-          Icon(icon, size: 10, color: const Color(0xFF64748B)),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              text,
-              style: GoogleFonts.inter(
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF334155),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _buildCoreDetails() {
-    // PERSONNEL LOGIC matching web app precisely
-    String composition = _trip?.composition ?? 'Solo';
-    if (composition.toLowerCase().contains('alone') ||
-        composition.toLowerCase() == 'solo') {
-      composition = 'Alone Travel';
-    } else if (composition.toLowerCase().contains('team')) {
-      composition = 'Team Travel';
-    }
-
-    String leaderName = _trip?.employee ?? 'Employee';
-    if (leaderName == 'Employee' && (_trip?.tripLeader?.isNotEmpty ?? false)) {
-      leaderName = _trip!.tripLeader!;
-    }
-
-    final designation = _trip?.leaderDesignation ?? 'Staff';
-    final empId = _trip?.leaderEmployeeId ?? '00000';
-    String roleInfo = '$designation ($empId)';
-
-    Widget personnelContent = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          composition,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
-            color: const Color(0xFF0F172A),
-            height: 1.2,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          'Leader: $leaderName',
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF475569),
-            height: 1.2,
-          ),
-        ),
-        if (roleInfo.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 1),
-            child: Text(
-              roleInfo,
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFF94A3B8),
-                height: 1.2,
-              ),
-            ),
-          ),
-        if (_trip?.reportingManagerName != null &&
-            _trip!.reportingManagerName!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 1),
-            child: Text(
-              'Manager: ${_trip!.reportingManagerName}',
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF64748B),
-                height: 1.2,
-              ),
-            ),
-          ),
-                if (_trip?.userBankName != null && _trip!.userBankName!.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _bankInfoRow(
-                          Icons.account_balance_rounded,
-                          _trip!.userBankName!,
-                        ),
-                        if (_trip?.userAccountNo != null)
-                          _bankInfoRow(Icons.numbers_rounded, _trip!.userAccountNo!),
-                      ],
-                    ),
-                  ),
-                ],
-                if (_trip?.members != null && _trip!.members.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'TEAM MEMBERS',
-                    style: GoogleFonts.inter(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF94A3B8),
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: _trip!.members!.map((m) {
-                      final member = _safe(m);
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Text(
-                          member['name'] ?? member['username'] ?? 'Member',
-                          style: GoogleFonts.inter(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF475569),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ],
-    );
-
+  Widget _buildFinanceGrid() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(Icons.grid_view_rounded, 'Trip Core Details'),
-        const SizedBox(height: 18),
-        Column(
-          children: [
-            // Row 1: Route and Timeline
-            Row(
-              children: [
-                Expanded(
-                  child: _detailTile(
-                    Icons.location_on_rounded,
-                    'ROUTE',
-                    content: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${_trip?.source} → ${_trip?.destination}',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF1E293B),
-                            height: 1.2,
-                          ),
-                        ),
-                        if (_trip?.enRoute?.isNotEmpty ?? false)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              'via ${_trip!.enRoute}',
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                                color: const Color(0xFF94A3B8),
-                                height: 1.2,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    iconColor: Colors.orange,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _detailTile(
-                    Icons.calendar_today_rounded,
-                    'TIMELINE',
-                    value: _trip?.dates ?? '',
-                    iconColor: Colors.blue,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // Row 2: Personnel and Project
-            Row(
-              children: [
-                Expanded(
-                  child: _detailTile(
-                    Icons.person_rounded,
-                    'PERSONNEL',
-                    content: personnelContent,
-                    iconColor: Colors.purpleAccent,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _detailTile(
-                    Icons.verified_user_rounded,
-                    'PROJECT',
-                    value: _trip?.projectCode ?? 'General Activity',
-                    iconColor: Colors.green,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // Row 3: Purpose
-            Row(
-              children: [
-                Expanded(
-                  child: _detailTile(
-                    Icons.business_center_rounded,
-                    'PURPOSE',
-                    value: _trip?.purpose ?? '',
-                    iconColor: Colors.pinkAccent,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Container(),
-                ), // Spacer to maintain 2-column layout
-              ],
-            ),
-            // Row 4: Vehicle Type (conditional)
-            if ([
-              '2 Wheeler',
-              '3 Wheeler',
-              '4 Wheeler',
-            ].contains(_travelMode)) ...[
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(child: _buildEditableVehicleTypeTile()),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Container(),
-                  ), // Spacer to maintain 2-column layout
-                ],
-              ),
-            ],
-          ],
-        ),
-      ],
-    );
-  }
-
-  Map<String, dynamic> _safe(dynamic item) {
-    if (item == null) return {};
-    if (item is Map) return Map<String, dynamic>.from(item);
-    if (item is String) {
-      try {
-        return jsonDecode(item) as Map<String, dynamic>;
-      } catch (_) {
-        return {};
-      }
-    }
-    return {};
-  }
-
-
-
-  Widget _detailTile(
-    IconData icon,
-    String label, {
-    String? value,
-    Widget? content,
-    required Color iconColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(icon, size: 20, color: iconColor),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label.toUpperCase(),
-                  style: GoogleFonts.inter(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF94A3B8),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                content ??
-                    Text(
-                      value ?? '',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        color: const Color(0xFF1E293B),
-                        height: 1.2,
-                      ),
-                      softWrap: true,
-                      maxLines: 3,
-                    ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEditableVehicleTypeTile() {
-    return GestureDetector(
-      onTap: () => _showTravelDetailsModal(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFF1F5F9)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(Icons.two_wheeler_rounded, size: 20, color: Colors.indigo),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'VEHICLE OWNERSHIP',
-                    style: GoogleFonts.inter(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF94A3B8),
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _vehicleType == 'Own'
-                        ? 'Own Vehicle'
-                        : _vehicleType == 'Rental'
-                        ? 'Rental Bike'
-                        : _vehicleType == 'Company'
-                        ? 'Company Self Drive'
-                        : 'Service / Outsourced',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF1E293B),
-                      height: 1.2,
-                    ),
-                    softWrap: true,
-                    maxLines: 2,
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.edit_rounded, size: 18, color: const Color(0xFF94A3B8)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showTravelDetailsModal() {
-    String tempTravelMode = _travelMode;
-    String tempVehicleType = _vehicleType;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (mContext) => StatefulBuilder(
-        builder: (context, setModalState) => GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            color: Colors.transparent,
-            child: GestureDetector(
-              onTap: () {},
-              child: SingleChildScrollView(
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
-                    ),
-                  ),
-                  padding: EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    top: 24,
-                    bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Travel Preferences',
-                            style: GoogleFonts.interTight(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(
-                              Icons.close_rounded,
-                              color: Color(0xFF64748B),
-                              size: 24,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      // Travel Mode Dropdown
-                      Text(
-                        'Travel Mode *',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF0F172A),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            isExpanded: true,
-                            value: tempTravelMode,
-                            items:
-                                [
-                                      'Airways',
-                                      'Train',
-                                      'Bus',
-                                      '2 Wheeler',
-                                      '3 Wheeler',
-                                      '4 Wheeler',
-                                    ]
-                                    .map(
-                                      (item) => DropdownMenuItem<String>(
-                                        value: item,
-                                        child: Text(
-                                          item,
-                                          style: GoogleFonts.inter(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: const Color(0xFF0F172A),
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                setModalState(() {
-                                  tempTravelMode = value;
-                                  // Auto-reset vehicle type if not applicable
-                                  if (![
-                                    '2 Wheeler',
-                                    '3 Wheeler',
-                                    '4 Wheeler',
-                                  ].contains(tempTravelMode)) {
-                                    tempVehicleType = 'Own';
-                                  }
-                                });
-                              }
-                            },
-                            dropdownColor: Colors.white,
-                            iconSize: 20,
-                            icon: const Icon(
-                              Icons.keyboard_arrow_down_rounded,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      // Vehicle Ownership Dropdown (Conditional)
-                      if ([
-                        '2 Wheeler',
-                        '3 Wheeler',
-                        '4 Wheeler',
-                      ].contains(tempTravelMode)) ...[
-                        Text(
-                          'Vehicle Ownership *',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF0F172A),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              isExpanded: true,
-                              value:
-                                  (tempVehicleType == 'Own' ||
-                                      tempVehicleType == 'Own Vehicle')
-                                  ? 'Own Vehicle'
-                                  : tempVehicleType == 'Rental'
-                                  ? 'Rental'
-                                  : tempVehicleType == 'Company' ||
-                                        tempVehicleType == 'Company Self Drive'
-                                  ? 'Company Self Drive'
-                                  : 'Service / Outsourced',
-                              items:
-                                  (() {
-                                        List<String> items = ['Own Vehicle'];
-                                        if (tempTravelMode
-                                                .toLowerCase()
-                                                .contains('bike') ||
-                                            tempTravelMode
-                                                .toLowerCase()
-                                                .contains('2 wheeler') ||
-                                            tempTravelMode
-                                                .toLowerCase()
-                                                .contains('3 wheeler')) {
-                                          items.add('Rental');
-                                        } else if (tempTravelMode
-                                                .toLowerCase()
-                                                .contains('car') ||
-                                            tempTravelMode
-                                                .toLowerCase()
-                                                .contains('4 wheeler')) {
-                                          items.add('Company Self Drive');
-                                        }
-                                        items.add('Service / Outsourced');
-                                        return items;
-                                      })()
-                                      .map(
-                                        (item) => DropdownMenuItem<String>(
-                                          value: item,
-                                          child: Text(
-                                            item,
-                                            style: GoogleFonts.inter(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: const Color(0xFF0F172A),
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  setModalState(() {
-                                    if (value == 'Own Vehicle')
-                                      tempVehicleType = 'Own';
-                                    else if (value == 'Rental')
-                                      tempVehicleType = 'Rental';
-                                    else if (value == 'Company Self Drive')
-                                      tempVehicleType = 'Company';
-                                    else
-                                      tempVehicleType = 'Service';
-                                  });
-                                }
-                              },
-                              dropdownColor: Colors.white,
-                              iconSize: 20,
-                              icon: const Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                color: Color(0xFF64748B),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                      ],
-                      // Action Buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => Navigator.pop(context),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                side: const BorderSide(
-                                  color: Color(0xFFE2E8F0),
-                                ),
-                              ),
-                              child: Text(
-                                'Cancel',
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                  color: const Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: _isActionLoading
-                                  ? null
-                                  : () {
-                                      setState(() {
-                                        _travelMode = tempTravelMode;
-                                        _vehicleType = tempVehicleType;
-                                      });
-                                      Navigator.pop(context);
-                                      _updateTravelDetails();
-                                    },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0F172A),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: Text(
-                                _isActionLoading ? 'Saving...' : 'Save Changes',
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOdometerSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(Icons.speed_rounded, 'Odometer Reading'),
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFF1F5F9)),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8),
-            ],
-          ),
-          child: _isEditingOdometer
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Start Odometer Reading
-                    Text(
-                      'START ODOMETER (KM)',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF64748B),
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _startOdometerController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: 'e.g., 50000',
-                        prefixIcon: const Icon(
-                          Icons.speed_rounded,
-                          color: Colors.orange,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFE2E8F0),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFE2E8F0),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Colors.orange,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Start Odometer Image
-                    GestureDetector(
-                      onTap: () => _pickOdometerImage(true),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFFBEB),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.orange.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            if (_startOdometerImage != null)
-                              Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Image.file(
-                                  _startOdometerImage!,
-                                  fit: BoxFit.cover,
-                                ),
-                              )
-                            else
-                              const Icon(
-                                Icons.camera_alt_rounded,
-                                color: Colors.orange,
-                                size: 28,
-                              ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Start Odometer Photo',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                      color: const Color(0xFF0F172A),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _startOdometerImage != null
-                                        ? 'Photo captured'
-                                        : 'Tap to capture photo',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.orange,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    // End Odometer Reading
-                    Text(
-                      'END ODOMETER (KM)',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF64748B),
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _endOdometerController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: 'e.g., 50150',
-                        prefixIcon: const Icon(
-                          Icons.stop_rounded,
-                          color: Colors.teal,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFE2E8F0),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFE2E8F0),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Colors.teal,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // End Odometer Image
-                    GestureDetector(
-                      onTap: () => _pickOdometerImage(false),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0FDFA),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.teal.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            if (_endOdometerImage != null)
-                              Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Image.file(
-                                  _endOdometerImage!,
-                                  fit: BoxFit.cover,
-                                ),
-                              )
-                            else
-                              const Icon(
-                                Icons.camera_alt_rounded,
-                                color: Colors.teal,
-                                size: 28,
-                              ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'End Odometer Photo',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                      color: const Color(0xFF0F172A),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _endOdometerImage != null
-                                        ? 'Photo captured'
-                                        : 'Tap to capture photo',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.teal,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    // Action Buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _isSavingOdometer
-                                ? null
-                                : () => setState(() {
-                                    _isEditingOdometer = false;
-                                    _startOdometerImage = null;
-                                    _endOdometerImage = null;
-                                    _startOdometerController.clear();
-                                    _endOdometerController.clear();
-                                  }),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFF1F5F9),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: Text(
-                              'Cancel',
-                              style: GoogleFonts.inter(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                                color: const Color(0xFF64748B),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _isSavingOdometer
-                                ? null
-                                : _updateOdometerWithImages,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF10B981),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              disabledBackgroundColor: Colors.grey,
-                            ),
-                            child: Text(
-                              _isSavingOdometer ? 'Saving...' : 'Save Readings',
-                              style: GoogleFonts.inter(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFF7ED),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.orange.withOpacity(0.2),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'START',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.orange,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _trip?.odometer?['start_odo_reading'] != null
-                                      ? '${_trip!.odometer!['start_odo_reading']} KM'
-                                      : '-',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w900,
-                                    color: const Color(0xFF0F172A),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF0FDFA),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.teal.withOpacity(0.2),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'END',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.teal,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _trip?.odometer?['end_odo_reading'] != null
-                                      ? '${_trip!.odometer!['end_odo_reading']} KM'
-                                      : '-',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w900,
-                                    color: const Color(0xFF0F172A),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    // Distance Card
-                    if (_trip?.odometer?['start_odo_reading'] != null &&
-                        _trip?.odometer?['end_odo_reading'] != null)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0FDF4),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.green.withOpacity(0.2),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'DISTANCE',
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.green,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${(_trip!.odometer!['end_odo_reading'] - _trip!.odometer!['start_odo_reading']).toString()} KM',
-                              style: GoogleFonts.inter(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFF0F172A),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () =>
-                          setState(() => _isEditingOdometer = true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF7C1D1D),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        minimumSize: const Size(double.infinity, 0),
-                      ),
-                      child: Text(
-                        'Update Readings',
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFinancialSummary() {
-    final status = _trip?.status.toLowerCase() ?? '';
-    final canRequestTopUp = [
-      'approved',
-      'hr approved',
-      'on-going',
-    ].contains(status);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _sectionHeader(Icons.currency_rupee_rounded, 'Financial Summary'),
-            if (canRequestTopUp)
+            _buildSectionHeader(
+              Icons.currency_rupee_rounded,
+              'FINANCIAL SUMMARY',
+            ),
+            if (!_isApprover() &&
+                [
+                  'on-going',
+                  'approved',
+                  'hr approved',
+                ].contains(_trip!.status.toLowerCase()))
               TextButton.icon(
-                onPressed: () async {
-                  // Step 1: Show TripWalletSheet — this shows the balance,
-                  // total advances, total spent (mirrors web TripWalletModal overview).
-                  // Step 2: From within the sheet, user clicks "Request New Advance"
-                  // which navigates to AdvanceRequestScreen.
-                  if (_trip == null) return;
-                  await showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => TripWalletSheet(
-                      trip: _trip!,
-                      onUpdate: _fetchTripStory,
-                    ),
-                  );
-                  _fetchTripStory();
-                },
+                onPressed: () => _showTopUpModal(),
                 icon: const Icon(
-                  Icons.add_rounded,
+                  Icons.add_circle_outline_rounded,
                   size: 14,
-                  color: Color(0xFF7C1D1D),
+                  color: Color(0xFFBB0633),
                 ),
                 label: Text(
-                  'Top-up / Advance',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF7C1D1D),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
+                  'TOP-UP',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFBB0633),
                   ),
+                ),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                 ),
               ),
           ],
         ),
-        const SizedBox(height: 16),
-        _finRow(
-          'Approved Advance',
-          _formatCurrency(_trip?.totalApprovedAdvance),
-          'Funds disbursed by HQ',
-          const Color(0xFFF1F5F9),
-          const Color(0xFF0F172A),
-          Icons.credit_card_rounded,
-        ),
         const SizedBox(height: 12),
-        _finRow(
-          'Recorded Expenses',
-          _formatCurrency(_trip?.totalExpenses),
-          'On-field spending',
-          const Color(0xFFFFF7ED),
-          Colors.orange,
-          Icons.trending_up_rounded,
-        ),
-        const SizedBox(height: 12),
-        _finRow(
-          'Wallet Balance',
-          _formatCurrency(_trip?.walletBalance),
-          'Current liquidity',
-          const Color(0xFFF0FDF4),
-          const Color(0xFF10B981),
-          Icons.layers_rounded,
+        Column(
+          children: [
+            _finBoxLarge(
+              'APPROVED ADVANCE',
+              '₹${_trip!.totalApprovedAdvance?.toStringAsFixed(0) ?? '0'}',
+              const Color(0xFFBB0633),
+              const Color(0xFFFFF1F2),
+              Icons.account_balance_wallet_rounded,
+              'Funds disbursed by HQ',
+            ),
+            const SizedBox(height: 12),
+            _finBoxLarge(
+              'RECORDED EXPENSES',
+              '₹${_trip!.totalExpenses?.toStringAsFixed(0) ?? '0'}',
+              const Color(0xFFF59E0B),
+              const Color(0xFFFFFBEB),
+              Icons.trending_up_rounded,
+              'On-field spending',
+            ),
+            const SizedBox(height: 12),
+            _finBoxLarge(
+              'WALLET BALANCE',
+              '₹${_trip!.walletBalance?.abs().toStringAsFixed(0) ?? '0'}',
+              (_trip!.walletBalance ?? 0) >= 0
+                  ? const Color(0xFF10B981)
+                  : const Color(0xFFEF4444),
+              const Color(0xFFF8FAFC),
+              Icons.credit_card_rounded,
+              'Current available liquidity',
+            ),
+            _buildAdvanceRequestsList(),
+          ],
         ),
       ],
     );
   }
 
-  Widget _finRow(
+  Widget _buildAdvanceRequestsList() {
+    if (_trip!.advances == null || _trip!.advances!.isEmpty)
+      return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            const Icon(
+              Icons.history_rounded,
+              size: 16,
+              color: Color(0xFF64748B),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'ADVANCE REQUESTS HISTORY',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF0F172A),
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ..._trip!.advances!.map((adv) {
+          final status = adv['status']?.toString() ?? 'Pending';
+          final amount = adv['requested_amount']?.toString() ?? '0';
+          final date = adv['submitted_at']?.toString().split('T')[0] ?? '';
+          final mode = adv['payment_mode'] ?? 'N/A';
+
+          Color statusColor = const Color(0xFF64748B);
+          if (status.toLowerCase().contains('approved'))
+            statusColor = const Color(0xFF10B981);
+          if (status.toLowerCase().contains('rejected'))
+            statusColor = const Color(0xFFEF4444);
+          if (status.toLowerCase().contains('submitted'))
+            statusColor = const Color(0xFF3B82F6);
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.account_balance_wallet_rounded,
+                    size: 16,
+                    color: statusColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '₹$amount via $mode',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                      Text(
+                        'Requested on $date',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    status.toUpperCase(),
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 8,
+                      fontWeight: FontWeight.w900,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ],
+    );
+  }
+
+  Widget _finBoxLarge(
     String label,
     String value,
-    String desc,
-    Color bgColor,
-    Color accent,
+    Color primary,
+    Color bg,
     IconData icon,
+    String sub,
   ) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: accent.withOpacity(0.15), width: 1.5),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white, bgColor.withOpacity(0.5)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: primary.withOpacity(0.1)),
       ),
       child: Row(
         children: [
@@ -2136,12 +1025,12 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5),
+                BoxShadow(color: primary.withOpacity(0.1), blurRadius: 10),
               ],
             ),
-            child: Icon(icon, size: 24, color: accent),
+            child: Icon(icon, color: primary, size: 20),
           ),
           const SizedBox(width: 20),
           Expanded(
@@ -2150,34 +1039,207 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
               children: [
                 Text(
                   label,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 10,
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF64748B),
+                    color: primary.withOpacity(0.7),
                     letterSpacing: 0.5,
                   ),
                 ),
-                const SizedBox(height: 2),
                 Text(
-                  desc,
-                  style: GoogleFonts.inter(
+                  value,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: primary,
+                  ),
+                ),
+                Text(
+                  sub,
+                  style: GoogleFonts.plusJakartaSans(
                     fontSize: 10,
-                    color: const Color(0xFF94A3B8),
                     fontWeight: FontWeight.w600,
+                    color: const Color(0xFF94A3B8),
                   ),
                 ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOverviewCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: Column(
+        children: [
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            childAspectRatio: 2.2,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            children: [
+              _gridDetailItem(
+                Icons.route_rounded,
+                'ROUTE',
+                '${_trip!.source}\n→ ${_trip!.destination}',
+                const Color(0xFFF59E0B),
+              ),
+              _gridDetailItem(
+                Icons.calendar_today_rounded,
+                'TIMELINE',
+                _trip!.dates,
+                const Color(0xFF3B82F6),
+              ),
+              _gridDetailItem(
+                Icons.person_outline_rounded,
+                'PERSONNEL',
+                _trip!.employee,
+                const Color(0xFF8B5CF6),
+              ),
+              _gridDetailItem(
+                Icons.shield_outlined,
+                'PROJECT',
+                _trip!.projectCode ?? 'General',
+                const Color(0xFF10B981),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _gridDetailItem(
+            Icons.movie_filter_rounded,
+            'PURPOSE',
+            _trip!.purpose,
+            const Color(0xFFEC4899),
+            fullWidth: true,
+          ),
+          if (_trip!.userBankName != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.account_balance_rounded,
+                    size: 14,
+                    color: Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Bank: ${_trip!.userBankName} (${_trip!.userAccountNo})',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF475569),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _gridDetailItem(
+    IconData icon,
+    String label,
+    String value,
+    Color color, {
+    bool fullWidth = false,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 16, color: color),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF94A3B8),
+                  letterSpacing: 0.5,
+                ),
+              ),
+              Text(
                 value,
-                style: GoogleFonts.inter(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: accent,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1E293B),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOdoCard() {
+    final start = _trip!.odometer?['start_odo_reading'] ?? '0';
+    final end = _trip!.odometer?['end_odo_reading'] ?? 'Active';
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _odoItem('START READING', '$start KM')),
+              Container(
+                width: 1,
+                height: 40,
+                color: Colors.white.withOpacity(0.1),
+              ),
+              Expanded(
+                child: _odoItem(
+                  'END READING',
+                  end == 'Active' ? 'ACTIVE' : '$end KM',
                 ),
               ),
             ],
@@ -2187,187 +1249,163 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
     );
   }
 
-  Widget _additionalLuggageButton() {
-    return TextButton(
-      onPressed: _showLuggageModal,
-      style: TextButton.styleFrom(
-        backgroundColor: const Color(0xFFDB2777),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        minimumSize: Size.zero,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-      ),
-      child: Text(
-        'Additional Luggage',
-        style: GoogleFonts.inter(
-          color: Colors.white,
-          fontSize: 9,
-          fontWeight: FontWeight.w600,
+  Widget _odoItem(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            color: Colors.white.withOpacity(0.5),
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
         ),
-      ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: GoogleFonts.plusJakartaSans(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
+          ),
+        ),
+      ],
     );
   }
 
-  void _showLuggageModal() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Additional Luggage',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w900),
+  String _selectedCategory = 'All';
+  final List<String> _categories = [
+    'All',
+    'Travel',
+    'Local Travel',
+    'Food',
+    'Accommodation',
+    'Incidental',
+  ];
+
+  Widget _buildExpenseSection() {
+    final expenses = _trip!.expenses ?? [];
+    if (expenses.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Column(
           children: [
-            TextField(
-              onChanged: (v) => _luggageWeight = v,
-              decoration: const InputDecoration(
-                labelText: 'Luggage Weight (kg)',
-                hintText: 'e.g. 5',
-              ),
-              keyboardType: TextInputType.number,
+            Icon(
+              Icons.receipt_long_rounded,
+              size: 40,
+              color: Colors.grey.shade300,
             ),
             const SizedBox(height: 12),
-            TextField(
-              onChanged: (v) => _luggageRemarks = v,
-              decoration: const InputDecoration(
-                labelText: 'Remarks',
-                hintText: 'Why is this needed?',
+            Text(
+              'No expenses recorded yet',
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.grey.shade500,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
               ),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (_luggageWeight.isEmpty || _luggageRemarks.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter both weight and remarks'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Additional Luggage info saved locally.'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFDB2777),
-            ),
-            child: const Text('Save', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExpenseRegistry() {
-    final bool isApprover =
-        (_currentUser?['id']?.toString() ==
-            _trip?.currentApprover?.toString() ||
-        (_trip?.claim != null &&
-            _currentUser?['id']?.toString() ==
-                _trip?.claim!['current_approver']?.toString()));
-
-    if (isApprover) {
-      return _buildAuditRegistry(isApprover);
+      );
     }
 
-    final claimStatus = _trip?.claim?['status'] ?? 'Draft';
-    final isLocked = !['Draft', 'Rejected'].contains(claimStatus);
+    final filteredExpenses = _selectedCategory == 'All'
+        ? expenses
+        : expenses
+              .where(
+                (e) =>
+                    e['nature'].toString().toLowerCase() ==
+                    _selectedCategory.toLowerCase(),
+              )
+              .toList();
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _sectionHeader(
-                Icons.description_rounded,
-                'Detailed Expense Registry',
-              ),
-            ),
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 4,
-              children: [
-                _additionalLuggageButton(),
-                if (!isLocked)
-                  TextButton.icon(
-                    onPressed: () {
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => TripWalletSheet(
-                          trip: _trip!,
-                          onUpdate: _fetchTripStory,
-                          initialView: 'add_expense',
-                        ),
-                      );
-                    },
-                    icon: const Icon(
-                      Icons.add_rounded,
-                      size: 16,
-                      color: Color(0xFF7C1D1D),
-                    ),
-                    label: Text(
-                      'Add Expense',
-                      style: GoogleFonts.inter(
-                        color: const Color(0xFF7C1D1D),
-                        fontWeight: FontWeight.w800,
-                        fontSize: 10,
-                      ),
-                    ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: _categories.map((cat) {
+              final isSelected = _selectedCategory == cat;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8, bottom: 16),
+                child: ChoiceChip(
+                  label: Text(cat),
+                  selected: isSelected,
+                  onSelected: (val) {
+                    if (val) setState(() => _selectedCategory = cat);
+                  },
+                  labelStyle: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isSelected ? Colors.white : const Color(0xFF64748B),
                   ),
-              ],
-            ),
-          ],
+                  selectedColor: const Color(0xFF0F172A),
+                  backgroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: isSelected ? 4 : 0,
+                  pressElevation: 0,
+                ),
+              );
+            }).toList(),
+          ),
         ),
-        const SizedBox(height: 16),
-        _buildCategorizedList(),
-        if (!isLocked) ...[
+        if (filteredExpenses.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Text(
+              'No ${_selectedCategory} expenses found',
+              style: GoogleFonts.plusJakartaSans(color: Colors.grey),
+            ),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: filteredExpenses.length,
+            itemBuilder: (context, index) =>
+                _buildExpenseCard(filteredExpenses[index]),
+          ),
+        if (_isOwner() &&
+            (_trip!.claim == null ||
+                _trip!.claim!['status'] == 'Draft' ||
+                _trip!.claim!['status'] == 'Pending')) ...[
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) =>
-                      ClaimSheet(trip: _trip!, onUpdate: _fetchTripStory),
-                );
-              },
-              icon: const Icon(
-                Icons.send_rounded,
-                size: 18,
-                color: Colors.white,
-              ),
+              onPressed: _isActionLoading ? null : () => _handleAction('Submit'),
+              icon: const Icon(Icons.send_rounded, size: 18),
               label: Text(
-                'Submit Full Claim',
-                style: GoogleFonts.inter(
+                'SUBMIT FOR CLAIM',
+                style: GoogleFonts.plusJakartaSans(
                   fontWeight: FontWeight.w900,
-                  color: Colors.white,
+                  fontSize: 13,
+                  letterSpacing: 1,
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF7C1D1D),
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 20),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                 ),
+                elevation: 4,
+                shadowColor: const Color(0xFF10B981).withOpacity(0.3),
               ),
             ),
           ),
@@ -2376,478 +1414,799 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
     );
   }
 
-  Widget _buildCategorizedList() {
-    final expenses = _trip?.expenses ?? [];
-
-    if (expenses.isEmpty) {
-      return _emptyBox('No expense entries recorded yet.');
+  Widget _buildExpenseCard(dynamic exp) {
+    var nature = exp['nature']?.toString() ?? 'Other';
+    final amount = exp['amount'] ?? '0';
+    final date = exp['date'] ?? '';
+    final remarks = exp['remarks'];
+    final status = exp['status'] ?? 'Pending';
+    final isRejected = status.toString().toLowerCase() == 'rejected';
+    final isApproved = status.toString().toLowerCase() == 'approved';
+    var details = exp['details'] ?? {};
+    if (details.isEmpty &&
+        exp['description'] is String &&
+        exp['description'].toString().startsWith('{')) {
+      try {
+        details = jsonDecode(exp['description']);
+      } catch (e) {}
     }
 
-    return ListView.separated(
+    // Normalize nature for mobile labeling
+    String displayNature = nature;
+    if (nature.toLowerCase() == 'fuel') displayNature = 'Local Travel';
+    if (nature.toLowerCase() == 'others' ||
+        nature.toLowerCase() == 'other' ||
+        nature.toLowerCase() == 'miscellaneous')
+      displayNature = 'Others';
+    if (nature.toLowerCase() == 'incidental') displayNature = 'Incidental';
+
+    // Smart override: if details contain any local conveyance/travel data,
+    // always open Local Travel form regardless of stored nature
+    final bool hasLocalConveyanceData =
+        details['origin'] != null ||
+        details['destination'] != null ||
+        details['odoStart'] != null ||
+        details['odo_start'] != null ||
+        details['mode'] != null ||
+        details['subType'] != null ||
+        details['vehicle_type'] != null;
+    if (hasLocalConveyanceData) displayNature = 'Local Travel';
+
+    // Construct "Activity / Route Details" summary to match web grid
+    String mainDisplay = nature;
+    String subDisplay = date;
+
+    if (hasLocalConveyanceData ||
+        nature.toLowerCase() == 'local travel' ||
+        nature.toLowerCase() == 'fuel') {
+      // Local conveyance — show mode + route
+      String mode = details['mode'] ?? 'Bike';
+      String subType = details['subType'] ?? 'Own Bike';
+      String route =
+          (details['origin'] != null && details['destination'] != null)
+          ? '${details['origin']} → ${details['destination']}'
+          : (remarks ?? 'Local Movement');
+      mainDisplay = '$mode - $subType';
+      subDisplay = route;
+    } else if (!hasLocalConveyanceData &&
+        (nature.toLowerCase().contains('other') ||
+            nature.toLowerCase() == 'incidental')) {
+      mainDisplay = (remarks != null && remarks.toString().isNotEmpty)
+          ? remarks.toString()
+          : nature;
+      subDisplay = date;
+    } else if (nature.toLowerCase() == 'travel') {
+      String mode = details['mode'] ?? 'Travel';
+      String route =
+          (details['origin'] != null && details['destination'] != null)
+          ? '${details['origin']} → ${details['destination']}'
+          : (remarks ?? 'Outstation Voyage');
+      mainDisplay = mode;
+      subDisplay = route;
+    } else {
+      mainDisplay = nature;
+      subDisplay = date;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: isRejected
+            ? Border.all(color: Colors.red.withOpacity(0.3))
+            : Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: const Color(0xFFF1F5F9)),
+              ),
+              child: Icon(
+                (hasLocalConveyanceData ||
+                        nature.toLowerCase() == 'fuel' ||
+                        nature.toLowerCase() == 'local travel')
+                    ? Icons.directions_car_filled_rounded
+                    : Icons.receipt_long_rounded,
+                size: 20,
+                color: const Color(0xFF0F172A),
+              ),
+            ),
+            title: Text(
+              mainDisplay,
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                color: const Color(0xFF1E293B),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              subDisplay,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF94A3B8),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: GestureDetector(
+              onTap: isApproved
+                  ? null
+                  : () async {
+                      final refresh = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => TripExpenseFormDetailedScreen(
+                            category: displayNature,
+                            tripId: widget.tripId,
+                            expenseData: exp,
+                          ),
+                        ),
+                      );
+                      if (refresh == true) _fetchDetails();
+                    },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: isApproved
+                      ? const Color(0xFFF0FDF4)
+                      : isRejected
+                      ? const Color(0xFFFFF1F2)
+                      : const Color(0xFFF5F3FF),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isApproved
+                        ? const Color(0xFFBBF7D0)
+                        : isRejected
+                        ? const Color(0xFFFECACA)
+                        : const Color(0xFFE0E7FF),
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '₹$amount',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        color: isApproved
+                            ? const Color(0xFF16A34A)
+                            : isRejected
+                            ? const Color(0xFFDC2626)
+                            : const Color(0xFF4F46E5),
+                        decoration: (!isApproved && !isRejected)
+                            ? TextDecoration.underline
+                            : TextDecoration.none,
+                        decorationColor: const Color(0xFF4F46E5),
+                      ),
+                    ),
+                    Text(
+                      status.toString().toUpperCase(),
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 7,
+                        fontWeight: FontWeight.w800,
+                        color: isApproved
+                            ? const Color(0xFF10B981)
+                            : isRejected
+                            ? Colors.red
+                            : const Color(0xFFF59E0B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // EDIT / ACTION STRIP — only for non-approved expenses
+          if (!isApproved)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final refresh = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => TripExpenseFormDetailedScreen(
+                              category: displayNature,
+                              tripId: widget.tripId,
+                              expenseData: exp,
+                            ),
+                          ),
+                        );
+                        if (refresh == true) _fetchDetails();
+                      },
+                      icon: const Icon(Icons.edit_rounded, size: 14),
+                      label: Text(
+                        'Edit',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF4F46E5),
+                        side: const BorderSide(color: Color(0xFFE0E7FF)),
+                        backgroundColor: const Color(0xFFF5F3FF),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        minimumSize: const Size(0, 36),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              title: Text(
+                'View Internal Audit / Details',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(height: 1, color: const Color(0xFFF1F5F9)),
+                      const SizedBox(height: 12),
+                      if (details.isNotEmpty)
+                        _buildDetailedNatureInfo(displayNature, details, exp),
+                      if (remarks != null && remarks.toString().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFF1F5F9),
+                              ),
+                            ),
+                            child: Text(
+                              'Emp Remarks: $remarks',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12,
+                                color: const Color(0xFF475569),
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      _buildAuditRemarkRow('RM', exp['rm_remarks']),
+                      _buildAuditRemarkRow('HR', exp['hr_remarks']),
+                      _buildAuditRemarkRow('FINANCE', exp['finance_remarks']),
+                      if (_isApprover()) ...[
+                        const SizedBox(height: 20),
+                        _buildAuditInputSection(exp),
+                      ],
+                      if (exp['receipt_image'] != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: _buildReceiptButton(exp['receipt_image']),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettlementCard() {
+    final claim = _trip!.claim ?? {};
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          _settleGridItem(
+            'CLAIM STATUS',
+            claim['status'] ?? 'No Claim Filed',
+            isBadge: true,
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _settleGridItem(
+                  'TRANSFERRED BY',
+                  claim['processed_by']?['name'] ?? 'Waiting',
+                ),
+              ),
+              Expanded(
+                child: _settleGridItem(
+                  'TRANSACTION ID',
+                  claim['transaction_id'] ?? 'N/A',
+                ),
+              ),
+              Expanded(
+                child: _settleGridItem(
+                  'PAYOUT DATE',
+                  claim['payment_date'] ?? 'N/A',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _settleGridItem(String label, String value, {bool isBadge = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 8,
+            fontWeight: FontWeight.w800,
+            color: Colors.white.withOpacity(0.4),
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 4),
+        if (isBadge)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              value.toUpperCase(),
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
+          )
+        else
+          Text(
+            value,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDetailRow(String label, dynamic value) {
+    if (value == null || value.toString().isEmpty || value.toString() == 'N/A')
+      return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              color: const Color(0xFF94A3B8),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.toString(),
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF334155),
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailedNatureInfo(String nature, Map details, dynamic expense) {
+    switch (nature.toLowerCase()) {
+      case 'travel':
+      case 'others':
+        return Column(
+          children: [
+            _buildDetailRow('Mode', details['mode'] ?? 'N/A'),
+            _buildDetailRow(
+              'Route',
+              '${details['origin'] ?? 'N/A'} → ${details['destination'] ?? 'N/A'}',
+            ),
+            _buildDetailRow('Vehicle', details['carrier'] ?? 'N/A'),
+            _buildDetailRow(
+              'Scheduled',
+              '${details['depDate'] ?? ''} ${details['boardingTime'] ?? ''}',
+            ),
+            _buildDetailRow(
+              'Actual',
+              '${details['arrDate'] ?? ''} ${details['actualTime'] ?? ''}',
+            ),
+            _buildDetailRow('Booking', details['bookedBy'] ?? 'N/A'),
+            if (details['pnr'] != null) _buildDetailRow('PNR', details['pnr']),
+            if (details['ticketNo'] != null)
+              _buildDetailRow('Ticket', details['ticketNo']),
+          ],
+        );
+      case 'local travel':
+      case 'fuel':
+        return Column(
+          children: [
+            _buildDetailRow(
+              'Mode',
+              '${details['mode'] ?? 'N/A'} (${details['subType'] ?? 'N/A'})',
+            ),
+            _buildDetailRow(
+              'Route',
+              '${details['origin'] ?? 'N/A'} → ${details['destination'] ?? 'N/A'}',
+            ),
+            if (details['odoStart'] != null) ...[
+              _buildDetailRow('Odo Start', '${details['odoStart']} KM'),
+              _buildDetailRow('Odo End', '${details['odoEnd'] ?? 'Active'} KM'),
+              _buildDetailRow(
+                'Distance',
+                '${(double.tryParse(details['odoEnd']?.toString() ?? '0') ?? 0) - (double.tryParse(details['odoStart']?.toString() ?? '0') ?? 0)} KM',
+              ),
+            ],
+            _buildDetailRow(
+              'Timing',
+              '${details['time']?['boardingTime'] ?? details['boardingTime'] ?? ''} - ${details['time']?['actualTime'] ?? details['actualTime'] ?? ''}',
+            ),
+            if (details['selfies'] != null && (details['selfies'] as List).isNotEmpty) ...[
+              _buildDetailRow(
+                'Selfie Proofs',
+                '${(details['selfies'] as List).length} Captured',
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: (details['selfies'] as List)
+                      .map((s) => _miniImageThumbnail(s.toString(), "Selfie"))
+                      .toList(),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (details['odoStartImg'] != null || details['odoEndImg'] != null)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    if (details['odoStartImg'] != null)
+                      _miniImageThumbnail(details['odoStartImg'], "Start Odo"),
+                    if (details['odoEndImg'] != null)
+                      _miniImageThumbnail(details['odoEndImg'], "End Odo"),
+                  ],
+                ),
+              ),
+            if (expense['job_report_id'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TextButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.description_outlined, size: 14),
+                  label: const Text(
+                    'View Linked Job Report',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ),
+          ],
+        );
+      case 'food':
+        return Column(
+          children: [
+            _buildDetailRow('Category', details['mealCategory'] ?? 'N/A'),
+            _buildDetailRow('Type', details['mealType'] ?? 'N/A'),
+            _buildDetailRow('Restaurant', details['restaurant'] ?? 'N/A'),
+            _buildDetailRow('Time', details['mealTime'] ?? 'N/A'),
+            if (details['invoiceNo'] != null)
+              _buildDetailRow('Invoice', details['invoiceNo']),
+          ],
+        );
+      case 'accommodation':
+        return Column(
+          children: [
+            _buildDetailRow('Type', details['accomType'] ?? 'N/A'),
+            _buildDetailRow('Hotel', details['hotelName'] ?? 'N/A'),
+            _buildDetailRow('City', details['city'] ?? 'N/A'),
+            _buildDetailRow(
+              'Check-In',
+              '${details['checkIn'] ?? ''} ${details['checkInTime'] ?? ''}',
+            ),
+            _buildDetailRow(
+              'Check-Out',
+              '${details['checkOut'] ?? ''} ${details['checkOutTime'] ?? ''}',
+            ),
+            if (details['nights'] != null)
+              _buildDetailRow('Nights', details['nights'].toString()),
+          ],
+        );
+      case 'incidental':
+        return Column(
+          children: [
+            _buildDetailRow('Type', details['incidentalType'] ?? 'N/A'),
+            _buildDetailRow('Location', details['location'] ?? 'N/A'),
+            if (details['otherReason'] != null)
+              _buildDetailRow('Reason', details['otherReason']),
+            if (details['description'] != null)
+              _buildDetailRow('Description', details['description']),
+          ],
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildJobReportsSection() {
+    return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: expenses.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (ctx, idx) {
-        return _buildExpenseItem(
-          Map<String, dynamic>.from(expenses[idx]),
-          false,
+      itemCount: _trip!.jobReports!.length,
+      itemBuilder: (context, index) {
+        final report = _trip!.jobReports![index];
+        final String name = report['user_name'] ?? 'Personnel';
+        final String date =
+            report['created_at']?.toString().split('T')[0] ?? '';
+        final String description = report['description'] ?? '';
+        final String? attachment = report['attachment'];
+        final String? auditRemarks = report['remarks'];
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFF1F5F9)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header like a mail header
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: const Color(0xFFF1F5F9),
+                      child: Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : 'P',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                name,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF1E293B),
+                                ),
+                              ),
+                              Text(
+                                date,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            'via Mobile Activity Tracking',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 10,
+                              color: const Color(0xFF94A3B8),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              // Body content
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  description,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    color: const Color(0xFF475569),
+                    height: 1.5,
+                  ),
+                ),
+              ),
+              // Audit Remarks if any
+              if (auditRemarks != null && auditRemarks.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF1F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFFE4E6)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.verified_user_rounded,
+                        size: 14,
+                        color: Color(0xFFBB0633),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Audit: $auditRemarks',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            color: const Color(0xFFBB0633),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              // Attachment segment
+              if (attachment != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: InkWell(
+                    onTap: () {
+                      /* View PDF */
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEEF2FF),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.picture_as_pdf_rounded,
+                              size: 20,
+                              color: Color(0xFF4338CA),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Attachment_Report.pdf',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF1E293B),
+                                  ),
+                                ),
+                                Text(
+                                  'Tap to view proof document',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 10,
+                                    color: const Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
   }
 
-  Widget _buildAuditRegistry(bool isApprover) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child:
-                  _sectionHeader(Icons.description_rounded, 'Audit Master Registry'),
-            ),
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 4,
-              children: [
-                _additionalLuggageButton(),
-                TextButton(
-                  onPressed: () => _handleAuditAction('Reject'),
-                  child: Text(
-                    'Reject All',
-                    style: GoogleFonts.inter(
-                      color: Colors.red,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 10,
-                    ),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () => _handleAuditAction('Approve'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 0,
-                    ),
-                  ),
-                  child: Text(
-                    'Final Approve',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 10,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _buildAuditSummaryStrip(),
-        const SizedBox(height: 16),
-        if (_trip?.expenses?.isEmpty ?? true)
-          _emptyBox('No expenses submitted for audit.')
-        else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _trip?.expenses?.length ?? 0,
-            separatorBuilder: (_, __) => const SizedBox(height: 16),
-            itemBuilder: (ctx, idx) {
-              final exp = _trip!.expenses![idx];
-              return _buildExpenseItem(exp, isApprover);
-            },
-          ),
-      ],
-    );
-  }
-
-  Widget _buildAuditSummaryStrip() {
-    final total = _trip!.expenses!.fold<double>(
-      0,
-      (sum, e) => sum + (double.tryParse(e['amount'].toString()) ?? 0),
-    );
-    final approved = _trip!.expenses!
-        .where((e) => e['status'] != 'Rejected')
-        .fold<double>(
-          0,
-          (sum, e) => sum + (double.tryParse(e['amount'].toString()) ?? 0),
-        );
-    final rejected = _trip!.expenses!
-        .where((e) => e['status'] == 'Rejected')
-        .fold<double>(
-          0,
-          (sum, e) => sum + (double.tryParse(e['amount'].toString()) ?? 0),
-        );
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _sumItem('Total Claimed', _formatCurrency(total), Colors.white),
-          _sumItem(
-            'Approved (Net)',
-            _formatCurrency(approved),
-            const Color(0xFF10B981),
-          ),
-          _sumItem(
-            'Rejected',
-            _formatCurrency(rejected),
-            const Color(0xFFEF4444),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sumItem(String label, String val, Color color) {
-    return Column(
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: GoogleFonts.inter(
-            color: Colors.white38,
-            fontSize: 8,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          val,
-          style: GoogleFonts.inter(
-            color: color,
-            fontSize: 13,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _deleteExpense(String id) async {
-    if (_isActionLoading) return;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Delete Expense',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w900),
-        ),
-        content: const Text(
-          'Are you sure you want to delete this expense entry?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isActionLoading = true);
-    try {
-      await _tripService.deleteExpense(id);
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Expense deleted successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        _fetchTripStory();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to delete: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isActionLoading = false);
-    }
-  }
-
-  Widget _buildExpenseItem(Map<String, dynamic> exp, bool isAudit) {
-    final role = _currentUser?['role']?.toString().toLowerCase() ?? '';
-    final String currentRemarks = _auditRemarks[exp['id'].toString()] ?? '';
-    final claimStatus = _trip?.claim?['status'] ?? 'Draft';
-    final isLocked = !['Draft', 'Rejected'].contains(claimStatus);
-
-    bool isCompleted = false;
-    bool isOdoForm = false;
-    try {
-      if (exp['description'] != null) {
-        final Map<String, dynamic> detail = jsonDecode(exp['description']);
-        isCompleted = detail['isCompleted'] ?? false;
-
-        final cat = exp['category']?.toString();
-        if (cat == 'Fuel' || cat == 'Local') {
-          isOdoForm = [
-            'Own Car',
-            'Company Car',
-            'Self Drive Rental',
-            'Own Bike',
-            'Rental Bike',
-          ].contains(detail['subType']);
-        }
-      }
-    } catch (_) {}
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: exp['status'] == 'Rejected'
-            ? const Color(0xFFFEF2F2)
-            : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: exp['status'] == 'Rejected'
-              ? const Color(0xFFFECACA)
-              : const Color(0xFFF1F5F9),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  _getIconForCategory(exp['category']),
-                  size: 20,
-                  color: const Color(0xFF64748B),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _mapCategoryToLabel(exp['category']),
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF0F172A),
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            if (!isLocked &&
-                                !isAudit &&
-                                !isCompleted &&
-                                isOdoForm)
-                              IconButton(
-                                onPressed: () {
-                                  showModalBottomSheet(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    backgroundColor: Colors.transparent,
-                                    builder: (_) => TripWalletSheet(
-                                      trip: _trip!,
-                                      onUpdate: _fetchTripStory,
-                                      initialExpense: exp,
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.edit_note_rounded,
-                                  size: 20,
-                                  color: Color(0xFF3B82F6),
-                                ),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                              ),
-                            if (!isLocked && !isAudit) ...[
-                              const SizedBox(width: 8),
-                              IconButton(
-                                onPressed: () =>
-                                    _deleteExpense(exp['id'].toString()),
-                                icon: const Icon(
-                                  Icons.delete_outline_rounded,
-                                  size: 20,
-                                  color: Colors.redAccent,
-                                ),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                              ),
-                            ],
-                            if (!isLocked && !isAudit) const SizedBox(width: 8),
-                            Text(
-                              _formatCurrency(exp['amount']),
-                              style: GoogleFonts.inter(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFF7C1D1D),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.calendar_today_rounded,
-                          size: 10,
-                          color: Colors.black26,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          exp['date'] ?? '',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: Colors.black26,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        if (exp['receipt_image'] != null) ...[
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.attachment_rounded,
-                            size: 12,
-                            color: Color(0xFF10B981),
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            'Receipt Attached',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              color: const Color(0xFF10B981),
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRichDescription(exp['description']),
-          if (isAudit) ...[
-            const SizedBox(height: 16),
-            TextField(
-              onChanged: (v) => _auditRemarks[exp['id'].toString()] = v,
-              controller: TextEditingController(text: currentRemarks)
-                ..selection = TextSelection.fromPosition(
-                  TextPosition(offset: currentRemarks.length),
-                ),
-              decoration: InputDecoration(
-                hintText: 'Add remarks for ${role.toUpperCase()}...',
-                hintStyle: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: Colors.black26,
-                ),
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-              ),
-              style: GoogleFonts.inter(fontSize: 12),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton.icon(
-                  onPressed: () => _handleItemAction(exp['id'], 'Rejected'),
-                  icon: const Icon(
-                    Icons.close_rounded,
-                    size: 16,
-                    color: Colors.red,
-                  ),
-                  label: Text(
-                    'Reject Item',
-                    style: GoogleFonts.inter(
-                      color: Colors.red,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () => _handleItemAction(exp['id'], 'Approved'),
-                  icon: const Icon(
-                    Icons.check_rounded,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-                  label: Text(
-                    'Approve Item',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                ),
-              ],
-            ),
-          ] else ...[
-            const SizedBox(height: 12),
-            if (exp['rm_remarks']?.isNotEmpty ?? false)
-              _remarkBox('RM', exp['rm_remarks']),
-            if (exp['hr_remarks']?.isNotEmpty ?? false)
-              _remarkBox('HR', exp['hr_remarks']),
-            if (exp['finance_remarks']?.isNotEmpty ?? false)
-              _remarkBox('Finance', exp['finance_remarks']),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _remarkBox(String role, String text) {
+  Widget _buildAuditRemarkRow(String role, dynamic remark) {
+    if (remark == null || remark.toString().isEmpty)
+      return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -2856,7 +2215,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
-              role.toUpperCase(),
+              role,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 8,
                 fontWeight: FontWeight.w900,
@@ -2867,12 +2226,11 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              text,
+              remark.toString(),
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 11,
-                color: Colors.black38,
+                color: const Color(0xFF334155),
                 fontWeight: FontWeight.w600,
-                fontStyle: FontStyle.italic,
               ),
             ),
           ),
@@ -2881,343 +2239,164 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
     );
   }
 
-  Widget _buildSettlementLifecycle() {
+  Widget _buildAuditInputSection(dynamic exp) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader(
-          Icons.check_circle_outline_rounded,
-          'Settlement & Payout Lifecycle',
+        TextField(
+          onChanged: (val) => _auditRemarks[exp['id'].toString()] = val,
+          decoration: InputDecoration(
+            hintText: 'Add verdict remark...',
+            hintStyle: GoogleFonts.plusJakartaSans(fontSize: 12),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.all(16),
+          ),
         ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFF1F5F9)),
-          ),
-          child: Column(
-            children: [
-              _settleItem(
-                'Claim Status',
-                _trip?.claimStatus ?? 'No Claim Filed',
-                isBadge: true,
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _handleItemAction(exp['id'], 'Rejected'),
+                icon: const Icon(Icons.close_rounded, size: 16),
+                label: const Text('REJECT ITEM'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Color(0xFFFFE4E6)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
-              const Divider(height: 24),
-              _settleItem(
-                'Transferred By',
-                _trip?.claim?['processed_by']?['name'] ?? 'Waiting',
-              ),
-              const Divider(height: 24),
-              _settleItem(
-                'Transaction ID',
-                _trip?.claim?['transaction_id'] ?? 'N/A',
-                isMono: true,
-              ),
-              const Divider(height: 24),
-              _settleItem(
-                'Payout Date',
-                _trip?.claim?['payment_date'] != null
-                    ? DateFormat(
-                        'dd MMM, yyyy',
-                      ).format(DateTime.parse(_trip!.claim!['payment_date']))
-                    : 'N/A',
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _settleItem(
-    String label,
-    String value, {
-    bool isBadge = false,
-    bool isMono = false,
-  }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            color: Colors.black38,
-          ),
+  Widget _buildReceiptButton(dynamic receipt) {
+    return InkWell(
+      onTap: () {
+        /* View Full Image */
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
-        if (isBadge)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: value.toLowerCase() == 'approved'
-                  ? const Color(0xFFF0FDF4)
-                  : const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(6),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.image_outlined,
+              size: 20,
+              color: Color(0xFF64748B),
             ),
-            child: Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                color: value.toLowerCase() == 'approved'
-                    ? const Color(0xFF10B981)
-                    : Colors.black45,
+            const SizedBox(width: 12),
+            Text(
+              'View Attached Receipt',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1E293B),
               ),
             ),
-          )
-        else
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
-              letterSpacing: isMono ? 0.5 : 0,
+            const Spacer(),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: Color(0xFF94A3B8),
             ),
-          ),
-      ],
-    );
-  }
-
-  Widget _sectionHeader(IconData icon, String title) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: const Color(0xFF64748B)),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: GoogleFonts.interTight(
-            fontSize: 16,
-            fontWeight: FontWeight.w900,
-            color: const Color(0xFF0F172A),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _emptyBox(String msg) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-      ),
-      child: Center(
-        child: Text(
-          msg,
-          style: GoogleFonts.inter(
-            color: Colors.black26,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
+          ],
         ),
       ),
     );
   }
+  Widget _miniImageThumbnail(String? imagePath, String label) {
+    if (imagePath == null || imagePath.isEmpty) return const SizedBox.shrink();
 
-  IconData _getIconForCategory(String? cat) {
-    switch (cat?.toLowerCase()) {
-      case 'travel':
-        return Icons.flight_rounded;
-      case 'accommodation':
-        return Icons.hotel_rounded;
-      case 'food':
-        return Icons.restaurant_rounded;
-      case 'local':
-        return Icons.directions_car_rounded;
-      default:
-        return Icons.receipt_long_rounded;
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'approved':
-        return const Color(0xFF10B981);
-      case 'completed':
-        return const Color(0xFF3B82F6);
-      case 'on-going':
-        return const Color(0xFFF59E0B);
-      case 'rejected':
-        return const Color(0xFFEF4444);
-      default:
-        return const Color(0xFF64748B);
-    }
-  }
-
-  String _mapCategoryToLabel(String cat) {
-    switch (cat.toLowerCase()) {
-      case 'others':
-      case 'travel':
-        return 'Travel';
-      case 'fuel':
-      case 'local':
-        return 'Local Travel';
-      case 'food':
-        return 'Food';
-      case 'accommodation':
-      case 'stay':
-        return 'Stay';
-      default:
-        return cat;
-    }
-  }
-
-  Future<void> _pickOdometerImage(bool isStart) async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 85,
-      );
-
-      if (image != null) {
-        setState(() {
-          if (isStart) {
-            _startOdometerImage = File(image.path);
-          } else {
-            _endOdometerImage = File(image.path);
-          }
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error picking image: $e')));
-      }
-    }
-  }
-
-  Future<void> _updateOdometerWithImages() async {
-    if (_startOdometerController.text.isEmpty ||
-        _endOdometerController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter both odometer readings')),
-      );
-      return;
-    }
-
-    if (_startOdometerImage == null || _endOdometerImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please capture both odometer images')),
-      );
-      return;
-    }
-
-    final startValue = int.tryParse(_startOdometerController.text);
-    final endValue = int.tryParse(_endOdometerController.text);
-
-    if (startValue == null || endValue == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter valid numbers')),
-      );
-      return;
-    }
-
-    if (endValue < startValue) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('End odometer must be greater than start'),
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isSavingOdometer = true);
-    try {
-      // Create multipart request for image upload
-      final request = http.MultipartRequest(
-        'PATCH',
-        Uri.parse('${ApiConstants.baseUrl}/api/trips/${widget.tripId}/'),
-      );
-
-      // Add token
-      final user = _apiService.getUser();
-      if (user?['auth_token'] != null) {
-        request.headers['Authorization'] = 'Token ${user!['auth_token']}';
-      }
-
-      // Add odometer data
-      request.fields['odometer[start_odo_reading]'] = startValue.toString();
-      request.fields['odometer[end_odo_reading]'] = endValue.toString();
-
-      // Add image files
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'odometer[start_image]',
-          _startOdometerImage!.path,
-        ),
-      );
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'odometer[end_image]',
-          _endOdometerImage!.path,
-        ),
-      );
-
-      final response = await request.send();
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // Trigger safety notification for the trip mode
-        ExpenseReminderService.showSafetyNotification(
-          _trip?.travelMode ?? _travelMode,
-        ).catchError(
-          (e) => debugPrint('Error sending safety notification: $e'),
-        );
-
-        setState(() {
-          _isEditingOdometer = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Odometer recorded successfully')),
-          );
+    String path = imagePath.trim();
+    // Handle JSON array string if needed (common for receipts)
+    if (path.startsWith('[') && path.endsWith(']')) {
+      try {
+        final List<dynamic> list = jsonDecode(path);
+        if (list.isNotEmpty) {
+          path = list.first.toString().trim();
         }
-        _fetchTripStory();
+      } catch (e) {
+        // fallback to original string
+      }
+    }
+
+    // Clean legacy formats [u'path'] or ['path'] or 'path'
+    path = path
+        .replaceFirst(RegExp(r"^\[u'"), '')
+        .replaceFirst(RegExp(r"^u'"), '')
+        .replaceFirst(RegExp(r"^'"), '');
+    path = path.replaceFirst(RegExp(r"'\]$"), '').replaceFirst(RegExp(r"'$"), '');
+
+    Widget imageWidget;
+    try {
+      if (path.startsWith('data:image')) {
+        final base64String = path.split(',').last;
+        imageWidget =
+            Image.memory(base64Decode(base64String), fit: BoxFit.cover);
+      } else if (path.startsWith('/9j/') ||
+          (path.length > 300 && !path.contains('/') && !path.contains(':'))) {
+        imageWidget = Image.memory(base64Decode(path), fit: BoxFit.cover);
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: ${response.statusCode}')),
-          );
-        }
+        const String backendBase = 'http://192.168.1.138:4567';
+        final String fullUrl = path.startsWith('http')
+            ? path
+            : '$backendBase${path.startsWith('/') ? '' : '/'}$path';
+        imageWidget = Image.network(
+          fullUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (c, e, s) =>
+              const Icon(Icons.broken_image, size: 20, color: Colors.grey),
+        );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    } finally {
-      setState(() => _isSavingOdometer = false);
-    }
-  }
-
-  bool _shouldShowOdometerSection() {
-    final mode = (_trip?.travelMode ?? _travelMode).toString().toLowerCase();
-    final vtype = (_trip?.vehicleType ?? _vehicleType).toString().toLowerCase();
-
-    // Bikes: Own or Rental
-    if (mode.contains('bike') ||
-        mode.contains('2 wheeler') ||
-        mode.contains('3 wheeler')) {
-      return (vtype == 'own' || vtype.contains('rental'));
+      imageWidget = const Icon(Icons.error_outline, size: 20, color: Colors.red);
     }
 
-    // Cars: Own or Company Self Drive
-    if (mode.contains('car') ||
-        mode.contains('cab') ||
-        mode.contains('4 wheeler')) {
-      return (vtype == 'own' ||
-          vtype.contains('company') ||
-          vtype.contains('self'));
-    }
-
-    return false;
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      width: 65,
+      height: 65,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          children: [
+            Positioned.fill(child: imageWidget),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                color: Colors.black.withOpacity(0.5),
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

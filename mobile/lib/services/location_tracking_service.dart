@@ -141,7 +141,9 @@ class LocationTrackingService {
           debugPrint('SYNC_TRACKING: startTracking failed: $e');
         }
       } else {
-        debugPrint('SYNC_TRACKING: No active trip found among ${trips.length} trips. Stopping service.');
+        debugPrint(
+          'SYNC_TRACKING: No active trip found among ${trips.length} trips. Stopping service.',
+        );
         stopTracking();
       }
     } catch (e) {
@@ -203,7 +205,9 @@ void onStart(ServiceInstance service) async {
   final ApiService apiService = ApiService();
 
   // DEBUG: show the token we recovered (may be empty if load failed)
-  LoggerService.log('BACKGROUND SERVICE: auth token = ${apiService.getToken()}');
+  LoggerService.log(
+    'BACKGROUND SERVICE: auth token = ${apiService.getToken()}',
+  );
   final prefs = await SharedPreferences.getInstance();
   String? currentTripId = prefs.getString('active_tracking_trip_id');
 
@@ -232,7 +236,9 @@ void onStart(ServiceInstance service) async {
           timeLimit: const Duration(seconds: 20),
         );
       } catch (e) {
-        debugPrint('BACKGROUND SERVICE: getCurrentPosition failed: $e. Trying last known...');
+        debugPrint(
+          'BACKGROUND SERVICE: getCurrentPosition failed: $e. Trying last known...',
+        );
         position = await Geolocator.getLastKnownPosition();
       }
 
@@ -240,8 +246,10 @@ void onStart(ServiceInstance service) async {
       if (position != null && currentTripId != null) {
         try {
           final token = apiService.getToken();
-          debugPrint('BACKGROUND SERVICE: Syncing. Token present: ${token != null && token.isNotEmpty}');
-          
+          debugPrint(
+            'BACKGROUND SERVICE: Syncing. Token present: ${token != null && token.isNotEmpty}',
+          );
+
           final endpoint = '/api/trips/$currentTripId/tracking/';
           await apiService.post(
             endpoint,
@@ -255,11 +263,12 @@ void onStart(ServiceInstance service) async {
             includeAuth: true,
           );
           debugPrint('BACKGROUND SERVICE: Sync OK for $currentTripId');
-          
+
           if (service is AndroidServiceInstance) {
             service.setForegroundNotificationInfo(
               title: "Trip Tracking Active",
-              content: "Last Sync: ${DateFormat('HH:mm').format(DateTime.now())}",
+              content:
+                  "Last Sync: ${DateFormat('HH:mm').format(DateTime.now())}",
             );
           }
         } catch (e) {
@@ -270,7 +279,9 @@ void onStart(ServiceInstance service) async {
           }
         }
       } else {
-        debugPrint('BACKGROUND SERVICE: Missing data. Position: ${position != null}, TripID: $currentTripId');
+        debugPrint(
+          'BACKGROUND SERVICE: Missing data. Position: ${position != null}, TripID: $currentTripId',
+        );
         if (service is AndroidServiceInstance) {
           service.setForegroundNotificationInfo(
             title: "Trip Tracking Active",

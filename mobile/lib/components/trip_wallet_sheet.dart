@@ -182,12 +182,25 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
   bool get _isLocked =>
       !['Draft', 'Rejected', null].contains(_tripData.claimStatus);
 
+  bool get _isFullTrip => _tripData.tripId.startsWith('TRP-');
+
+  List<Map<String, String>> get _filteredCategories {
+    if (_isFullTrip) return _categories;
+    return _categories.where((c) => c['id'] == 'Local').toList();
+  }
+
   @override
   void initState() {
     super.initState();
     _view = widget.initialView ?? 'overview';
-    _selectedCategory = _mapInitialCategory(widget.initialCategory) ?? 'Food';
     _tripData = widget.trip;
+    if (!_isFullTrip) {
+      _selectedCategory = 'Local';
+      _selectedLocalMode = 'Bike';
+      _selectedLocalSubType = 'Own Bike';
+    } else {
+      _selectedCategory = _mapInitialCategory(widget.initialCategory) ?? 'Food';
+    }
     _refreshTripData();
     _cleanupExpiredDrafts();
 
@@ -768,6 +781,20 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
         'longitude': _longitude ?? 0.0,
         'trip': int.tryParse(_tripData.id) ?? _tripData.id, // Try as int first
       };
+
+      // Handle Fixed Fields for ITS- (Local Travel) entries
+      if (!_isFullTrip && backendCategory == 'Fuel') {
+        payload['description'] = jsonEncode({
+          ...detailMap,
+          'mode': 'Bike',
+          'subType': 'Own Bike',
+          'bookedBy': 'Self Booked',
+          'isFinalized': isNowFinalized,
+          'isCompleted': isNowCompleted,
+          'endOdoSubmittedAt':
+              endOdoTimestamp ?? (detailMap['endOdoSubmittedAt'] ?? null),
+        });
+      }
 
       Map<String, dynamic> result;
       if (_isEditing && _editingExpenseId != null) {
@@ -1563,8 +1590,8 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       _hotelController.text = detail['hotelName'] ?? '';
       _cityController.text = detail['city'] ?? '';
       _restaurantController.text = detail['restaurant'] ?? '';
-      _paxController.text = (detail['pax'] ?? detail['persons'] ?? '1')
-          .toString();
+      _paxController.text =
+          (detail['pax'] ?? detail['persons'] ?? '1').toString();
       _providerController.text = detail['provider'] ?? '';
       _travelNoController.text = detail['travelNo'] ?? '';
       _pnrController.text = detail['pnr'] ?? '';
@@ -1572,9 +1599,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       _scheduledTimeController.text = detail['time']?['scheduledTime'] ?? '';
       _actualTimeController.text = detail['time']?['actualTime'] ?? '';
       _delayController.text = (detail['time']?['delay'] ?? '0').toString();
-      _tollController.text = detail['toll'] ?? '';
-      _parkingController.text = detail['parking'] ?? '';
-      _fuelController.text = detail['fuel'] ?? '';
+      _tollController.text = (detail['toll'] ?? '').toString();
+      _parkingController.text = (detail['parking'] ?? '').toString();
+      _fuelController.text = (detail['fuel'] ?? '').toString();
       _carrierNameController.text = detail['carrierName'] ?? '';
       _bookingTimeController.text = detail['bookingTime'] ?? '';
       _invoiceNoController.text = detail['invoiceNo'] ?? '';
@@ -1582,11 +1609,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       _driverNameController.text = detail['driverName'] ?? '';
       _startTimeController.text = detail['startTime'] ?? '';
       _endTimeController.text = detail['endTime'] ?? '';
-      _odoStartController.text = detail['odoStart'] ?? '';
-      _odoEndController.text = detail['odoEnd'] ?? '';
+      _odoStartController.text = (detail['odoStart'] ?? '').toString();
+      _odoEndController.text = (detail['odoEnd'] ?? '').toString();
       _otherReasonController.text = detail['otherReason'] ?? '';
-      _earlyCheckInController.text = detail['earlyCheckInCharges'] ?? '';
-      _lateCheckOutController.text = detail['lateCheckOutCharges'] ?? '';
+      _earlyCheckInController.text =
+          (detail['earlyCheckInCharges'] ?? '').toString();
+      _lateCheckOutController.text =
+          (detail['lateCheckOutCharges'] ?? '').toString();
       _stayPurposeController.text = detail['purpose'] ?? '';
       _mealTimeController.text = detail['mealTime'] ?? '';
       _addressController.text = detail['purpose'] ?? '';
@@ -2701,13 +2730,15 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                         ),
                       )
                       .toList(),
-                  onChanged: (v) {
-                    setState(() {
-                      _selectedLocalMode = v!;
-                      _selectedLocalSubType =
-                          null; // Reset subtype on mode change
-                    });
-                  },
+                  onChanged: _isFullTrip
+                      ? (v) {
+                          setState(() {
+                            _selectedLocalMode = v!;
+                            _selectedLocalSubType =
+                                null; // Reset subtype on mode change
+                          });
+                        }
+                      : null,
                   icon: const Icon(
                     Icons.keyboard_arrow_down_rounded,
                     color: Colors.black26,
@@ -2741,11 +2772,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                           ),
                         )
                         .toList(),
-                    onChanged: (v) {
-                      setState(() {
-                        _selectedLocalSubType = v!;
-                      });
-                    },
+                    onChanged: _isFullTrip
+                        ? (v) {
+                            setState(() {
+                              _selectedLocalSubType = v!;
+                            });
+                          }
+                        : null,
                     icon: const Icon(
                       Icons.keyboard_arrow_down_rounded,
                       color: Colors.black26,
@@ -4147,7 +4180,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
           DropdownButtonFormField<String>(
             isExpanded: true,
             value: _selectedCategory,
-            items: _categories
+            items: _filteredCategories
                 .map(
                   (c) => DropdownMenuItem(
                     value: c['id'],
@@ -4191,7 +4224,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
             decoration: _inputDecoration(Icons.category_rounded, 'Select Type'),
           ),
         ),
-        if (_selectedCategory == 'Local') ...[
+        if (_selectedCategory == 'Local' && _isFullTrip) ...[
           const SizedBox(height: 12),
           Row(
             children: [

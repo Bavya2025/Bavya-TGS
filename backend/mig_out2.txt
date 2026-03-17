@@ -1,0 +1,22 @@
+Making migrations...
+Migrations for 'travel':
+  travel\migrations\0012_alter_jobreport_options_remove_jobreport_created_by_and_more.py
+    - Change Meta options on jobreport
+    - Remove field created_by from jobreport
+    - Remove field file from jobreport
+    - Add field attachment to jobreport
+    - Add field deleted_at to jobreport
+    - Add field deleted_by to jobreport
+    - Add field file_name to jobreport
+    - Add field is_deleted to jobreport
+    - Add field updated_at to jobreport
+    - Add field user to jobreport
+    - Alter field created_at on jobreport
+Migrating...
+Operations to perform:
+  Apply all migrations: travel
+Running migrations:
+  Applying travel.0012_alter_jobreport_options_remove_jobreport_created_by_and_more... OK
+Roles created
+Admin user already exists
+Done.

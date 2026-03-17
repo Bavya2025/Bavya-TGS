@@ -142,6 +142,21 @@ class User(models.Model):
         return data.get('office', {}).get('name', '') if data else ''
 
     @property
+    def office_location(self):
+        data = self._get_api_data()
+        if not data: return ''
+        geo = data.get('office', {}).get('geo_location', {}) or {}
+        # Prioritize cluster/district as 'real location' names
+        return (geo.get('cluster') or geo.get('district') or geo.get('mandal') or self.base_location or '').strip()
+
+    @property
+    def cluster_name(self):
+        data = self._get_api_data()
+        if not data: return ''
+        geo = data.get('office', {}).get('geo_location', {}) or {}
+        return (geo.get('cluster') or geo.get('district') or self.base_location or '').strip()
+
+    @property
     def level_rank(self):
         data = self._get_api_data()
         return data.get('position', {}).get('level_rank', 10) if data else 10

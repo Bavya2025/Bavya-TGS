@@ -1,33 +1,25 @@
 import '../screens/team_trip_details_screen.dart';
-import '../screens/approvals_inbox_screen.dart';
-import '../screens/trip_approvals_screen.dart';
+import '../screens/inbox_screen.dart';
+import '../screens/outbox_screen.dart';
 import '../screens/finance_hub_screen.dart';
 import '../screens/cfo_room_screen.dart';
-import '../screens/org_settings_screen.dart';
 import '../screens/user_management_screen.dart';
-import '../screens/api_management_screen.dart';
-import '../screens/dispute_review_screen.dart';
-import '../screens/admin_audit_logs_screen.dart';
 import '../screens/guest_house_screen.dart';
-import '../components/forensic_camera.dart';
+import '../screens/api_management_screen.dart';
+import '../screens/login_history_screen.dart';
+import '../screens/admin_audit_logs_screen.dart';
+import '../screens/job_report_screen.dart';
 import 'package:flutter/material.dart';
 import '../models/module_model.dart';
 import '../screens/my_trips_screen.dart';
 import '../screens/policy_center_screen.dart';
-import '../screens/expense_approvals_screen.dart';
-import '../screens/admin_vendor_list_screen.dart';
-import '../screens/admin_user_list_screen.dart';
-import '../screens/login_history_screen.dart';
 import '../screens/documents_screen.dart';
 import '../screens/settlements_screen.dart';
 import '../screens/fleet_management_screen.dart';
 import '../screens/frs_attendance_screen.dart';
 import '../screens/frs_requests_hub_screen.dart';
-import '../screens/my_requests_screen.dart';
-import '../screens/my_claims_screen.dart';
-import '../screens/my_tracking_screen.dart';
-import '../screens/help_support_screen.dart';
-import '../screens/job_report_screen.dart';
+import '../screens/fuel_master_screen.dart';
+import '../screens/route_master_screen.dart';
 
 /// Module constants matching the Header.jsx navigation structure
 class ModuleConstants {
@@ -54,19 +46,36 @@ class ModuleConstants {
       destinationScreen: () => const MyTripsScreen(),
     ),
     NavigationModule(
-      title: 'My Requests',
-      description: 'Journey & Claims',
-      icon: Icons.assignment_rounded,
+      title: 'Inbox',
+      description: 'Active requests & approvals',
+      icon: Icons.inbox_rounded,
       backgroundColor: const Color(0xFFF3E5F5),
       iconColor: const Color(0xFF7B1FA2),
       allowedRoles: [
         'employee',
         'reporting_authority',
+        'hr',
         'finance',
-        'admin',
         'cfo',
+        'admin',
       ],
-      destinationScreen: () => const MyRequestsScreen(),
+      destinationScreen: () => const InboxScreen(),
+    ),
+    NavigationModule(
+      title: 'Outbox',
+      description: 'Historical records',
+      icon: Icons.archive_rounded,
+      backgroundColor: const Color(0xFFE0F2F1),
+      iconColor: const Color(0xFF00897B),
+      allowedRoles: [
+        'employee',
+        'reporting_authority',
+        'hr',
+        'finance',
+        'cfo',
+        'admin',
+      ],
+      destinationScreen: () => const OutboxScreen(),
     ),
   ];
 
@@ -80,22 +89,6 @@ class ModuleConstants {
       iconColor: const Color(0xFF2E7D32),
       allowedRoles: ['finance', 'admin'],
       destinationScreen: () => const FinanceHubScreen(),
-    ),
-    NavigationModule(
-      title: 'Approvals',
-      description: 'Review requests',
-      icon: Icons.bar_chart_rounded,
-      backgroundColor: const Color(0xFFE0F2F1),
-      iconColor: const Color(0xFF00897B),
-      allowedRoles: [
-        'employee',
-        'reporting_authority',
-        'hr',
-        'finance',
-        'cfo',
-        'admin',
-      ],
-      destinationScreen: () => const ApprovalsInboxScreen(),
     ),
     NavigationModule(
       title: 'Settlements',
@@ -182,29 +175,22 @@ class ModuleConstants {
       destinationScreen: () => const ApiManagementScreen(),
     ),
     NavigationModule(
-      title: 'Route Masters',
-      description: 'Manage routes',
-      icon: Icons.map_rounded,
-      backgroundColor: const Color(0xFFF1F8E9),
-      iconColor: const Color(0xFF388E3C),
+      title: 'Fuel Masters',
+      description: 'Reimbursement rates',
+      icon: Icons.local_gas_station_rounded,
+      backgroundColor: const Color(0xFFFDF2F2),
+      iconColor: const Color(0xFFBB0633),
       allowedRoles: ['admin'],
-      destinationScreen: null, // Coming soon
+      destinationScreen: () => const FuelMasterScreen(),
     ),
     NavigationModule(
-      title: 'Help & Support',
-      description: 'Get assistance',
-      icon: Icons.help_outline_rounded,
-      backgroundColor: const Color(0xFFFDF2F8),
-      iconColor: const Color(0xFFDB2777),
-      allowedRoles: [
-        'employee',
-        'reporting_authority',
-        'finance',
-        'admin',
-        'cfo',
-        'guesthouse_manager',
-      ],
-      destinationScreen: () => const HelpSupportScreen(),
+      title: 'Route Masters',
+      description: 'Logistics network',
+      icon: Icons.alt_route_rounded,
+      backgroundColor: const Color(0xFFF0FDF4),
+      iconColor: const Color(0xFF10B981),
+      allowedRoles: ['admin'],
+      destinationScreen: () => const RouteMasterScreen(),
     ),
     NavigationModule(
       title: 'Login History',
@@ -264,15 +250,6 @@ class ModuleConstants {
       allowedRoles: allRoles, // Global per instructions
       destinationScreen: () => const FrsRequestsHubScreen(),
     ),
-    NavigationModule(
-      title: 'My Tracking',
-      description: 'Review tracking status',
-      icon: Icons.my_location_rounded,
-      backgroundColor: const Color(0xFFF0FDF4),
-      iconColor: const Color(0xFF16A34A),
-      allowedRoles: ['employee', 'reporting_authority', 'hr', 'management'],
-      destinationScreen: () => const MyTrackingScreen(),
-    ),
   ];
 
   static List<NavigationModule> getModulesForRole(String? userRole) {
@@ -285,6 +262,8 @@ class ModuleConstants {
     );
 
     // 2. Add matching managementNav
+    // Note: The list is a static field of the class, so we must access it as ModuleConstants.managementNavModules
+    // Wait, since we are inside the static method `getModulesForRole`, we can access `managementNavModules` directly.
     result.addAll(
       managementNavModules.where(
         (m) => m.allowedRoles.contains(normalizedRole),

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import (
-    Trip, TripOdometer, Expense, TravelClaim, TravelAdvance, Dispute, PolicyDocument, BulkActivityBatch,
+    Trip, TripOdometer, Expense, TravelClaim, TravelAdvance, Dispute, PolicyDocument, BulkActivityBatch, JobReport,
     TravelModeMaster, BookingTypeMaster, AirlineMaster, FlightClassMaster, TrainClassMaster,
     BusOperatorMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
     TrainProviderMaster, BusProviderMaster, IntercityCabProviderMaster,
@@ -245,6 +245,13 @@ class DisputeSerializer(serializers.ModelSerializer):
         fields = ['id', 'trip', 'trip_id_display', 'expense', 'expense_category', 'raised_by', 'raised_by_name', 'category', 'reason', 'status', 'admin_comment', 'created_at', 'updated_at']
         read_only_fields = ['raised_by', 'status', 'admin_comment', 'created_at', 'updated_at', 'expense_category']
 
+class JobReportSerializer(serializers.ModelSerializer):
+    user_name = serializers.ReadOnlyField(source='user.name')
+
+    class Meta:
+        model = JobReport
+        fields = '__all__'
+
 class TripSerializer(serializers.ModelSerializer):
     advances = TravelAdvanceSerializer(many=True, read_only=True)
     expenses = ExpenseSerializer(many=True, read_only=True)
@@ -259,22 +266,24 @@ class TripSerializer(serializers.ModelSerializer):
     user_bank_name = serializers.ReadOnlyField(source='user.bank_name')
     user_account_no = serializers.ReadOnlyField(source='user.account_no')
     user_ifsc_code = serializers.ReadOnlyField(source='user.ifsc_code')
+    user_base_location = serializers.ReadOnlyField(source='user.base_location')
     route_path_name = serializers.ReadOnlyField(source='route_path.path_name')
 
     has_gh_booking = serializers.SerializerMethodField()
     has_vehicle_booking = serializers.SerializerMethodField()
+    job_reports = JobReportSerializer(many=True, read_only=True)
 
     class Meta:
         model = Trip
         fields = [
-            'trip_id', 'user', 'user_name', 'user_emp_id', 'user_bank_name', 'user_account_no', 'user_ifsc_code',
+            'trip_id', 'user', 'user_name', 'user_emp_id', 'user_bank_name', 'user_account_no', 'user_ifsc_code', 'user_base_location',
             'purpose', 'destination', 'start_date', 'end_date',
             'status', 'cost_estimate', 'source', 'travel_mode', 'composition',
             'trip_leader', 'en_route', 'route_path', 'route_path_name', 'project_code', 'consider_as_local', 'accommodation_requests',
             'vehicle_type', 'members', 'lifecycle_events', 'created_at', 'updated_at',
             'advances', 'expenses', 'odometer', 'claim', 'reporting_manager_name',
             'current_approver', 'total_approved_advance', 'total_expenses', 'wallet_balance', 'has_gh_booking', 'has_vehicle_booking',
-            'rejection_reason', 'rejected_by', 'fuel_rate_snapshot'
+            'rejection_reason', 'rejected_by', 'fuel_rate_snapshot', 'job_reports'
         ]
         read_only_fields = ('trip_id', 'user', 'user_name', 'user_emp_id', 'status', 'cost_estimate', 'created_at', 'updated_at', 'lifecycle_events')
 
@@ -308,7 +317,9 @@ class TripSerializer(serializers.ModelSerializer):
         source = attrs.get('source')
         destination = attrs.get('destination')
         
-        if source and destination and str(source).strip().lower() == str(destination).strip().lower():
+        is_local = attrs.get('consider_as_local', False)
+        
+        if not is_local and source and destination and str(source).strip().lower() == str(destination).strip().lower():
             raise serializers.ValidationError({
                 "to": "Source and Destination cannot be the same.",
                 "from": "Source and Destination cannot be the same."
@@ -348,3 +359,4 @@ class BulkActivityBatchSerializer(serializers.ModelSerializer):
 
     def get_reporting_manager_name(self, obj):
         return obj.user.reporting_manager.name if obj.user and obj.user.reporting_manager else 'N/A'
+

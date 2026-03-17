@@ -8,18 +8,23 @@ class TripService {
   final ApiService _apiService = ApiService();
 
   Future<List<Trip>> fetchTrips({String? search, bool all = false}) async {
-    String url = ApiConstants.trips;
     List<String> params = [];
     if (search != null && search.isNotEmpty) params.add('search=$search');
     if (all) params.add('all=true');
 
-    if (params.isNotEmpty) url += '?${params.join('&')}';
+    String queryString = params.isNotEmpty ? '?${params.join('&')}' : '';
 
-    final response = await _apiService.get(url);
-    if (response is List) {
-      return response.map((json) => Trip.fromJson(json)).toList();
+    final tripsResponse = await _apiService.get('${ApiConstants.trips}$queryString');
+    final travelsResponse = await _apiService.get('${ApiConstants.travels}$queryString');
+
+    List<Trip> trips = [];
+    if (tripsResponse is List) {
+      trips.addAll(tripsResponse.map((json) => Trip.fromJson(json)));
     }
-    return [];
+    if (travelsResponse is List) {
+      trips.addAll(travelsResponse.map((json) => Trip.fromJson(json)));
+    }
+    return trips;
   }
 
   Future<List<Map<String, dynamic>>> fetchUserAdvances() async {
@@ -31,19 +36,24 @@ class TripService {
   }
 
   Future<Trip> fetchTripDetails(String id) async {
-    final url = ApiConstants.tripDetails.replaceFirst('{id}', id);
+    final endpoint = id.startsWith('ITS-') ? ApiConstants.travelDetails : ApiConstants.tripDetails;
+    final url = endpoint.replaceFirst('{id}', id);
     final response = await _apiService.get(url);
     return Trip.fromJson(response);
   }
 
   Future<void> patchTrip(String tripId, Map<String, dynamic> data) async {
-    final url = ApiConstants.tripDetails.replaceFirst('{id}', tripId);
+    final endpoint = tripId.startsWith('ITS-') ? ApiConstants.travelDetails : ApiConstants.tripDetails;
+    final url = endpoint.replaceFirst('{id}', tripId);
     await _apiService.patch(url, body: data, includeAuth: true);
   }
 
   Future<Trip> createTrip(Map<String, dynamic> data) async {
+    final isLocal = data['consider_as_local'] == true;
+    final url = isLocal ? ApiConstants.travels : ApiConstants.trips;
+    
     final response = await _apiService.post(
-      ApiConstants.trips,
+      url,
       body: data,
       includeAuth: true,
     );
@@ -92,9 +102,10 @@ class TripService {
   Future<List<Map<String, dynamic>>> fetchApprovals({
     String tab = 'pending',
     String type = 'all',
+    String viewType = 'special',
     String? search,
   }) async {
-    String url = '${ApiConstants.approvals}?tab=$tab&type=$type';
+    String url = '${ApiConstants.approvals}?tab=$tab&type=$type&view_type=$viewType';
     if (search != null && search.isNotEmpty) {
       url += '&search=$search';
     }
@@ -154,8 +165,9 @@ class TripService {
   Future<void> requestAdvance(
     String tripId,
     double amount,
-    String purpose,
-  ) async {
+    String purpose, {
+    String? paymentMode,
+  }) async {
     await _apiService.post(
       '${ApiConstants.baseUrl}/api/advances/',
       body: {
@@ -163,6 +175,7 @@ class TripService {
         'purpose': purpose,
         'trip': tripId,
         'status': 'Submitted',
+        'payment_mode': paymentMode ?? 'Bank Transfer',
         'submitted_at': DateTime.now().toIso8601String(),
       },
       includeAuth: true,
@@ -192,8 +205,33 @@ class TripService {
     return Map<String, dynamic>.from(response);
   }
 
+  /// Partial update — use this for targeted field changes (e.g. job report)
+  Future<Map<String, dynamic>> patchExpense(
+    String id,
+    Map<String, dynamic> expenseData,
+  ) async {
+    final response = await _apiService.patch(
+      '${ApiConstants.expenses}$id/',
+      body: expenseData,
+      includeAuth: true,
+    );
+    return Map<String, dynamic>.from(response);
+  }
+
   Future<void> deleteExpense(String id) async {
     await _apiService.delete('${ApiConstants.expenses}$id/', includeAuth: true);
+  }
+
+  Future<double?> fetchFuelRate(String vehicleType) async {
+    try {
+      final response = await _apiService.get('${ApiConstants.fuelRates}?vehicle_type=$vehicleType');
+      if (response != null && response['rate_per_km'] != null) {
+        return double.tryParse(response['rate_per_km'].toString());
+      }
+    } catch (e) {
+      debugPrint('Error fetching fuel rate: $e');
+    }
+    return null;
   }
 
   Future<void> updateOdometer(
@@ -532,3 +570,5 @@ class TripService {
     );
   }
 }
+
+

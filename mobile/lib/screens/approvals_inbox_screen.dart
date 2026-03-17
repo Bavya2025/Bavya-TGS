@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/trip_service.dart';
 import '../services/api_service.dart';
 
 class ApprovalsInboxScreen extends StatefulWidget {
-  const ApprovalsInboxScreen({super.key});
+  final bool hideHeader;
+  final int? enforceTab;
+
+  const ApprovalsInboxScreen({
+    super.key,
+    this.hideHeader = false,
+    this.enforceTab,
+  });
 
   @override
   State<ApprovalsInboxScreen> createState() => _ApprovalsInboxScreenState();
@@ -23,6 +31,8 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
   };
   String _activeTab = 'pending';
   String _filterType = 'all';
+  String _viewType = 'special'; // 'special' or 'monthly'
+  final Set<String> _selectedIds = {}; // for batch actions parity with web
   final TextEditingController _searchController = TextEditingController();
 
   final List<Map<String, dynamic>> _filterOptions = [
@@ -37,6 +47,9 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
   @override
   void initState() {
     super.initState();
+    if (widget.enforceTab != null) {
+      _activeTab = widget.enforceTab == 0 ? 'pending' : 'history';
+    }
     _fetchData();
   }
 
@@ -47,6 +60,7 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
       final tasks = await _tripService.fetchApprovals(
         tab: _activeTab,
         type: _filterType,
+        viewType: _viewType,
         search: _searchController.text,
       );
       if (mounted) {
@@ -59,9 +73,14 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load tasks: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
       }
     }
   }
@@ -78,41 +97,46 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
   }) async {
     try {
       await _tripService.performApproval(id, action, extraData: extra);
-      // mirror web toast wording: "Request approved successfully" etc
+      // mirror web toast wording EXACTLY: "Request Approved successfully"
       String verb;
       switch (action.toLowerCase()) {
         case 'approve':
-          verb = 'approved';
+          verb = 'Approved';
           break;
         case 'reject':
         case 'rejectbyfinance':
-          verb = 'rejected';
+          verb = 'Rejected';
           break;
         case 'pay':
-          verb = 'paid';
+          verb = 'Paid';
           break;
         default:
-          verb = '${action.toLowerCase()}ed';
+          verb = '${action}ed';
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Request $verb successfully'),
-          backgroundColor: Colors.green,
+          backgroundColor: const Color(0xFF10B981),
           behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
+      setState(() => _selectedIds.clear());
       _fetchData();
     } catch (e) {
-      // try to extract message from exception if available
       String message = e.toString();
-      if (e is Map && e.containsKey('error')) {
-        message = e['error'].toString();
+      if (e.toString().contains('Unauthorized')) {
+        message = 'Your session has expired. Please login again.';
+      } else if (e.toString().contains('authorized')) {
+        message = 'You are not authorized to perform this action.';
       }
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Action failed: $message'),
-          backgroundColor: Colors.red,
+          content: Text(message),
+          backgroundColor: const Color(0xFFEF4444),
           behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     }
@@ -144,8 +168,8 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
           ),
           Column(
             children: [
-              _buildCustomHeader(),
-              _buildFilterToggleSection(),
+              if (!widget.hideHeader) _buildCustomHeader(),
+              if (widget.enforceTab == null) _buildFilterToggleSection(),
               _buildTypeFilterSection(),
               Expanded(
                 child: _isLoading
@@ -261,25 +285,75 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
 
   Widget _buildFilterToggleSection() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+      child: Column(
         children: [
-          Expanded(
-            child: _buildToggleBtn(
-              'pending',
-              Icons.access_time_filled_rounded,
-              'Active Queue',
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _buildToggleBtn(
+                  'pending',
+                  Icons.access_time_filled_rounded,
+                  'Active Queue',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildToggleBtn(
+                  'history',
+                  Icons.check_circle_rounded,
+                  'History',
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildToggleBtn(
-              'history',
-              Icons.check_circle_rounded,
-              'History',
+          const SizedBox(height: 16),
+          // CATEGORY SELECTOR (Special vs Monthly) - Mirrors Web Workflow
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _categoryBtn('special', 'Special Requests'),
+                ),
+                Expanded(
+                  child: _categoryBtn('monthly', 'Monthly Tour Plan'),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _categoryBtn(String type, String label) {
+    bool isSelected = _viewType == type;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _viewType = type);
+        _fetchData();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0F1E2A) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            color: isSelected ? Colors.white : const Color(0xFF64748B),
+          ),
+        ),
       ),
     );
   }
@@ -338,43 +412,62 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
 
   Widget _buildTypeFilterSection() {
     return Container(
-      height: 50,
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _filterOptions.length,
-        itemBuilder: (context, index) {
-          final filter = _filterOptions[index];
-          final bool isSelected = _filterType == filter['value'];
-          return GestureDetector(
-            onTap: () => _handleFilterChange(filter['value']),
-            child: Container(
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: isSelected
-                        ? const Color(0xFFBB0633)
-                        : Colors.transparent,
-                    width: 3,
-                  ),
+      margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '$_activeTab Approvals'.toUpperCase(),
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF64748B),
+              letterSpacing: 1.0,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
-              ),
-              child: Text(
-                filter['label'],
+              ],
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _filterType,
+                icon: const Icon(Icons.filter_list_rounded, color: Color(0xFFBB0633), size: 18),
                 style: GoogleFonts.plusJakartaSans(
+                  color: const Color(0xFF0F172A),
+                  fontWeight: FontWeight.w800,
                   fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                  color: isSelected
-                      ? const Color(0xFFBB0633)
-                      : const Color(0xFF64748B),
-                  letterSpacing: -0.2,
                 ),
+                dropdownColor: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                items: _filterOptions.map((filter) {
+                  return DropdownMenuItem<String>(
+                    value: filter['value'],
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: Text(filter['label']),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    _handleFilterChange(newValue);
+                  }
+                },
               ),
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -606,6 +699,7 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
               Navigator.pop(context);
               _handleAction(task['id'], action, extra: extra);
             },
+            onRefresh: _fetchData, // Pass refresh callback
           ),
         ),
       ),
@@ -617,11 +711,13 @@ class _TaskDetailsContent extends StatefulWidget {
   final Map<String, dynamic> task;
   final bool isHistory;
   final Function(String action, {Map<String, dynamic>? extra}) onAction;
+  final VoidCallback onRefresh; // New property
 
   const _TaskDetailsContent({
     required this.task,
     required this.isHistory,
     required this.onAction,
+    required this.onRefresh,
   });
 
   @override
@@ -677,20 +773,61 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Enter remarks'),
-          content: TextField(
-            autofocus: true,
-            onChanged: (v) => remark = v,
-            decoration: const InputDecoration(hintText: 'Remarks'),
+          title: Text(
+            'Rejection Reason',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Please enter the reason for rejection:',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                autofocus: true,
+                onChanged: (v) => remark = v,
+                decoration: InputDecoration(
+                  hintText: 'Required for rejection...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                maxLines: 3,
+              ),
+            ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, null),
-              child: const Text('Cancel'),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.plusJakartaSans(
+                  color: const Color(0xFF64748B),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
-            TextButton(
+            ElevatedButton(
               onPressed: () => Navigator.pop(context, remark.trim()),
-              child: const Text('OK'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFBB0633),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: Text(
+                'Confirm Rejection',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         );
@@ -699,6 +836,28 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
   }
 
   void _handleItemAction(dynamic itemId, String status) async {
+    String finalRemark = itemRemarks[itemId.toString()] ?? '';
+
+    if (status == 'Rejected') {
+      final remark = await _showRemarksDialog();
+      if (remark == null || remark.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Rejection reason is mandatory'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+        return;
+      }
+      finalRemark = remark;
+      // Sync the local state as well
+      itemRemarks[itemId.toString()] = finalRemark;
+    }
+
     setState(() => _isActionLoading = true);
     try {
       await _tripService.performApproval(
@@ -707,16 +866,27 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
         extraData: {
           'item_id': itemId,
           'item_status': status,
-          'remarks': itemRemarks[itemId.toString()] ?? '',
+          'remarks': finalRemark,
         },
       );
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Item updated successfully')),
+        SnackBar(
+          content: Text('Item ${status.toLowerCase()}ed with feedback'),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
       );
+      widget.onRefresh(); // Trigger main screen refresh
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error updating item: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update item: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isActionLoading = false);
     }
@@ -823,7 +993,7 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                       const SizedBox(width: 4),
                       Expanded(
                         child: TextField(
-                          keyboardType: TextInputType.numberWithOptions(
+                          keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
                           decoration: InputDecoration(
@@ -848,6 +1018,39 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                         ),
                       ),
                     ],
+                  ),
+                ] else if (isFinanceHead &&
+                    widget.task['details']?['executive_approved_amount'] !=
+                        null) ...[
+                  const SizedBox(height: 32),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Executive Recommendation',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                        Text(
+                          '₹${widget.task['details']['executive_approved_amount']}',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFFBB0633),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
                 const SizedBox(height: 32),
@@ -1440,7 +1643,7 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          exp['category'] ?? 'Other',
+                          exp['category'] ?? exp['nature'] ?? 'Other',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
@@ -1463,14 +1666,31 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          exp['description']?.toString() ?? '',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF0F172A),
-                          ),
-                        ),
+                        child: () {
+                          String description = exp['description']?.toString() ?? '';
+                          if (description.startsWith('{')) {
+                            try {
+                              final d = jsonDecode(description) as Map<String, dynamic>;
+                              description =
+                                  "${d['origin'] ?? ''}${d['origin'] != null ? ' → ' : ''}${d['destination'] ?? d['location'] ?? d['hotelName'] ?? d['hotel_name'] ?? ''}";
+                              if (d['remarks'] != null &&
+                                  d['remarks'].toString().isNotEmpty &&
+                                  d['remarks'].toString().toLowerCase() != 'null') {
+                                description += " (${d['remarks']})";
+                              }
+                            } catch (e) {
+                              // fallback
+                            }
+                          }
+                          return Text(
+                            description,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF0F172A),
+                            ),
+                          );
+                        }(),
                       ),
                       Text(
                         '₹${exp['amount']}',
@@ -1482,6 +1702,170 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                       ),
                     ],
                   ),
+                  if (exp['receipt_image'] != null) ...[
+                    const SizedBox(height: 8),
+                    _miniImageThumbnail(exp['receipt_image'].toString(), "Receipt"),
+                  ],
+                  () {
+                    String description = exp['description']?.toString() ?? '';
+                    if (!description.startsWith('{')) return const SizedBox.shrink();
+                    try {
+                      final details = jsonDecode(description) as Map<String, dynamic>;
+                      if (details['odoStart'] == null &&
+                          details['odoEnd'] == null &&
+                          details['odoStartImg'] == null &&
+                          details['odoEndImg'] == null &&
+                          (details['selfies'] == null ||
+                              (details['selfies'] as List).isEmpty)) {
+                        return const SizedBox.shrink();
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8.0),
+                            child: Divider(height: 1),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              if (details['odoStart'] != null)
+                                _miniInfoBlock(
+                                  'Odo Start',
+                                  '${details['odoStart']} km',
+                                ),
+                              if (details['odoEnd'] != null)
+                                _miniInfoBlock(
+                                  'Odo End',
+                                  '${details['odoEnd']} km',
+                                ),
+                              if (details['mode'] != null)
+                                _miniInfoBlock(
+                                  'Mode',
+                                  details['mode'].toString(),
+                                ),
+                            ],
+                          ),
+                          if (details['odoStartImg'] != null ||
+                              details['odoEndImg'] != null ||
+                              (details['selfies'] != null &&
+                                  (details['selfies'] as List).isNotEmpty)) ...[
+                            const SizedBox(height: 8),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  if (details['odoStartImg'] != null)
+                                    _miniImageThumbnail(
+                                      details['odoStartImg'],
+                                      "Start",
+                                    ),
+                                  if (details['odoEndImg'] != null)
+                                    _miniImageThumbnail(
+                                      details['odoEndImg'],
+                                      "End",
+                                    ),
+                                  if (details['selfies'] != null)
+                                    ...(details['selfies'] as List)
+                                        .map(
+                                          (s) => _miniImageThumbnail(
+                                            s.toString(),
+                                            "Selfie",
+                                          ),
+                                        )
+                                        .toList(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      );
+                    } catch (e) {
+                      return const SizedBox.shrink();
+                    }
+                  }(),
+                  () {
+                    final pFin = exp['finance_remarks']?.toString();
+                    final pHr = exp['hr_remarks']?.toString();
+                    final pRm = exp['rm_remarks']?.toString();
+                    final hasRemarks = (pFin != null && pFin.isNotEmpty) ||
+                        (pHr != null && pHr.isNotEmpty) ||
+                        (pRm != null && pRm.isNotEmpty);
+
+                    return Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(top: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (pFin != null && pFin.isNotEmpty)
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  const TextSpan(
+                                    text: 'Fin: ',
+                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                  TextSpan(text: pFin),
+                                ],
+                              ),
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: const Color(0xFF475569),
+                              ),
+                            ),
+                          if (pHr != null && pHr.isNotEmpty)
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  const TextSpan(
+                                    text: 'HR: ',
+                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                  TextSpan(text: pHr),
+                                ],
+                              ),
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: const Color(0xFF475569),
+                              ),
+                            ),
+                          if (pRm != null && pRm.isNotEmpty)
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  const TextSpan(
+                                    text: 'RM: ',
+                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                  TextSpan(text: pRm),
+                                ],
+                              ),
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: const Color(0xFF475569),
+                              ),
+                            ),
+                          if (!hasRemarks)
+                            Text(
+                              'No remarks',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: const Color(0xFF94A3B8),
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }(),
                   if (!widget.isHistory) ...[
                     const SizedBox(height: 16),
                     TextField(
@@ -1629,6 +2013,109 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
           ),
         ),
       ],
+    );
+  }
+  Widget _miniInfoBlock(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 9,
+            color: Colors.grey,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _miniImageThumbnail(String? imagePath, String label) {
+    if (imagePath == null || imagePath.isEmpty) return const SizedBox.shrink();
+
+    String path = imagePath.trim();
+    // Handle JSON array string if needed (common for receipts)
+    if (path.startsWith('[') && path.endsWith(']')) {
+      try {
+        final List<dynamic> list = jsonDecode(path);
+        if (list.isNotEmpty) {
+          path = list.first.toString().trim();
+        }
+      } catch (e) {
+        // fallback to original string
+      }
+    }
+
+    // Clean legacy formats [u'path'] or ['path'] or 'path'
+    path = path
+        .replaceFirst(RegExp(r"^\[u'"), '')
+        .replaceFirst(RegExp(r"^u'"), '')
+        .replaceFirst(RegExp(r"^'"), '');
+    path = path.replaceFirst(RegExp(r"'\]$"), '').replaceFirst(RegExp(r"'$"), '');
+
+    Widget imageWidget;
+    try {
+      if (path.startsWith('data:image')) {
+        final base64String = path.split(',').last;
+        imageWidget =
+            Image.memory(base64Decode(base64String), fit: BoxFit.cover);
+      } else if (path.startsWith('/9j/') ||
+          (path.length > 300 && !path.contains('/') && !path.contains(':'))) {
+        imageWidget = Image.memory(base64Decode(path), fit: BoxFit.cover);
+      } else {
+        const String backendBase = 'http://192.168.1.138:4567';
+        final String fullUrl = path.startsWith('http')
+            ? path
+            : '$backendBase${path.startsWith('/') ? '' : '/'}$path';
+        imageWidget = Image.network(
+          fullUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (c, e, s) =>
+              const Icon(Icons.broken_image, size: 20, color: Colors.grey),
+        );
+      }
+    } catch (e) {
+      imageWidget = const Icon(Icons.error_outline, size: 20, color: Colors.red);
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Stack(
+          children: [
+            Positioned.fill(child: imageWidget),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                color: Colors.black.withOpacity(0.5),
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

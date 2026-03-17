@@ -1,0 +1,200 @@
+
+/* ============================================================
+   GMAIL-STYLE COMPOSE WINDOW — Job Report Modal
+   ============================================================ */
+
+.gmail-compose-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(0, 0, 0, 0.35);
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 0 24px 0 0;
+}
+
+.gmail-compose-window {
+    width: 540px;
+    max-width: 96vw;
+    height: 420px;
+    background: #fff;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.28);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: composeSlideUp 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes composeSlideUp {
+    from { transform: translateY(60px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+.gmail-compose-header {
+    background: #404040;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-radius: 12px 12px 0 0;
+    flex-shrink: 0;
+}
+
+.gmail-compose-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.gmail-compose-close {
+    background: none;
+    border: none;
+    color: #ccc;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: 4px;
+    transition: color 0.15s;
+}
+.gmail-compose-close:hover { color: #fff; }
+
+.gmail-compose-subject-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0;
+}
+
+.gmail-compose-field-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #94a3b8;
+    white-space: nowrap;
+    min-width: 52px;
+}
+
+.gmail-compose-subject-value {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gmail-compose-divider {
+    height: 1px;
+    background: #f1f5f9;
+    flex-shrink: 0;
+}
+
+.gmail-compose-body {
+    flex: 1;
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    color: #1e293b;
+    border: none;
+    outline: none;
+    resize: none;
+    font-family: inherit;
+    background: #fff;
+    line-height: 1.6;
+    box-sizing: border-box;
+}
+.gmail-compose-body::placeholder { color: #94a3b8; }
+
+.gmail-attachments-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 14px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.gmail-attachment-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 9999px;
+    padding: 3px 8px 3px 7px;
+    font-size: 0.75rem;
+    color: #475569;
+    max-width: 220px;
+}
+
+.gmail-chip-name {
+    max-width: 160px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gmail-chip-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #94a3b8;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+.gmail-chip-remove:hover { color: #ef4444; }
+
+.gmail-compose-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px 12px;
+    border-top: 1px solid #e2e8f0;
+    background: #fafafa;
+    flex-shrink: 0;
+}
+
+.gmail-send-btn {
+    background: #1a73e8;
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 22px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: background 0.15s, opacity 0.15s;
+}
+.gmail-send-btn:hover:not(:disabled) { background: #1558b0; }
+.gmail-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.gmail-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.gmail-toolbar-icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 50%;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+.gmail-toolbar-icon-btn:hover { background: #f1f5f9; color: #1e293b; }
+.gmail-toolbar-icon-btn.discard:hover { background: #fee2e2; color: #ef4444; }

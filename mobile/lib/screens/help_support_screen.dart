@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
+import '../services/trip_service.dart';
 import 'policy_center_screen.dart';
 import 'location_codes_screen.dart';
 
@@ -14,6 +18,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
+  final TripService _tripService = TripService();
   
   bool _isChatOpen = false;
   final List<Map<String, String>> _messages = [
@@ -123,6 +128,22 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
         );
       }
     });
+  }
+
+  Future<void> _downloadTemplate() async {
+    try {
+      final bytes = await _tripService.downloadBulkTemplate();
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/travel_activities_template.xlsx');
+      await file.writeAsBytes(bytes);
+      await OpenFilex.open(file.path);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to download template'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
@@ -236,17 +257,27 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   }
 
   Widget _buildQuickActions() {
-    return Row(
+    return Column(
       children: [
-        _buildActionCard(Icons.article_rounded, 'User Guides', 'Documentation', () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const PolicyCenterScreen()));
-        }),
-        const SizedBox(width: 12),
-        _buildActionCard(Icons.forum_rounded, 'Live Chat', 'Start Support', () => setState(() => _isChatOpen = true)),
-        const SizedBox(width: 12),
-        _buildActionCard(Icons.map_rounded, 'Location Codes', 'View ISO', () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const LocationCodesScreen()));
-        }),
+        Row(
+          children: [
+            _buildActionCard(Icons.article_rounded, 'User Guides', 'Documentation', () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const PolicyCenterScreen()));
+            }),
+            const SizedBox(width: 12),
+            _buildActionCard(Icons.forum_rounded, 'Live Chat', 'Start Support', () => setState(() => _isChatOpen = true)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _buildActionCard(Icons.map_rounded, 'Location Codes', 'View ISO', () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const LocationCodesScreen()));
+            }),
+            const SizedBox(width: 12),
+            _buildActionCard(Icons.table_view_rounded, 'Activity Template', 'Download Excel', _downloadTemplate),
+          ],
+        ),
       ],
     );
   }

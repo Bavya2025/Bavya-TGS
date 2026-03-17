@@ -31,14 +31,18 @@ class Trip {
   final double? walletBalance;
   final List<dynamic>? advances;
   final List<dynamic>? expenses;
+  final List<dynamic>? jobReports;
   final String? enRoute;
   final Map<String, dynamic>? claim;
   final dynamic currentApprover;
   final String? userBankName;
   final String? userAccountNo;
+  final String? userIfscCode;
   final int hierarchyLevel;
   final bool hasGhBooking;
   final bool hasVehicleBooking;
+  final bool considerAsLocal;
+  final String? userBaseLocation;
 
   Trip({
     required this.id,
@@ -71,14 +75,18 @@ class Trip {
     this.walletBalance,
     this.advances,
     this.expenses,
+    this.jobReports,
     this.enRoute,
     this.claim,
     this.currentApprover,
     this.userBankName,
     this.userAccountNo,
+    this.userIfscCode,
     this.hierarchyLevel = 1,
     this.hasGhBooking = false,
     this.hasVehicleBooking = false,
+    this.considerAsLocal = false,
+    this.userBaseLocation,
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {
@@ -106,7 +114,6 @@ class Trip {
       leaderDesignation = lead['designation'] ?? lead['role'];
       leaderEmpId = lead['employee_id'] ?? lead['id']?.toString();
     } else {
-      // Fallback to direct fields if available
       leaderDesignation = json['creator_designation'] ?? json['creator_role'];
       leaderEmpId = json['creator_employee_id']?.toString();
     }
@@ -149,14 +156,18 @@ class Trip {
       walletBalance: parseDouble(json['wallet_balance']),
       advances: parseJsonField(json['advances']),
       expenses: parseJsonField(json['expenses']),
+      jobReports: parseJsonField(json['job_reports']),
       enRoute: json['en_route'],
       claim: json['claim'],
       currentApprover: json['current_approver'],
       userBankName: json['user_bank_name'] ?? json['bank_name'],
       userAccountNo: json['user_account_no'] ?? json['bank_account_no'],
+      userIfscCode: json['user_ifsc_code'] ?? json['bank_ifsc_code'],
       hierarchyLevel: json['hierarchy_level'] ?? 1,
       hasGhBooking: json['has_gh_booking'] ?? false,
       hasVehicleBooking: json['has_vehicle_booking'] ?? false,
+      considerAsLocal: json['consider_as_local'] ?? false,
+      userBaseLocation: json['user_base_location'],
     );
   }
 
