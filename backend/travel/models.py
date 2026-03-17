@@ -1,0 +1,623 @@
+from django.db import models
+import random
+import datetime
+import re
+from django.conf import settings
+from django.utils import timezone
+
+class SoftDeleteManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
+
+    def all_with_deleted(self):
+        return super().get_queryset()
+
+class SoftDeleteModel(models.Model):
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
+
+    class Meta:
+        abstract = True
+
+    def delete(self, using=None, keep_parents=False):
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        self.save()
+
+    def restore(self):
+        self.is_deleted = False
+        self.deleted_at = None
+        self.save()
+
+class Trip(SoftDeleteModel):
+    COMPOSITION_CHOICES = [
+        ('Solo', 'Solo Travel'),
+        ('Mutual', 'Mutual (2 Teams)'),
+        ('Group', 'Group Travel (3+)'),
+    ]
+
+    TRAVEL_MODE_CHOICES = [
+        ('Airways', 'Airways'),
+        ('Train', 'Train'),
+        ('Bus', 'Bus'),
+        ('Car / Jeep / Van', 'Car / Jeep / Van'),
+        ('LCV', 'LCV (Light Commercial Vehicle)'),
+        ('Bus / Truck (2 Axle)', 'Bus / Truck (2 Axle)'),
+        ('3-Axle Commercial', '3-Axle Commercial'),
+        ('MAV (4-6 Axle)', 'MAV (Multi-Axle Vehicle 4-6)'),
+        ('Oversized (7+ Axle)', 'Oversized Vehicle (7+ Axle)'),
+        ('2 Wheeler', '2 Wheeler (Non-Tollable)'),
+        ('3 Wheeler', '3 Wheeler (Non-Tollable)'),
+    ]
+
+    VEHICLE_TYPE_CHOICES = [
+        ('Own', 'Own Vehicle'),
+        ('Service', 'Service / Outsourced'),
+    ]
+
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='trips', null=True, blank=True)
+    trip_id = models.CharField(max_length=100, unique=True, primary_key=True, editable=False)
+    source = models.CharField(max_length=100) 
+    destination = models.CharField(max_length=100) 
+    route_path = models.ForeignKey('travel_masters.RoutePath', on_delete=models.SET_NULL, null=True, blank=True)
+    en_route = models.CharField(max_length=255, blank=True, null=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    composition = models.CharField(max_length=20, choices=COMPOSITION_CHOICES, default='Solo')
+    purpose = models.TextField()
+    travel_mode = models.CharField(max_length=20, choices=TRAVEL_MODE_CHOICES, default='Airways')
+    vehicle_type = models.CharField(max_length=20, choices=VEHICLE_TYPE_CHOICES, blank=True, null=True)
+    members = models.JSONField(default=list, blank=True) 
+    trip_leader = models.CharField(max_length=100, default='Self (Creator)')
+    accommodation_requests = models.JSONField(default=list, blank=True) 
+    lifecycle_events = models.JSONField(default=list, blank=True) 
+    project_code = models.CharField(max_length=100, default='General', blank=True)
+    consider_as_local = models.BooleanField(default=True)
+    current_approver = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='trips_to_approve')
+    status = models.CharField(max_length=50, default='Submitted') # Submitted, Forwarded, Manager Approved, Approved, Rejected, Completed
+    hierarchy_level = models.IntegerField(default=1) # 1: Manager, 2: Senior Manager, 3: Director
+    cost_estimate = models.CharField(max_length=50, default='₹0 (Estimated)')
+    # Snapshot fields for resilience during API downtime
+    user_name = models.CharField(max_length=255, null=True, blank=True)
+    user_designation = models.CharField(max_length=255, null=True, blank=True)
+    user_department = models.CharField(max_length=255, null=True, blank=True)
+    reporting_manager_name = models.CharField(max_length=255, null=True, blank=True)
+    senior_manager_name = models.CharField(max_length=255, null=True, blank=True)
+    hod_director_name = models.CharField(max_length=255, null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, null=True)
+    rejected_by = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='rejected_trips')
+    fuel_rate_snapshot = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        
+        if not self.trip_id:
+            if self.consider_as_local:
+                # 1. Project Code
+                proj = (self.project_code or 'GS').upper()
+                if proj == 'GENERAL': proj = 'GS'
+                
+                # 2. Branch Code
+                branch = 'GEN'
+                if self.user:
+                    base_loc = self.user.base_location
+                    if base_loc:
+                        try:
+                            from travel_masters.models import Location
+                            loc = Location.objects.filter(name__icontains=base_loc).first()
+                            if loc and loc.code:
+                                branch = loc.code.upper()
+                            else:
+                                clean_loc = re.sub(r'[^a-zA-Z0-9]', '', base_loc)
+                                branch = clean_loc[:3].upper() if len(clean_loc) >= 3 else clean_loc.upper()
+                        except:
+                            pass
+                
+                # 3. MonthYear (e.g., apr26) – use english abbreviation to avoid locale issues
+                import calendar
+                ref_date = self.start_date or datetime.date.today()
+                month_year = f"{calendar.month_abbr[ref_date.month].lower()}{str(ref_date.year)[-2:]}"
+                
+                # 4. Generate & Check Uniqueness
+                base_id = f"ITS-{proj}-{branch}-{month_year}"
+                generated_id = base_id
+                
+                seq = 1
+                while Trip.objects.filter(trip_id=generated_id).exists():
+                    generated_id = f"{base_id}-{seq:02d}"
+                    seq += 1
+                
+                self.trip_id = generated_id
+            else:
+                # Legacy / Trip ID format
+                current_year = datetime.datetime.now().year
+                random_number = random.randint(1000, 9999)
+                self.trip_id = f"TRP-{current_year}-{random_number}"
+                
+                while Trip.objects.filter(trip_id=self.trip_id).exists():
+                    random_number = random.randint(1000, 9999)
+                    self.trip_id = f"TRP-{current_year}-{random_number}"
+        
+        if is_new and not self.lifecycle_events:
+            self.lifecycle_events = [{
+                "title": "Trip Requested",
+                "status": "completed",
+                "date": datetime.datetime.now().strftime("%b %d, %Y"),
+                "description": "Trip request initiated by user."
+            }]
+        
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.trip_id} - {self.destination}"
+
+    class Meta:
+        ordering = ['-created_at']
+
+class TripOdometer(SoftDeleteModel):
+    trip = models.OneToOneField(Trip, on_delete=models.CASCADE, related_name='odometer_details')
+    
+    start_odo_reading = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    start_odo_image = models.TextField(null=True, blank=True)
+    start_odo_lat = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    start_odo_long = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    
+    end_odo_reading = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    end_odo_image = models.TextField(null=True, blank=True)
+    end_odo_lat = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    end_odo_long = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Odometer for {self.trip.trip_id}"
+
+    class Meta:
+        ordering = ['-created_at']
+
+class TripTracking(models.Model):
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='tracking_history')
+    latitude = models.DecimalField(max_digits=20, decimal_places=10)
+    longitude = models.DecimalField(max_digits=20, decimal_places=10)
+    timestamp = models.DateTimeField(default=timezone.now)
+    accuracy = models.FloatField(null=True, blank=True)
+    speed = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['timestamp']
+        verbose_name = "Trip Tracking"
+        verbose_name_plural = "Trip Tracking Points"
+
+    def __str__(self):
+        return f"Tracking for {self.trip_id} at {self.timestamp}"
+
+
+class Expense(SoftDeleteModel):
+    CATEGORY_CHOICES = [
+        ('Food', 'Food & Refreshments'),
+        ('Fuel', 'Fuel / Mileage'),
+        ('Accommodation', 'Hotel & Stay'),
+        ('Toll', 'Toll & Parking'),
+        ('Incidental', 'Incidental Expenses'),
+        ('Others', 'Miscellaneous'),
+    ]
+
+    PAID_BY_CHOICES = [
+        ('Self (Out of Pocket)', 'Self (Out of Pocket)'),
+        ('Company Paid', 'Company Paid'),
+        ('Corporate Card', 'Corporate Card')
+    ]
+
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='expenses')
+    date = models.DateField()
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    paid_by = models.CharField(max_length=50, choices=PAID_BY_CHOICES, default='Self (Out of Pocket)')
+    description = models.TextField(blank=True)
+    status = models.CharField(max_length=20, default='Pending') # Pending, Approved, Rejected
+    receipt_image = models.TextField(null=True, blank=True) 
+    latitude = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    rm_remarks = models.TextField(blank=True, null=True)
+    hr_remarks = models.TextField(blank=True, null=True)
+    finance_remarks = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # New fields for Long Distance Travel Enhancement
+    travel_mode = models.CharField(max_length=50, blank=True, null=True)
+    class_type = models.CharField(max_length=50, blank=True, null=True)
+    booking_reference = models.CharField(max_length=100, blank=True, null=True)
+    refundable_flag = models.BooleanField(default=False)
+    meal_included_flag = models.BooleanField(default=False)
+    vehicle_type = models.CharField(max_length=50, blank=True, null=True)
+    odo_start = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    odo_end = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    distance = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    cancellation_status = models.CharField(max_length=50, blank=True, null=True)
+    cancellation_date = models.DateField(null=True, blank=True)
+    refund_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    cancellation_reason = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.category} - {self.amount} for {self.trip.trip_id}"
+
+    class Meta:
+        ordering = ['-date']
+
+class TravelClaim(SoftDeleteModel):
+    STATUS_CHOICES = [
+        ('Draft', 'Draft'),
+        ('Submitted', 'Submitted'),
+        ('Manager Approved', 'Manager Approved'),
+        ('Approved', 'Approved'),
+        ('Rejected', 'Rejected'),
+        ('Under Process', 'Under Process'),
+        ('Transferred', 'Transferred'),
+        ('Rejected by Finance', 'Rejected by Finance'),
+        ('Paid', 'Paid'),
+        ('PENDING_HR', 'Pending HR Approval'),
+        ('PENDING_EXECUTIVE', 'Pending Finance Executive'),
+        ('PENDING_HEAD', 'Pending Finance Head'),
+        ('PENDING_FINAL_RELEASE', 'Pending Final Release'),
+        ('REJECTED_BY_HEAD', 'Rejected by Finance Head'),
+    ]
+
+    HEAD_ACTION_CHOICES = [
+        ('Approved', 'Approved'),
+        ('Rejected', 'Rejected'),
+    ]
+
+    trip = models.OneToOneField(Trip, on_delete=models.CASCADE, related_name='claim')
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    approved_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    hr_approved_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    executive_approved_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Draft')
+    
+    current_approver = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='claims_to_approve')
+    sent_by_executive = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='sent_claims')
+    final_executive = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='final_processed_claims')
+    
+    hierarchy_level = models.IntegerField(default=1)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    remarks = models.TextField(blank=True)
+    
+    # Finance/Payment fields
+    payment_mode = models.CharField(max_length=50, blank=True, null=True)
+    transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    receipt_file = models.TextField(null=True, blank=True)
+    head_action = models.CharField(max_length=20, choices=HEAD_ACTION_CHOICES, null=True, blank=True)
+    payment_date = models.DateTimeField(null=True, blank=True)
+    processed_by = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_claims')
+    finance_remarks = models.TextField(blank=True)
+    
+    # Snapshot fields for resilience
+    user_name = models.CharField(max_length=255, null=True, blank=True)
+    user_designation = models.CharField(max_length=255, null=True, blank=True)
+    user_department = models.CharField(max_length=255, null=True, blank=True)
+    reporting_manager_name = models.CharField(max_length=255, null=True, blank=True)
+    senior_manager_name = models.CharField(max_length=255, null=True, blank=True)
+    hod_director_name = models.CharField(max_length=255, null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, null=True)
+    rejected_by = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='rejected_claims')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Claim for {self.trip.trip_id} - {self.status}"
+
+class TravelAdvance(SoftDeleteModel):
+    STATUS_CHOICES = [
+        ('Draft', 'Draft'),
+        ('Submitted', 'Submitted'),
+        ('Manager Approved', 'Manager Approved'),
+        ('Approved', 'Approved'),
+        ('Rejected', 'Rejected'),
+        ('Under Process', 'Under Process'),
+        ('Transferred', 'Transferred'),
+        ('Rejected by Finance', 'Rejected by Finance'),
+        ('Paid', 'Paid'),
+        ('PENDING_HR', 'Pending HR Approval'),
+        ('PENDING_EXECUTIVE', 'Pending Finance Executive'),
+        ('PENDING_HEAD', 'Pending Finance Head'),
+        ('PENDING_FINAL_RELEASE', 'Pending Final Release'),
+        ('REJECTED_BY_HEAD', 'Rejected by Finance Head'),
+        ('COMPLETED', 'Completed'),
+    ]
+
+    HEAD_ACTION_CHOICES = [
+        ('Approved', 'Approved'),
+        ('Rejected', 'Rejected'),
+    ]
+
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='advances')
+    requested_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    hr_approved_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    executive_approved_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Draft')
+    
+    current_approver = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='advances_to_approve')
+    sent_by_executive = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='sent_advances')
+    final_executive = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='final_processed_advances')
+    
+    hierarchy_level = models.IntegerField(default=1)
+    purpose = models.TextField(blank=True)
+    hr_remarks = models.TextField(blank=True, null=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    
+    # Finance/Payment fields
+    payment_mode = models.CharField(max_length=50, blank=True, null=True)
+    transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    receipt_file = models.TextField(null=True, blank=True)
+    head_action = models.CharField(max_length=20, choices=HEAD_ACTION_CHOICES, null=True, blank=True)
+    payment_date = models.DateTimeField(null=True, blank=True)
+    processed_by = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_advances')
+    finance_remarks = models.TextField(blank=True)
+    
+    # Snapshot fields for resilience
+    user_name = models.CharField(max_length=255, null=True, blank=True)
+    user_designation = models.CharField(max_length=255, null=True, blank=True)
+    user_department = models.CharField(max_length=255, null=True, blank=True)
+    reporting_manager_name = models.CharField(max_length=255, null=True, blank=True)
+    senior_manager_name = models.CharField(max_length=255, null=True, blank=True)
+    hod_director_name = models.CharField(max_length=255, null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, null=True)
+    rejected_by = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='rejected_advances')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Advance for {self.trip.trip_id} - {self.status}"
+
+class Dispute(SoftDeleteModel):
+    CATEGORY_CHOICES = [
+        ('Mileage', 'Mileage / GPS Variance'),
+        ('Expense', 'Expense Rejection'),
+        ('Policy', 'Policy Violation'),
+        ('Other', 'Other'),
+    ]
+
+    STATUS_CHOICES = [
+        ('Open', 'Open'),
+        ('In Review', 'In Review'),
+        ('Resolved', 'Resolved'),
+        ('Rejected', 'Rejected'),
+    ]
+
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='disputes')
+    expense = models.ForeignKey(Expense, on_delete=models.CASCADE, null=True, blank=True, related_name='disputes')
+    raised_by = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='disputes')
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Open')
+    admin_comment = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Dispute {self.id} - {self.trip.trip_id} - {self.status}"
+
+    class Meta:
+        ordering = ['-created_at']
+
+class PolicyDocument(models.Model):
+    title = models.CharField(max_length=200)
+    category = models.CharField(max_length=50, default='General')
+    
+    # English
+    file_content_en = models.TextField(blank=True, null=True)
+    file_name_en = models.CharField(max_length=255, blank=True, null=True)
+    file_size_en = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Telugu
+    file_content_te = models.TextField(blank=True, null=True)
+    file_name_te = models.CharField(max_length=255, blank=True, null=True)
+    file_size_te = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Hindi
+    file_content_hi = models.TextField(blank=True, null=True)
+    file_name_hi = models.CharField(max_length=255, blank=True, null=True)
+    file_size_hi = models.CharField(max_length=50, blank=True, null=True)
+    
+    uploaded_by = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title
+
+    class Meta:
+        ordering = ['-created_at']
+
+class BulkActivityBatch(SoftDeleteModel):
+    STATUS_CHOICES = [
+        ('Draft', 'Draft'),
+        ('Submitted', 'Submitted'),
+        ('Approved', 'Approved'),
+        ('Rejected', 'Rejected'),
+    ]
+
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='activity_batches')
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='activity_batches', null=True, blank=True)
+    file_name = models.CharField(max_length=255)
+    
+    # Store the actual rows in JSON temporarily until approval
+    data_json = models.JSONField(default=list) 
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Draft')
+    current_approver = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='batches_to_approve')
+    hierarchy_level = models.IntegerField(default=1) 
+    remarks = models.TextField(blank=True, null=True)
+    
+    # To track which expenses were created from this batch
+    created_expenses = models.JSONField(default=list, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Batch {self.id} - {self.user.name} ({self.status})"
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class JobReport(SoftDeleteModel):
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='job_reports')
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='job_reports', null=True)
+    description = models.TextField()
+    attachment = models.TextField(null=True, blank=True) # Base64 encoded PDF
+    file_name = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Job Report for {self.trip.trip_id} by {self.user.name}"
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+# --- MASTER TABLES ---
+
+# --- MASTER TABLES (TRAVEL MODULE) ---
+
+class TravelModeMaster(SoftDeleteModel):
+    mode_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class BookingTypeMaster(SoftDeleteModel):
+    booking_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class AirlineMaster(SoftDeleteModel):
+    airline_name = models.CharField(max_length=100, unique=True)
+    airline_code = models.CharField(max_length=50, blank=True, null=True, unique=True)
+    status = models.BooleanField(default=True)
+
+class FlightClassMaster(SoftDeleteModel):
+    class_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class TrainClassMaster(SoftDeleteModel):
+    class_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class BusOperatorMaster(SoftDeleteModel):
+    operator_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class BusTypeMaster(SoftDeleteModel):
+    bus_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class IntercityCabVehicleMaster(SoftDeleteModel):
+    vehicle_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class TravelProviderMaster(SoftDeleteModel):
+    provider_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class TrainProviderMaster(SoftDeleteModel):
+    provider_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class BusProviderMaster(SoftDeleteModel):
+    provider_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class IntercityCabProviderMaster(SoftDeleteModel):
+    provider_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+# --- MASTER TABLES (LOCAL CONVEYANCE MODULE) ---
+
+class LocalTravelModeMaster(SoftDeleteModel):
+    mode_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class LocalCarSubTypeMaster(SoftDeleteModel):
+    sub_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class LocalBikeSubTypeMaster(SoftDeleteModel):
+    sub_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class LocalProviderMaster(SoftDeleteModel):
+    provider_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+# --- MASTER TABLES (STAY & LODGING MODULE) ---
+
+class StayTypeMaster(SoftDeleteModel):
+    stay_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class RoomTypeMaster(SoftDeleteModel):
+    room_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+# --- MASTER TABLES (FOOD & REFRESHMENTS MODULE) ---
+
+class MealCategoryMaster(SoftDeleteModel):
+    category_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class MealTypeMaster(SoftDeleteModel):
+    meal_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+# --- MASTER TABLES (INCIDENTAL MODULE) ---
+
+class IncidentalTypeMaster(SoftDeleteModel):
+    expense_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+# --- DYNAMIC MASTER SYSTEM ---
+
+class MasterModule(SoftDeleteModel):
+    name = models.CharField(max_length=100, unique=True)
+    display_order = models.IntegerField(default=0)
+    status = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+class CustomMasterDefinition(SoftDeleteModel):
+    table_name = models.CharField(max_length=100, unique=True)
+    module_ref = models.ForeignKey(MasterModule, on_delete=models.CASCADE, related_name='tables', null=True, blank=True)
+    module = models.CharField(max_length=50, blank=True, null=True) # Legacy
+    api_endpoint = models.CharField(max_length=255, blank=True, null=True) # For system tables
+    fields_list = models.TextField(default='name,code') # Comma separated list of fields
+    is_system = models.BooleanField(default=False)
+    status = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.table_name
+
+class CustomMasterValue(SoftDeleteModel):
+    definition = models.ForeignKey(CustomMasterDefinition, on_delete=models.CASCADE, related_name='values')
+    name = models.CharField(max_length=200)
+    code = models.CharField(max_length=100, blank=True, null=True)
+    status = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['definition', 'name'], name='unique_name_per_definition')
+        ]
+
+    def __str__(self):
+        return f"{self.definition.table_name} - {self.name}"
+
