@@ -1,8 +1,9 @@
-import requests
+import requests # type: ignore
 import time
-from .models import SystemConfig
-from .utils import decrypt_key
-from core.models import User, Role
+from typing import List, Dict, Any, cast
+from api_management.models import SystemConfig # type: ignore
+from api_management.utils import decrypt_key # type: ignore
+from core.models import User, Role # type: ignore
 
 # EXTERNAL_API_URL = "http://192.168.1.235:8000/api/employees/"  
 
@@ -15,7 +16,7 @@ CACHE_TIMEOUT = 300 # 5 minutes
 HR_ID_TO_CODE_CACHE = {}
 
 # Full employee list cache for team filtering
-GLOBAL_EMPLOYEE_CACHE = {'timestamp': 0, 'data': []}
+GLOBAL_EMPLOYEE_CACHE = {'timestamp': 0.0, 'data': []}
 GLOBAL_CACHE_TIMEOUT = 600 # 10 minutes
 
 def resolve_hr_id_to_code(hr_id, api_url, headers):
@@ -30,12 +31,12 @@ def resolve_hr_id_to_code(hr_id, api_url, headers):
         url = url.replace('//', '/').replace(':/', '://')
         resp = requests.get(url, headers=headers, timeout=5)
         if resp.status_code == 200:
-            data = resp.json() or {}
-            # The employee_code is at the top level for the detail endpoint
-            code = data.get('employee_code')
-            if code:
-                HR_ID_TO_CODE_CACHE[hr_id] = code
-                return code
+            data = resp.json()
+            if isinstance(data, dict):
+                code = data.get('employee_code')
+                if code:
+                    HR_ID_TO_CODE_CACHE[hr_id] = code
+                    return code
     except Exception as e:
         print(f"Error resolving HR ID {hr_id}: {e}")
     
@@ -56,13 +57,16 @@ def get_dynamic_employee_data(employee_code):
             
     # Fetch from API
     data = fetch_employee_data(employee_id_filter=employee_code)
-    if data and not data.get('error') and data.get('results'):
-        emp_data = data['results'][0]
-        CACHE_EMPLOYEE_DATA[employee_code] = {
-            'timestamp': now,
-            'data': emp_data
-        }
-        return emp_data
+    if isinstance(data, dict) and not data.get('error'):
+        results = data.get('results')
+        if isinstance(results, list) and len(results) > 0:
+            emp_data = results[0]
+            if isinstance(emp_data, dict):
+                CACHE_EMPLOYEE_DATA[employee_code] = {
+                    'timestamp': now,
+                    'data': emp_data
+                }
+                return emp_data
         
     return None
 
@@ -126,7 +130,7 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
             latency = (time.time() - start_time) * 1000
 
             try:
-                from .models import APILog
+                from api_management.models import APILog # type: ignore
                 APILog.objects.create(
                     source="External Integration",
                     endpoint=api_url,
@@ -137,15 +141,15 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
             except: pass
 
             response.raise_for_status()
-            data = response.json() or {}
+            data = response.json()
             
-            if not data:
+            if not isinstance(data, dict):
                 return {"count": 0, "results": []}
 
             total_count = data.get('count', 0)
             next_url = data.get('next')
             prev_url = data.get('previous')
-            page_results = data.get('results', [])
+            page_results = list(data.get('results', []))
             
             # If we need more data for the current page_size
             current_external_page = start_external_page
@@ -156,12 +160,13 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
                     next_data = next_resp.json() or {}
                     page_results.extend(next_data.get('results', []))
                     next_url = next_data.get('next')
-                    current_external_page += 1
+                    current_external_page = int(current_external_page) + 1 # type: ignore
                 except:
                     break
             
             # Slice to exact page_size in case we fetched too many
-            page_results = page_results[:int(page_size)]
+            limit_idx = int(page_size)
+            page_results = page_results[:limit_idx] # type: ignore
 
             if fetch_all_pages:
                 while next_url:
@@ -231,8 +236,8 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
                             resolved_reporting_to = raw_reporting_to
 
                         # Update pos_detail with resolved hierarchy
-                        if pos_detail:
-                            pos_detail['reporting_to'] = resolved_reporting_to
+                        if isinstance(pos_detail, dict):
+                            pos_detail['reporting_to'] = resolved_reporting_to # type: ignore
 
                         transformed_results.append({
                             "employee": {
@@ -328,8 +333,9 @@ def get_manager_reports_locations(manager_code):
     
     # Check global cache first
     cached = GLOBAL_EMPLOYEE_CACHE
-    if now - cached['timestamp'] < GLOBAL_CACHE_TIMEOUT and cached['data']:
-        all_emps_results = cached['data']
+    ts = cast(float, cached.get('timestamp', 0))
+    if now - ts < GLOBAL_CACHE_TIMEOUT and cached.get('data'):
+        all_emps_results = cast(List[Any], cached['data'])
     else:
         # Fetch fresh data (summary version is faster)
         # Note: fetch_all_pages=True iterates through all results
@@ -338,55 +344,81 @@ def get_manager_reports_locations(manager_code):
             return []
         
         all_emps_results = response_data.get('results', [])
+        if not isinstance(all_emps_results, list):
+            all_emps_results = []
+        
         # Update cache
         GLOBAL_EMPLOYEE_CACHE['timestamp'] = now
         GLOBAL_EMPLOYEE_CACHE['data'] = all_emps_results
 
-    # 1. Resolve manager's internal employee ID from the manager_code
+    if not isinstance(all_emps_results, list):
+        all_emps_results = []
+
     manager_id = None
     for item in all_emps_results:
-        if item.get('employee', {}).get('employee_code') == manager_code:
-            manager_id = item.get('employee', {}).get('id')
-            break
+        if isinstance(item, dict):
+            emp_node = item.get('employee')
+            if isinstance(emp_node, dict) and emp_node.get('employee_code') == manager_code:
+                manager_id = emp_node.get('id')
+                break
 
     if not manager_id:
         return []
 
     # 2. Recursively find ALL subordinates at every level
     team_ids = set()
-    def find_all_reports(m_id):
+    def find_all_reports(m_id, results_list):
         direct_ids = []
-        for item in all_emps_results:
-            reporting_to = item.get('position', {}).get('reporting_to', [])
+        for item in results_list:
+            if not isinstance(item, dict): continue
+            
+            pos_node = item.get('position')
+            if not isinstance(pos_node, dict): continue
+            
+            reporting_to = pos_node.get('reporting_to', [])
+            if not isinstance(reporting_to, list): continue
+            
             is_match = False
-            if reporting_to and isinstance(reporting_to[0], dict):
+            if len(reporting_to) > 0 and isinstance(reporting_to[0], dict):
                 r_mgr_id = reporting_to[0].get('employee_id')
                 if r_mgr_id and str(r_mgr_id) == str(m_id):
                     is_match = True
-            elif reporting_to and isinstance(reporting_to[0], (str, int)):
+            elif len(reporting_to) > 0 and isinstance(reporting_to[0], (str, int)):
                 if str(reporting_to[0]) == str(m_id):
                     is_match = True
             
             if is_match:
-                emp_id = item.get('employee', {}).get('id')
-                if emp_id and emp_id not in team_ids:
-                    team_ids.add(emp_id)
-                    direct_ids.append(emp_id)
+                emp_node = item.get('employee')
+                if isinstance(emp_node, dict):
+                    emp_id = emp_node.get('id')
+                    if emp_id and emp_id not in team_ids:
+                        team_ids.add(emp_id)
+                        direct_ids.append(emp_id)
         
         for d_id in direct_ids:
-            find_all_reports(d_id)
+            find_all_reports(d_id, results_list)
 
-    find_all_reports(manager_id)
+    find_all_reports(manager_id, all_emps_results)
 
     # 3. Collect geo_location cluster/district for all team members
     team_locations = set()
     for item in all_emps_results:
-        emp_id = item.get('employee', {}).get('id')
+        if not isinstance(item, dict): continue
+        
+        emp_node = item.get('employee')
+        if not isinstance(emp_node, dict): continue
+        
+        emp_id = emp_node.get('id')
         if emp_id in team_ids:
-            geo = item.get('office', {}).get('geo_location', {})
+            off_node = item.get('office', {})
+            if not isinstance(off_node, dict): off_node = {}
+            
+            geo = off_node.get('geo_location', {})
+            if not isinstance(geo, dict): geo = {}
+            
             # Prioritize cluster > district > mandal > office name
             loc_label = (geo.get('cluster') or geo.get('district') or geo.get('mandal') or 
-                         item.get('office', {}).get('name') or '').strip()
+                         off_node.get('name') or '').strip()
             if loc_label:
                 team_locations.add(loc_label)
 
@@ -427,7 +459,7 @@ def fetch_geo_data():
         latency = (time.time() - start_time) * 1000
 
         try:
-            from .models import APILog
+            from api_management.models import APILog # type: ignore
             APILog.objects.create(
                 source="Geo Integration",
                 endpoint=api_url,
