@@ -109,6 +109,7 @@ const TripTimeline = () => {
 
                 return {
                     title: step.title,
+                    travelMode: '',
                     status: 'current',
                     date: 'Action Required',
                     description: actionDescription,
@@ -204,13 +205,7 @@ const TripTimeline = () => {
                                     <p>{trip.source} → {trip.destination}</p>
                                 </div>
                             </div>
-                            <div className="s-item">
-                                <Briefcase size={18} />
-                                <div>
-                                    <label>Travel Mode</label>
-                                    <p>{trip.travel_mode}</p>
-                                </div>
-                            </div>
+                            {/* Travel Mode removed as per user request */}
                             <div className="s-item">
                                 <TrendingUp size={18} />
                                 <div>
@@ -222,7 +217,7 @@ const TripTimeline = () => {
                                 <ShieldCheck size={18} />
                                 <div>
                                     <label>Reporting Manager</label>
-                                    <p>{trip.reporting_manager?.name || 'Assigned'}</p>
+                                    <p>{trip.reporting_manager_name || 'Assigned'}</p>
                                 </div>
                             </div>
                         </div>

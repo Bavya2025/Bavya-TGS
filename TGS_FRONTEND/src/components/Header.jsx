@@ -51,7 +51,7 @@ const Header = () => {
     // Comprehensive role detection matching backend logic
     let userRole = rawRole;
     if (rawRole === 'admin') userRole = 'admin';
-    else if (dept.includes('finance') || desig.includes('finance') || rawRole === 'finance') userRole = 'finance';
+    else if (dept.includes('finance') || desig.includes('finance') || rawRole.includes('finance')) userRole = 'finance';
     else if (dept.includes('hr') || desig.includes('hr') || rawRole === 'hr') userRole = 'hr';
     else if (dept.includes('cfo') || desig.includes('cfo') || rawRole === 'cfo') userRole = 'cfo';
     else if (rawRole.includes('guesthouse') || rawRole === 'guesthousemanager') userRole = 'guesthousemanager';
@@ -102,7 +102,7 @@ const Header = () => {
         { title: 'System Policy', icon: <BookOpen size={18} />, path: '/policy', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo'] },
         { title: 'CFO Room', icon: <BarChart3 size={18} />, path: '/cfo-war-room', roles: ['cfo', 'admin'] },
         { title: 'User Management', icon: <Users size={18} />, path: '/employees', roles: ['admin'] },
-        { title: 'Guest Houses', icon: <Building2 size={18} />, path: '/guesthouse', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo', 'guesthousemanager'] },
+        { title: 'Guest Houses', icon: <Building2 size={18} />, path: '/guesthouse', roles: ['admin', 'cfo', 'guesthousemanager'] },
         { title: 'Fleet Management', icon: <Car size={18} />, path: '/fleet', roles: ['admin', 'guesthousemanager'] },
         { title: 'API Management', icon: <Settings size={18} />, path: '/api-management', roles: ['admin'] },
         { title: 'Route Masters', icon: <MapPin size={18} />, path: '/route-management', roles: ['admin'] },
@@ -265,6 +265,10 @@ const Header = () => {
                                     <NavLink to="/profile" className="dropdown-item" onClick={() => setShowProfileDropdown(false)}>
                                         <Users size={18} />
                                         <span>My Profile</span>
+                                    </NavLink>
+                                    <NavLink to="/settings" className="dropdown-item" onClick={() => setShowProfileDropdown(false)}>
+                                        <Settings size={18} />
+                                        <span>System Settings</span>
                                     </NavLink>
                                     <button className="dropdown-item logout-item" onClick={logout}>
                                         <LogOut size={18} />

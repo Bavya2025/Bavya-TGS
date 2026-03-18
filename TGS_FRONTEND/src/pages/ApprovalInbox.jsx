@@ -371,6 +371,10 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                 <p className="text-blue-600 font-bold">₹{task.details?.executive_approved_amount || '0.00'}</p>
                             </div>
                         )}
+                        <div className="info-block highlight">
+                            <span>Currently With</span>
+                            <p className="text-indigo-600 font-semibold">{task.current_approver_name || (activeTab === 'pending' ? 'You' : 'N/A')}</p>
+                        </div>
                     </div>
 
                     <div className="detail-section">
@@ -445,6 +449,41 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                                 onChange={(e) => setExecAmount(e.target.value)}
                                                 placeholder="0.00"
                                             />
+                                        </div>
+                                    </div>
+                                )}
+                                {isFinanceExec && task.status === 'PENDING_FINAL_RELEASE' && (
+                                    <div className="payout-editor animate-fade-in premium-card" style={{ padding: '16px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '12px', marginTop: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                                        <h4 style={{ color: '#0369a1', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.1rem', fontWeight: 600 }}>
+                                            <IndianRupee size={20} className="text-sky-600" /> disbursement / Payout Processing
+                                        </h4>
+                                        <div className="payout-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                                            <div className="form-group">
+                                                <label style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '6px', display: 'block', fontWeight: 600 }}>Payment Mode</label>
+                                                <select 
+                                                    className="form-input" 
+                                                    value={paymentMode} 
+                                                    onChange={e => setPaymentMode(e.target.value)}
+                                                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', outline: 'none' }}
+                                                >
+                                                    <option value="">Select Mode</option>
+                                                    <option value="NEFT">NEFT</option>
+                                                    <option value="UPI">UPI</option>
+                                                    <option value="Bank Transfer">Bank Transfer</option>
+                                                    <option value="Cash">Cash</option>
+                                                </select>
+                                            </div>
+                                            <div className="form-group">
+                                                <label style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '6px', display: 'block', fontWeight: 600 }}>Transaction / Ref ID</label>
+                                                <input 
+                                                    type="text" 
+                                                    className="form-input" 
+                                                    value={transactionId} 
+                                                    onChange={e => setTransactionId(e.target.value)}
+                                                    placeholder="Enter Ref Number"
+                                                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', outline: 'none' }}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -863,12 +902,30 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                 {activeTab !== 'history' && (
                     <div className="detail-actions-container">
                         <div className="detail-actions">
-                            <button className="action-btn reject" onClick={() => handleAction('Reject')}>
-                                <XCircle size={18} /> <span>Reject</span>
-                            </button>
-                            <button className="action-btn approve" onClick={() => handleAction('Approve')}>
-                                <CheckCircle size={18} /> <span>Approve</span>
-                            </button>
+                            {task.status === 'PENDING_FINAL_RELEASE' ? (
+                                <>
+                                    <button className="action-btn reject" onClick={() => handleAction('RejectByFinance')}>
+                                        <XCircle size={18} /> <span>Reject Payout</span>
+                                    </button>
+                                    <button 
+                                        className="action-btn approve" 
+                                        onClick={() => handleAction('Transfer')}
+                                        disabled={!paymentMode || !transactionId}
+                                        style={(!paymentMode || !transactionId) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                                    >
+                                        <IndianRupee size={18} /> <span>Process disbursement</span>
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button className="action-btn reject" onClick={() => handleAction('Reject')}>
+                                        <XCircle size={18} /> <span>Reject</span>
+                                    </button>
+                                    <button className="action-btn approve" onClick={() => handleAction('Approve')}>
+                                        <CheckCircle size={18} /> <span>Approve</span>
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
@@ -1288,6 +1345,9 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                                                     <div className="task-meta">
                                                                         <span className="task-requester">{task.requester}</span>
                                                                         <span className="task-date">• {task.date}</span>
+                                                                        <div className="task-current-approver" style={{ fontSize: '0.75rem', color: '#6366f1', marginTop: '4px', fontWeight: 600 }}>
+                                                                            Currently with: {task.current_approver_name || (activeTab === 'pending' ? 'You' : 'N/A')}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                                 <div className="task-amount">{task.cost}</div>

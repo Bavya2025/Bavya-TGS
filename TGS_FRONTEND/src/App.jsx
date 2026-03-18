@@ -42,6 +42,7 @@ import JobReport from './pages/JobReport';
 import TravelCreation from './pages/TravelCreation';
 import AdminMasters from './pages/AdminMasters';
 import NotificationsPage from './pages/NotificationsPage';
+import Settings from './pages/Settings';
 import SupportBot from './components/SupportBot';
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -278,16 +279,19 @@ const ReminderHandler = () => {
   return null;
 };
 
+import { ThemeProvider } from './context/ThemeContext';
+
 function App() {
   return (
     <ToastProvider>
       <ApiErrorHandler />
       <AuthProvider>
-        <NotificationHandler />
-        <ReminderHandler />
-        <Router>
-          <SupportBot />
-          <Routes>
+        <ThemeProvider>
+          <NotificationHandler />
+          <ReminderHandler />
+          <Router>
+            <SupportBot />
+            <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/trips" element={<ProtectedRoute><MyTrips /></ProtectedRoute>} />
@@ -327,10 +331,12 @@ function App() {
             <Route path="/travel-creation" element={<ProtectedRoute><TravelCreation /></ProtectedRoute>} />
             <Route path="/AdminMasters" element={<ProtectedRoute><AdminMasters /></ProtectedRoute>} />
             <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           </Routes>
         </Router>
-      </AuthProvider>
-    </ToastProvider>
+      </ThemeProvider>
+    </AuthProvider>
+</ToastProvider>
   );
 }
 

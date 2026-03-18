@@ -97,7 +97,7 @@ const Login = () => {
                     playsInline
                     preload="auto"
                 >
-                    <source src="/logo.mp4" type="video/mp4" />
+                    <source src="/logo_video.mp4" type="video/mp4" />
                 </video>
                 <div className="visual-overlay"></div>
                 <div className="visual-content">

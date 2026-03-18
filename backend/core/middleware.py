@@ -84,19 +84,18 @@ class ThreadLocalMiddleware:
         _thread_locals.request = request
         
         # Set skip_external_api for specific "DB-only" views
+        # IMPORTANT: Do NOT add /api/trips/, /api/advances/, /api/claims/ here.
+        # Those paths call resolve_approver() which NEEDS the external API to
+        # correctly resolve the reporting_manager hierarchy. Without it, all
+        # requests fall back to HR/Admin instead of routing to the actual manager.
         db_only_paths = [
-            '/api/auth/login',
-            '/api/auth/me',
             '/api/heartbeat',
             '/api/bot/chat',
             '/api/audit-logs/', 
             '/api/login-history/', 
             '/api/dashboard-stats/',
             '/api/audit-history',
-            '/api/session-history',
-            '/api/approvals/',
-            '/api/trips/',
-            '/api/users/'
+            '/api/session-history'
         ]
         _thread_locals.skip_external_api = any(request.path.startswith(p) for p in db_only_paths)
         

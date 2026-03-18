@@ -15,6 +15,19 @@ class User(models.Model):
     password_hash = models.CharField(max_length=255)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    theme = models.CharField(max_length=50, default='classic', choices=[
+        ('classic', 'Classic Burgundy'),
+        ('ocean', 'Ocean Blue'),
+        ('teal', 'Modern Teal'),
+        ('sunset', 'Sunset Orange'),
+        ('midnight', 'Midnight Navy'),
+        ('minimal', 'Minimalist Gray'),
+        ('pastel', 'Pastel Dreams'),
+        ('coastal', 'Coastal Sand'),
+        ('sunny', 'Sunny Sky'),
+        ('slate', 'Slate Elegance'),
+        ('tropical', 'Tropical Teal')
+    ])
 
  # FRS Fields
     is_face_enrolled = models.BooleanField(default=False)

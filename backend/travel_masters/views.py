@@ -538,6 +538,11 @@ class FuelRateMasterViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(vehicle_type__iexact=vehicle_type)
         return queryset.order_by('state', 'vehicle_type')
 
+    def get_permissions(self):
+        if self.action == 'my_rate':
+            return [IsCustomAuthenticated()]
+        return [IsAdmin()]
+
     @action(detail=False, methods=['get'], url_path='my_rate')
     def my_rate(self, request):
         """

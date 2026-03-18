@@ -94,31 +94,43 @@ def login_view(request):
             'user': {
                 'id': user.id,
                 'employee_id': user.employee_id,
-                'name': user.name,
-                'role': user.role.name,
-                'department': user.department,
-                'designation': user.designation,
-                'office_level': user.office_level,
-                'email': user.email
+                'name': getattr(user, 'name', user.employee_id),
+                'role': user.role.name if user.role else 'Employee',
+                'department': getattr(user, 'department', 'N/A'),
+                'designation': getattr(user, 'designation', 'N/A'),
+                'office_level': getattr(user, 'office_level', 3),
+                'email': getattr(user, 'email', ''),
+                'theme': getattr(user, 'theme', 'classic')
             }
         })
         
     except Exception as e:
+        import traceback
+        print(f"DEBUG: Login Error: {str(e)}")
+        print(traceback.format_exc())
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsCustomAuthenticated])
 def me_view(request):
-    user = request.custom_user
-    return Response({
-        'id': user.id,
-        'employee_id': user.employee_id,
-        'name': user.name,
-        'role': user.role.name,
-        'department': user.department,
-        'designation': user.designation,
-        'office_level': user.office_level
-    })
+    try:
+        user = request.custom_user
+        return Response({
+            'id': user.id,
+            'employee_id': user.employee_id,
+            'name': getattr(user, 'name', user.employee_id),
+            'role': user.role.name if user.role else 'Employee',
+            'department': getattr(user, 'department', 'N/A'),
+            'designation': getattr(user, 'designation', 'N/A'),
+            'office_level': getattr(user, 'office_level', 3),
+            'email': getattr(user, 'email', ''),
+            'theme': getattr(user, 'theme', 'classic')
+        })
+    except Exception as e:
+        import traceback
+        print(f"DEBUG: MeView Error: {str(e)}")
+        print(traceback.format_exc())
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 def logout_view(request):
@@ -824,3 +836,30 @@ def heartbeat_view(request):
         },
         'due_reminders': reminder_data
     })
+@api_view(['POST'])
+@permission_classes([IsCustomAuthenticated])
+def update_theme_view(request):
+    user = request.custom_user
+    theme = request.data.get('theme')
+    
+    if not theme:
+        return Response({'error': 'Theme is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    valid_themes = ['classic', 'ocean', 'teal', 'sunset', 'midnight', 'minimal']
+    if theme not in valid_themes:
+        return Response({'error': 'Invalid theme'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    user.theme = theme
+    user.save()
+    
+    AuditLog.objects.create(
+        user=user,
+        action='THEME_UPDATE',
+        model_name='User',
+        object_id=str(user.id),
+        object_repr=str(user),
+        ip_address=request.META.get('REMOTE_ADDR'),
+        details={'new_theme': theme}
+    )
+    
+    return Response({'message': 'Theme updated successfully', 'theme': theme})

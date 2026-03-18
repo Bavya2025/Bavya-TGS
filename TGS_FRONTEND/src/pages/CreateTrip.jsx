@@ -87,8 +87,7 @@ const CreateTrip = () => {
     const longDistanceCities = React.useMemo(() => {
         if (!fullHierarchy || !fullHierarchy.length) return [];
         const result = [];
-        const CLUSTER_TYPES = ['city', 'metropolitan city', 'metro city', 'metro_city', 'town', 'village', 'metro'];
-        const TARGET_TYPES = ['METRO', 'CITY', 'TOWN', 'VILLAGE'];
+        const TARGET_TYPES = ['METRO', 'CITY', 'TOWN', 'VILLAGE', 'CLUSTER'];
 
         const getSpecificType = (t) => {
             const typeValue = (t || '').toLowerCase().trim();
@@ -96,6 +95,7 @@ const CreateTrip = () => {
             if (typeValue.includes('city')) return 'CITY';
             if (typeValue.includes('town')) return 'TOWN';
             if (typeValue.includes('village')) return 'VILLAGE';
+            if (typeValue.includes('cluster')) return 'CLUSTER';
             return null;
         };
 
@@ -112,7 +112,6 @@ const CreateTrip = () => {
                 });
             }
 
-            // Recurse into all possible child keys to find more nodes
             const childKeys = [
                 'continents', 'countries', 'states', 'districts', 'mandals', 
                 'clusters', 'cluster', 'children', 'cities', 'metro_polyten_cities', 
@@ -127,7 +126,6 @@ const CreateTrip = () => {
 
         fullHierarchy.forEach(walk);
 
-        // De-duplicate by both ID and Name to ensure unique entries
         const seen = new Set();
         return result
             .filter(loc => {
@@ -723,7 +721,7 @@ const CreateTrip = () => {
                 <div className="form-grid">
 
                     {/* JOURNEY LOGISTICS */}
-                    <div className="form-section premium-card">
+                    <div className="form-section premium-card overflow-visible">
                         <div className="section-title">
                             <Navigation size={20} className="title-icon" />
                             <h3>Journey Logistics</h3>
@@ -1021,7 +1019,7 @@ const CreateTrip = () => {
                     </div>
 
                     {/* COMPOSITION & PURPOSE */}
-                    <div className="form-section premium-card">
+                    <div className="form-section premium-card overflow-visible">
                         <div className="section-title">
                             <Users size={20} className="title-icon" />
                             <h3>Composition & Purpose</h3>

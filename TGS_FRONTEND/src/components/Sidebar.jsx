@@ -80,6 +80,12 @@ const Sidebar = () => {
                 { title: 'Fuel Rate Master', icon: <Fuel size={18} />, path: '/fuel-master', roles: ['admin'] },
                 { title: 'Masters', icon: <Settings size={18} />, path: '/AdminMasters', roles: ['admin'] },
             ]
+        },
+        {
+            label: 'PERSONALIZATION',
+            items: [
+                { title: 'System Settings', icon: <Settings size={18} />, path: '/settings' },
+            ]
         }
     ];
 

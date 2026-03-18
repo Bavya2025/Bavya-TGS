@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Mail, Phone, MapPin, Briefcase, Building2, Hash, AlertCircle, Link as LinkIcon, Edit, Save } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { User, Mail, Phone, MapPin, Briefcase, Building2, Hash } from 'lucide-react';
 import api from '../api/api';
 
 const Profile = () => {
@@ -17,7 +16,6 @@ const Profile = () => {
 
             if (!apiKey) {
                 setApiKeyMissing(true);
-                console.warn("API Key missing in local storage. Attempting fetch with Bearer token only.");
             }
 
             try {
@@ -45,7 +43,6 @@ const Profile = () => {
                     console.warn("User not found in employee list for code:", user?.username);
                 }
             } catch (err) {
-                console.error("Error fetching profile:", err);
                 setError('Failed to load detailed profile data.');
             } finally {
                 setLoading(false);
@@ -61,9 +58,7 @@ const Profile = () => {
         return <div className="loading-state">Please log in to view your profile.</div>;
     }
 
-    if (apiKeyMissing) {
-        console.warn("API Key missing, displaying basic profile info from auth context.");
-    }
+
 
     const displayData = profileData ? {
         employee: {

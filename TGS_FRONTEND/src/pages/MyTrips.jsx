@@ -192,7 +192,7 @@ const MyTrips = () => {
                 cost: trip.cost_estimate || '0',
                 from: trip.source || 'N/A',
                 to: trip.destination || 'N/A',
-                travelMode: trip.travel_mode || '',
+                travelMode: '',
                 composition: trip.composition,
                 tripLeader: trip.trip_leader,
                 enRoute: trip.en_route,
@@ -229,17 +229,14 @@ const MyTrips = () => {
     const filteredTrips = trips.filter(t => {
         const s = (t.status || '').toLowerCase();
 
-        // Comprehensive list of states to hide as per user request (Pending/Processing states)
-        const hideStates = ['pending', 'submitted', 'forwarded', 'draft', 'under process', 'in progress', 'ongoing'];
-        const isHidden = hideStates.some(state => s === state || s.includes('pending'));
+        // Strict filter as per user request: only show "Approved"
+        // and exclude submitted, pending, expired, rejected, completed.
+        if (s !== 'approved') return false;
 
-        if (isHidden) return false;
-
-        const matchesStatus = filter === 'All Status' || t.status === filter;
         const matchesType = typeFilter === 'All' ||
             (typeFilter === 'Trip' && !t.considerAsLocal) ||
             (typeFilter === 'Travel' && t.considerAsLocal);
-        return matchesStatus && matchesType;
+        return matchesType;
     });
 
     return (
@@ -332,6 +329,9 @@ const MyTrips = () => {
                                         </div>
                                         <div className="meta-item">
                                             <Calendar size={14} /> <span>{trip.dates}</span>
+                                        </div>
+                                        <div className="meta-item">
+                                            <Clock size={14} /> <span className="text-secondary font-bold" style={{ color: '#bb0633' }}>Currently with: {trip.currentApproverName}</span>
                                         </div>
                                     </div>
                                 </div>

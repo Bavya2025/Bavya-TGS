@@ -14,7 +14,8 @@ from .views import (
     LocalProviderMasterViewSet, StayTypeMasterViewSet, RoomTypeMasterViewSet,
     MealCategoryMasterViewSet, MealTypeMasterViewSet, IncidentalTypeMasterViewSet,
     CustomMasterDefinitionViewSet, CustomMasterValueViewSet, MasterModuleViewSet,
-    DynamicMasterBundleView
+    DynamicMasterBundleView,
+    debug_routing_view
 )
 from .views_export import ExpenseStatementPDFView, ExpenseStatementExcelView
 
@@ -81,5 +82,6 @@ urlpatterns = [
     path('approvals/count/', ApprovalCountView.as_view(), name='approvals-count'),
     path('settlement/', TripSettlementView.as_view(), name='trip-settlement'),
     path('war-room/', CFOWarRoomView.as_view(), name='war-room'),
+    path('debug-routing/', debug_routing_view, name='debug-routing'),
     path('', include(router.urls)),
 ]
