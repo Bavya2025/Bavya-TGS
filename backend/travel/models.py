@@ -61,7 +61,7 @@ class Trip(SoftDeleteModel):
     ]
 
     user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='trips', null=True, blank=True)
-    trip_id = models.CharField(max_length=100, unique=True, primary_key=True, editable=False)
+    trip_id = models.CharField(max_length=255, unique=True, primary_key=True, editable=False)
     source = models.CharField(max_length=100) 
     destination = models.CharField(max_length=100) 
     route_path = models.ForeignKey('travel_masters.RoutePath', on_delete=models.SET_NULL, null=True, blank=True)

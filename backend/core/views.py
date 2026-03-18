@@ -27,31 +27,40 @@ def hash_password(password):
 def login_view(request):
     try:
         data = request.data
-        employee_id = data.get('employee_id')
+        employee_id = (data.get('employee_id') or '').strip()
         password = data.get('password')
         
-        if not employee_id or not password:
-            return Response({'error': 'Employee ID and Password are required'}, status=status.HTTP_400_BAD_REQUEST)
+        # Strict case-sensitive lookup
+        employee_id = (data.get('employee_id') or '').strip()
+        user = User.objects.filter(employee_id=employee_id).first()
         
-        user = User.objects.filter(employee_id__iexact=employee_id, is_active=True).first()
+        # Verify exact case match (handles case-insensitive DB collations)
+        if user and user.employee_id != employee_id:
+            user = None
+
         if not user:
              return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if not user.is_active:
+             return Response({'error': 'Your account is currently inactive. Please contact support.'}, status=status.HTTP_401_UNAUTHORIZED)
              
         hashed_input = hash_password(password)
         if user.password_hash != hashed_input:
-            AuditLog.objects.create(
-                action='LOGIN_FAILED',
-                model_name='User',
-                object_repr=employee_id,
-                ip_address=request.META.get('REMOTE_ADDR'),
-                details={'reason': 'Invalid password'}
-            )
+            try:
+                AuditLog.objects.create(
+                    action='LOGIN_FAILED',
+                    model_name='User',
+                    object_repr=employee_id,
+                    ip_address=request.META.get('REMOTE_ADDR'),
+                    details={'reason': 'Invalid password'}
+                )
+            except: pass # Don't let audit logging crash the login failure response
             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
             
         expiration = timezone.now() + datetime.timedelta(hours=8)
         payload = {
             'user_id': user.id,
-            'role': user.role.name,
+            'role': user.role.name if user.role else 'Employee',
             'exp': expiration
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
@@ -108,7 +117,7 @@ def login_view(request):
         import traceback
         print(f"DEBUG: Login Error: {str(e)}")
         print(traceback.format_exc())
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Authentication server error. Please retry later or contact IT.'}, status=status.HTTP_401_UNAUTHORIZED)
 
 @api_view(['GET'])
 @permission_classes([IsCustomAuthenticated])

@@ -77,9 +77,9 @@ const Login = () => {
             } else if (!err.response) {
                 setError('Server is unreachable. Please check if the backend is running.');
             } else if (err.response.status === 500) {
-                setError('Internal Server Error. Please contact support.');
+                setError(err.response.data?.error || 'Internal Server Error. Please contact support.');
             } else {
-                setError('Invalid username or password. Please try again.');
+                setError(err.response.data?.error || 'Invalid username or password. Please try again.');
             }
         } finally {
             setIsLoading(false);
