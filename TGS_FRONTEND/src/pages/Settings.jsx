@@ -51,7 +51,7 @@ const Settings = () => {
                 </div>
             </div>
 
-            <div className="settings-container" style={{ display: 'grid', gridTemplateColumns: 'minmax(250px, 300px) 1fr', gap: '2rem', marginTop: '2rem' }}>
+            <div className="settings-layout-inner">
                 {/* Sidebar Navigation */}
                 <div className="settings-nav premium-card">
                     {sections.map(section => (

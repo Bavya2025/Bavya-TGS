@@ -312,9 +312,15 @@ const FinanceDashboard = () => {
                             ) : (
                                 <tr>
                                     <td colSpan="8" className="fd-empty-cell">
-                                        {activeTab === 'pending' ? 'No pending financial actions.' : 
-                                         activeTab === 'processing' ? 'No transactions currently under process.' :
-                                         'No completed transfers found.'}
+                                        <div className="empty-state-fims">
+                                            <AlertCircle size={32} opacity={0.3} style={{ marginBottom: '10px' }} />
+                                            <p>
+                                                {activeTab === 'pending' ? 'No pending financial actions found in queue.' : 
+                                                 activeTab === 'processing' ? 'No transactions are currently under audit process.' :
+                                                 activeTab === 'completed' ? 'No completed fund transfers found.' :
+                                                 'No flagged or rejected requests found at this time.'}
+                                            </p>
+                                        </div>
                                     </td>
                                 </tr>
                             )}

@@ -1,12 +1,11 @@
 from rest_framework import serializers
 from .models import (
     Trip, TripOdometer, Expense, TravelClaim, TravelAdvance, Dispute, PolicyDocument, BulkActivityBatch, JobReport,
-    TravelModeMaster, BookingTypeMaster, AirlineMaster, FlightClassMaster, TrainClassMaster,
-    BusOperatorMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
-    TrainProviderMaster, BusProviderMaster, IntercityCabProviderMaster,
-    LocalTravelModeMaster, LocalCarSubTypeMaster, LocalBikeSubTypeMaster, LocalProviderMaster,
+    TravelModeMaster, BookingTypeMaster, AirlineMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
+    LocalTravelModeMaster, LocalProviderMaster,
     StayTypeMaster, RoomTypeMaster, MealCategoryMaster, MealTypeMaster, IncidentalTypeMaster,
-    CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking
+    CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking,
+    TravelOperatorMaster, TravelClassMaster, TravelVehicleMaster, LocalSubTypeMaster
 )
 from api_management.utils import encrypt_key, decrypt_key
 
@@ -32,20 +31,6 @@ class AirlineMasterSerializer(serializers.ModelSerializer):
         model = AirlineMaster
         fields = '__all__'
 
-class FlightClassMasterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = FlightClassMaster
-        fields = '__all__'
-
-class TrainClassMasterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TrainClassMaster
-        fields = '__all__'
-
-class BusOperatorMasterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BusOperatorMaster
-        fields = '__all__'
 
 class BusTypeMasterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -62,35 +47,32 @@ class TravelProviderMasterSerializer(serializers.ModelSerializer):
         model = TravelProviderMaster
         fields = '__all__'
 
-class TrainProviderMasterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TrainProviderMaster
-        fields = '__all__'
-
-class BusProviderMasterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BusProviderMaster
-        fields = '__all__'
-
-class IntercityCabProviderMasterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = IntercityCabProviderMaster
-        fields = '__all__'
 
 class LocalTravelModeMasterSerializer(serializers.ModelSerializer):
     class Meta:
         model = LocalTravelModeMaster
         fields = '__all__'
 
-class LocalCarSubTypeMasterSerializer(serializers.ModelSerializer):
+class LocalSubTypeMasterSerializer(serializers.ModelSerializer):
     class Meta:
-        model = LocalCarSubTypeMaster
+        model = LocalSubTypeMaster
         fields = '__all__'
 
-class LocalBikeSubTypeMasterSerializer(serializers.ModelSerializer):
+class TravelOperatorMasterSerializer(serializers.ModelSerializer):
     class Meta:
-        model = LocalBikeSubTypeMaster
+        model = TravelOperatorMaster
         fields = '__all__'
+
+class TravelClassMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TravelClassMaster
+        fields = '__all__'
+
+class TravelVehicleMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TravelVehicleMaster
+        fields = '__all__'
+
 
 class LocalProviderMasterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -117,7 +99,10 @@ class MealTypeMasterSerializer(serializers.ModelSerializer):
         model = MealTypeMaster
         fields = '__all__'
 
+from rest_framework.validators import UniqueValidator
+
 class IncidentalTypeMasterSerializer(serializers.ModelSerializer):
+    expense_type = serializers.CharField(validators=[UniqueValidator(queryset=IncidentalTypeMaster.all_objects.all(), message="This Expense Type already exists.")])
     class Meta:
         model = IncidentalTypeMaster
         fields = '__all__'
@@ -133,28 +118,48 @@ class CustomMasterDefinitionSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class CustomMasterValueSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        definition = attrs.get('definition') or getattr(self.instance, 'definition', None)
+        raw_name = attrs.get('name', getattr(self.instance, 'name', ''))
+        name = raw_name.strip() if isinstance(raw_name, str) else raw_name
+
+        if not definition or not name:
+            return attrs
+
+        attrs['name'] = name
+        existing_qs = CustomMasterValue.all_objects.filter(definition=definition, name=name)
+        if self.instance:
+            existing_qs = existing_qs.exclude(pk=self.instance.pk)
+
+        active_match = existing_qs.filter(is_deleted=False).first()
+        if active_match:
+            raise serializers.ValidationError({
+                'name': 'This value already exists in the selected master table.'
+            })
+
+        deleted_match = existing_qs.filter(is_deleted=True).first()
+        if deleted_match and not self.instance:
+            attrs['_restore_existing'] = deleted_match
+
+        return attrs
+
+    def create(self, validated_data):
+        restore_existing = validated_data.pop('_restore_existing', None)
+        if restore_existing:
+            restore_existing.name = validated_data.get('name', restore_existing.name)
+            restore_existing.code = validated_data.get('code', restore_existing.code)
+            restore_existing.status = validated_data.get('status', restore_existing.status)
+            restore_existing.is_deleted = False
+            restore_existing.deleted_at = None
+            restore_existing.save()
+            return restore_existing
+
+        return super().create(validated_data)
+
     class Meta:
         model = CustomMasterValue
         fields = '__all__'
-
-    def validate(self, data):
-        definition = data.get('definition')
-        name = data.get('name')
-        code = data.get('code')
-        
-        # Check for unique constraints manually to provide a better error message
-        if not self.instance: # On create
-            if CustomMasterValue.objects.filter(definition=definition, name=name).exists():
-                raise serializers.ValidationError({"name": f"A record with the name '{name}' already exists in this table."})
-            if code and CustomMasterValue.objects.filter(definition=definition, code=code).exists():
-                raise serializers.ValidationError({"code": f"A record with the code '{code}' already exists in this table."})
-        else: # On update
-            if CustomMasterValue.objects.filter(definition=definition, name=name).exclude(pk=self.instance.pk).exists():
-                raise serializers.ValidationError({"name": f"A record with the name '{name}' already exists in this table."})
-            if code and CustomMasterValue.objects.filter(definition=definition, code=code).exclude(pk=self.instance.pk).exists():
-                raise serializers.ValidationError({"code": f"A record with the code '{code}' already exists in this table."})
-                
-        return data
+        validators = []
 
 # --- CORE SERIALIZERS ---
 
@@ -230,8 +235,6 @@ class TravelClaimSerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()
     reporting_manager_name = serializers.SerializerMethodField()
 
-    current_approver_name = serializers.ReadOnlyField(source='current_approver.name')
-
     class Meta:
         model = TravelClaim
         fields = '__all__'
@@ -246,8 +249,6 @@ class TravelAdvanceSerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()
     reporting_manager_name = serializers.SerializerMethodField()
 
-    current_approver_name = serializers.ReadOnlyField(source='current_approver.name')
-
     class Meta:
         model = TravelAdvance
         fields = '__all__'
@@ -256,7 +257,7 @@ class TravelAdvanceSerializer(serializers.ModelSerializer):
         return obj.user_name or (obj.trip.user.name if obj.trip and obj.trip.user else 'Unknown User')
 
     def get_reporting_manager_name(self, obj):
-        return obj.reporting_manager_name or (obj.trip.user.reporting_manager.name if obj.trip and obj.trip.user and obj.trip.user.reporting_manager else None)
+        return obj.reporting_manager_name or (obj.trip.user.reporting_manager.name if obj.trip and obj.trip.user and obj.user.reporting_manager else None)
 
 class DisputeSerializer(serializers.ModelSerializer):
     trip_id_display = serializers.CharField(source='trip.trip_id', read_only=True)
@@ -295,7 +296,6 @@ class TripSerializer(serializers.ModelSerializer):
     has_gh_booking = serializers.SerializerMethodField()
     has_vehicle_booking = serializers.SerializerMethodField()
     job_reports = JobReportSerializer(many=True, read_only=True)
-    current_approver_name = serializers.ReadOnlyField(source='current_approver.name')
 
     class Meta:
         model = Trip
@@ -306,7 +306,7 @@ class TripSerializer(serializers.ModelSerializer):
             'trip_leader', 'en_route', 'route_path', 'route_path_name', 'project_code', 'consider_as_local', 'accommodation_requests',
             'vehicle_type', 'members', 'lifecycle_events', 'created_at', 'updated_at',
             'advances', 'expenses', 'odometer', 'claim', 'reporting_manager_name',
-            'current_approver', 'current_approver_name', 'total_approved_advance', 'total_expenses', 'wallet_balance', 'has_gh_booking', 'has_vehicle_booking',
+            'current_approver', 'total_approved_advance', 'total_expenses', 'wallet_balance', 'has_gh_booking', 'has_vehicle_booking',
             'rejection_reason', 'rejected_by', 'fuel_rate_snapshot', 'job_reports'
         ]
         read_only_fields = ('trip_id', 'user', 'user_name', 'user_emp_id', 'status', 'cost_estimate', 'created_at', 'updated_at', 'lifecycle_events')

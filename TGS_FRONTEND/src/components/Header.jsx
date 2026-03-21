@@ -24,7 +24,9 @@ import {
     ClipboardList,
     Fuel,
     Inbox as InboxIcon,
-    Archive
+    Archive,
+    Menu,
+    X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -35,6 +37,7 @@ const Header = () => {
     const [showManagement, setShowManagement] = useState(false);
     const [showProfileDropdown, setShowProfileDropdown] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const notifications = heartbeatData?.notifications || [];
     const unreadCount = heartbeatData?.unread_notification_count || 0;
 
@@ -61,6 +64,7 @@ const Header = () => {
         setShowManagement(false);
         setShowProfileDropdown(false);
         setShowNotifications(false);
+        setIsMobileMenuOpen(false);
     }, [location]);
 
     useEffect(() => {
@@ -121,8 +125,15 @@ const Header = () => {
         <header className="header">
             <div className="header-container">
                 <div className="header-left">
+                    <button 
+                        type="button"
+                        className="mobile-menu-toggle"
+                        onClick={() => setIsMobileMenuOpen(true)}
+                    >
+                        <Menu size={24} />
+                    </button>
                     <div className="logo-section">
-                        <div className="logo-box">
+                        <div className="logo-box" onClick={() => navigate('/')}>
                             <img src="/logo.png" alt="TGS Logo" className="logo-img" />
                         </div>
                     </div>
@@ -132,7 +143,7 @@ const Header = () => {
                 </div>
 
                 <div className="header-right">
-                    <nav className="top-nav">
+                    <nav className="top-nav desktop-only">
                         {filteredMain.map((item) => (
                             <NavLink
                                 key={item.path}
@@ -176,7 +187,6 @@ const Header = () => {
 
                     <div className="header-actions">
                         <div className="notification-wrapper">
-
                             <button className="icon-btn" onClick={() => setShowNotifications(!showNotifications)} title="Notifications">
                                 <Bell size={24} />
                                 {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
@@ -278,6 +288,52 @@ const Header = () => {
                             )}
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {/* Mobile Menu Overlay */}
+            <div className={`mobile-menu-overlay ${isMobileMenuOpen ? 'open' : ''}`}>
+                <div className="mobile-menu-header">
+                    <img src="/logo.png" alt="TGS Logo" className="mobile-logo" />
+                    <button className="close-menu" onClick={() => setIsMobileMenuOpen(false)}>
+                        <X size={24} />
+                    </button>
+                </div>
+                <div className="mobile-menu-content">
+                    <div className="mobile-nav-section">
+                        <h4>Main Navigation</h4>
+                        <div className="mobile-nav-list">
+                            {filteredMain.map((item) => (
+                                <NavLink
+                                    key={item.path}
+                                    to={item.path}
+                                    className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                >
+                                    {item.icon}
+                                    <span>{item.title}</span>
+                                </NavLink>
+                            ))}
+                        </div>
+                    </div>
+                    {filteredManagement.length > 0 && (
+                        <div className="mobile-nav-section">
+                            <h4>Management</h4>
+                            <div className="mobile-nav-list">
+                                {filteredManagement.map((item) => (
+                                    <NavLink
+                                        key={item.path}
+                                        to={item.path}
+                                        className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                    >
+                                        {item.icon}
+                                        <span>{item.title}</span>
+                                    </NavLink>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </header>

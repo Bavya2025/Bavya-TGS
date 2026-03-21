@@ -1,200 +1,26 @@
 from rest_framework import generics, viewsets, status, serializers
 from django.core.exceptions import PermissionDenied
 from rest_framework.response import Response
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action
 from .models import (
     Trip, Expense, TravelClaim, TravelAdvance, TripOdometer, Dispute, PolicyDocument, BulkActivityBatch, JobReport,
-    TravelModeMaster, BookingTypeMaster, AirlineMaster, FlightClassMaster, TrainClassMaster,
-    BusOperatorMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
-    TrainProviderMaster, BusProviderMaster, IntercityCabProviderMaster,
-    LocalTravelModeMaster, LocalCarSubTypeMaster, LocalBikeSubTypeMaster, LocalProviderMaster,
+    TravelModeMaster, BookingTypeMaster, AirlineMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
+    LocalTravelModeMaster, LocalProviderMaster,
     StayTypeMaster, RoomTypeMaster, MealCategoryMaster, MealTypeMaster, IncidentalTypeMaster,
-    CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking
+    CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking,
+    TravelOperatorMaster, TravelClassMaster, TravelVehicleMaster, LocalSubTypeMaster
 )
 from .serializers import (
     TripSerializer, ExpenseSerializer, TravelClaimSerializer, TravelAdvanceSerializer,
     TripOdometerSerializer, DisputeSerializer, PolicyDocumentSerializer, BulkActivityBatchSerializer, JobReportSerializer,
     TravelModeMasterSerializer, BookingTypeMasterSerializer, AirlineMasterSerializer,
-    FlightClassMasterSerializer, TrainClassMasterSerializer, BusOperatorMasterSerializer,
     BusTypeMasterSerializer, IntercityCabVehicleMasterSerializer, TravelProviderMasterSerializer,
-    TrainProviderMasterSerializer, BusProviderMasterSerializer, IntercityCabProviderMasterSerializer,
-    LocalTravelModeMasterSerializer, LocalCarSubTypeMasterSerializer, LocalBikeSubTypeMasterSerializer,
-    LocalProviderMasterSerializer, StayTypeMasterSerializer, RoomTypeMasterSerializer,
+    LocalTravelModeMasterSerializer, LocalProviderMasterSerializer, StayTypeMasterSerializer, RoomTypeMasterSerializer,
     MealCategoryMasterSerializer, MealTypeMasterSerializer, IncidentalTypeMasterSerializer,
     CustomMasterDefinitionSerializer, CustomMasterValueSerializer, MasterModuleSerializer,
-    TripTrackingSerializer
+    TripTrackingSerializer,
+    LocalSubTypeMasterSerializer, TravelOperatorMasterSerializer, TravelClassMasterSerializer, TravelVehicleMasterSerializer
 )
-
-DEFAULT_MASTER_MODULES = [
-    {"name": "Travel", "display_order": 1},
-    {"name": "Local Conveyance", "display_order": 2},
-    {"name": "Stay & Lodging", "display_order": 3, "aliases": ["Stay"]},
-    {"name": "Food & Refreshments", "display_order": 4, "aliases": ["Food"]},
-    {"name": "Incidental Expenses", "display_order": 5},
-]
-
-DYNAMIC_MASTER_SPECS = [
-    {"key": "travel_mode", "table_name": "Travel Mode", "module_name": "Travel", "source_model": TravelModeMaster, "name_field": "mode_name", "code_field": "lookup_key"},
-    {"key": "booking_type", "table_name": "Booking Type", "module_name": "Travel", "source_model": BookingTypeMaster, "name_field": "booking_type", "code_field": "lookup_key"},
-    {"key": "airline", "table_name": "Airline", "module_name": "Travel", "source_model": AirlineMaster, "name_field": "airline_name", "code_field": "lookup_key", "extra_fields": ["airline_code"]},
-    {"key": "flight_class", "table_name": "Flight Class", "module_name": "Travel", "source_model": FlightClassMaster, "name_field": "class_name", "code_field": "lookup_key"},
-    {"key": "train_class", "table_name": "Train Class", "module_name": "Travel", "source_model": TrainClassMaster, "name_field": "class_name", "code_field": "lookup_key"},
-    {"key": "bus_operator", "table_name": "Bus Operator", "module_name": "Travel", "source_model": BusOperatorMaster, "name_field": "operator_name", "code_field": "lookup_key"},
-    {"key": "bus_type", "table_name": "Bus Seat Type", "module_name": "Travel", "source_model": BusTypeMaster, "name_field": "bus_type", "code_field": "lookup_key"},
-    {"key": "intercity_cab_vehicle", "table_name": "Cab Vehicle Type", "module_name": "Travel", "source_model": IntercityCabVehicleMaster, "name_field": "vehicle_type", "code_field": "lookup_key"},
-    {"key": "train_provider", "table_name": "Train Provider", "module_name": "Travel", "source_model": TrainProviderMaster, "name_field": "provider_name", "code_field": "lookup_key"},
-    {"key": "bus_provider", "table_name": "Bus Provider", "module_name": "Travel", "source_model": BusProviderMaster, "name_field": "provider_name", "code_field": "lookup_key"},
-    {"key": "intercity_cab_provider", "table_name": "Cab Provider", "module_name": "Travel", "source_model": IntercityCabProviderMaster, "name_field": "provider_name", "code_field": "lookup_key"},
-    {"key": "travel_provider", "table_name": "Other Provider", "module_name": "Travel", "source_model": TravelProviderMaster, "name_field": "provider_name", "code_field": "lookup_key"},
-    {"key": "local_travel_mode", "table_name": "Travel Mode (Local)", "module_name": "Local Conveyance", "source_model": LocalTravelModeMaster, "name_field": "mode_name", "code_field": "lookup_key"},
-    {"key": "local_car_subtype", "table_name": "Car Sub-Type", "module_name": "Local Conveyance", "source_model": LocalCarSubTypeMaster, "name_field": "sub_type", "code_field": "lookup_key"},
-    {"key": "local_bike_subtype", "table_name": "Bike Sub-Type", "module_name": "Local Conveyance", "source_model": LocalBikeSubTypeMaster, "name_field": "sub_type", "code_field": "lookup_key"},
-    {"key": "local_provider", "table_name": "Local Provider", "module_name": "Local Conveyance", "source_model": LocalProviderMaster, "name_field": "provider_name", "code_field": "lookup_key"},
-    {"key": "stay_type", "table_name": "Stay Type", "module_name": "Stay & Lodging", "source_model": StayTypeMaster, "name_field": "stay_type", "code_field": "lookup_key"},
-    {"key": "room_type", "table_name": "Room Type", "module_name": "Stay & Lodging", "source_model": RoomTypeMaster, "name_field": "room_type", "code_field": "lookup_key"},
-    {"key": "meal_category", "table_name": "Meal Category", "module_name": "Food & Refreshments", "source_model": MealCategoryMaster, "name_field": "category_name", "code_field": "lookup_key"},
-    {"key": "meal_type", "table_name": "Meal Type", "module_name": "Food & Refreshments", "source_model": MealTypeMaster, "name_field": "meal_type", "code_field": "lookup_key"},
-    {"key": "incidental_type", "table_name": "Expense Type", "module_name": "Incidental Expenses", "source_model": IncidentalTypeMaster, "name_field": "expense_type", "code_field": "lookup_key"},
-]
-
-
-def _get_or_restore_module(module_data):
-    target_name = module_data["name"]
-    candidate_names = [target_name, *(module_data.get("aliases") or [])]
-    module = MasterModule.all_objects.filter(name__in=candidate_names).order_by('id').first()
-
-    if not module:
-        module = MasterModule.all_objects.create(
-            name=target_name,
-            display_order=module_data["display_order"],
-            status=True
-        )
-
-    changed = False
-    if module.is_deleted:
-        module.is_deleted = False
-        module.deleted_at = None
-        changed = True
-    if module.name != target_name:
-        module.name = target_name
-        changed = True
-    if module.display_order != module_data["display_order"]:
-        module.display_order = module_data["display_order"]
-        changed = True
-    if not module.status:
-        module.status = True
-        changed = True
-    if changed:
-        module.save(update_fields=["is_deleted", "deleted_at", "name", "display_order", "status"])
-    return module
-
-
-def _upsert_dynamic_value(definition, *, name, code=None, extra_data=None, status=True):
-    normalized_name = (name or '').strip()
-    if not normalized_name:
-        return
-
-    value = CustomMasterValue.all_objects.filter(definition_id=definition.id, name__iexact=normalized_name).order_by('id').first()
-    if not value:
-        CustomMasterValue.all_objects.create(
-            definition=definition,
-            name=normalized_name,
-            code=code,
-            extra_data=extra_data or {},
-            status=status
-        )
-        return
-
-    changed = False
-    if value.is_deleted:
-        value.is_deleted = False
-        value.deleted_at = None
-        changed = True
-    if value.name != normalized_name:
-        value.name = normalized_name
-        changed = True
-    if value.code != code:
-        value.code = code
-        changed = True
-    if (value.extra_data or {}) != (extra_data or {}):
-        value.extra_data = extra_data or {}
-        changed = True
-    if value.status != status:
-        value.status = status
-        changed = True
-    if changed:
-        value.save(update_fields=["is_deleted", "deleted_at", "name", "code", "extra_data", "status"])
-
-
-def _seed_definition_values(spec, definition):
-    if CustomMasterValue.all_objects.filter(definition=definition).exists():
-        return
-
-    source_qs = spec["source_model"].all_objects.all()
-    for item in source_qs:
-        name = getattr(item, spec["name_field"], None)
-        if not name:
-            continue
-        code = getattr(item, spec["code_field"], None) if spec.get("code_field") else None
-        extra_data = {}
-        for field in spec.get("extra_fields", []):
-            extra_data[field] = getattr(item, field, None)
-        _upsert_dynamic_value(
-            definition,
-            name=name,
-            code=code,
-            extra_data=extra_data,
-            status=getattr(item, "status", True)
-        )
-
-
-def ensure_default_master_setup():
-    modules = {}
-    for module_data in DEFAULT_MASTER_MODULES:
-        module = _get_or_restore_module(module_data)
-        modules[module.name] = module
-
-    for spec in DYNAMIC_MASTER_SPECS:
-        definition = CustomMasterDefinition.all_objects.filter(key=spec["key"]).first()
-        if not definition:
-            definition = CustomMasterDefinition.all_objects.filter(table_name=spec["table_name"]).first()
-
-        if not definition:
-            definition = CustomMasterDefinition.all_objects.create(
-                table_name=spec["table_name"],
-                key=spec["key"],
-                module_ref=modules.get(spec["module_name"]),
-                module=spec["module_name"],
-                api_endpoint='',
-                fields_list='name,code',
-                is_system=True,
-                status=True
-            )
-            _seed_definition_values(spec, definition)
-            continue
-
-        changed = False
-        if definition.is_deleted:
-            definition.is_deleted = False
-            definition.deleted_at = None
-            changed = True
-        defaults = {
-            "table_name": spec["table_name"],
-            "key": spec["key"],
-            "module_ref": modules.get(spec["module_name"]),
-            "module": spec["module_name"],
-            "api_endpoint": "",
-            "fields_list": "name,code",
-            "is_system": True,
-            "status": True,
-        }
-        for field, value in defaults.items():
-            if getattr(definition, field) != value:
-                setattr(definition, field, value)
-                changed = True
-        if changed:
-            definition.save(update_fields=["is_deleted", "deleted_at", *list(defaults.keys())])
-        _seed_definition_values(spec, definition)
 import io
 import json
 import pandas as pd
@@ -207,6 +33,7 @@ from api_management.utils import encrypt_key, decrypt_key
 from django.utils import timezone
 from rest_framework.views import APIView
 from django.db.models import Sum
+from django_filters.rest_framework import DjangoFilterBackend
 from core.models import User
 from notifications.models import Notification
 from core.permissions import IsCustomAuthenticated
@@ -292,17 +119,17 @@ def get_finance_executive(user, exclude_user=None):
     return all_finance[0] if all_finance else None
 
 def get_hr_head(user):
-    """Finds an HR approver (Head of HR) for the user's location."""
+    """Finds an HR approver (Head of HR)."""
     all_hr = _get_hr_users()
-    if not all_hr:
-        return None
-    
     # Try local HR first
     local_hr = [u for u in all_hr if u.base_location == user.base_location]
     if local_hr:
         return local_hr[0]
     
-    return all_hr[0]
+    return all_hr[0] if all_hr else None
+
+    local_heads = [u for u in heads if u.base_location == user.base_location]
+    return local_heads[0] if local_heads else (heads[0] if heads else None)
 
 def notify_hr(title, message):
     """Notify all users with HR role."""
@@ -343,65 +170,48 @@ def update_trip_lifecycle(trip, title, description):
 
 def resolve_approver(user, members_data=None):
     """Helper to resolve the first approver in the management hierarchy."""
+    def is_admin(u):
+        if not u or not u.role:
+            return False
+        return u.role.name.lower() in ['admin', 'it-admin', 'superuser', 'it admin', 'system administrator']
+    
     reporting_manager = user.reporting_manager
     senior_manager = user.senior_manager
     hod_director = user.hod_director
     
-    current_approver = reporting_manager
+    current_approver = reporting_manager if not is_admin(reporting_manager) else None
     h_level = 1
     
     if not current_approver:
-        current_approver = senior_manager
+        current_approver = senior_manager if not is_admin(senior_manager) else None
         h_level = 2
     
     if not current_approver:
-        current_approver = hod_director
+        current_approver = hod_director if not is_admin(hod_director) else None
         h_level = 3
         
     if not current_approver:
-        # Fallback to members' managers if it's a multi-user request
+        # Fallback to members' managers if applicable
         potential_managers = []
         if members_data:
             import re
             for m_str in members_data:
-                # Format is usually "Name (ID)"
                 match = re.search(r'\((.*?)\)', m_str)
                 if match:
                     member_id = match.group(1)
-                    member_user = User.objects.filter(employee_id=member_id).first()
+                    member_user = User._get_or_create_shell_user(member_id)
                     manager = member_user.reporting_manager if member_user else None
-                    if manager:
+                    if manager and not is_admin(manager):
                         potential_managers.append(manager)
             
         if potential_managers:
-            # Pick highest level manager among members' managers
-            potential_managers.sort(key=lambda m: getattr(m, 'level_rank', 10))
+            potential_managers.sort(key=lambda m: getattr(m, 'level_rank', 99))
             current_approver = potential_managers[0]
-        if current_approver:
             h_level = 1
         else:
             current_approver = get_hr_head(user)
-            h_level = 4 # Stage 2: HR
+            h_level = 1
             
-    # Absolute last resort if still None
-    if not current_approver:
-        # Fallback to IT Admin or any HR
-        current_approver = User.objects.filter(role__name__icontains='hr', is_active=True).first()
-        if not current_approver:
-            current_approver = User.objects.filter(role__name__icontains='admin', is_active=True).first()
-        h_level = 5
-
-    # Log routing decision if it's not the primary manager
-    if current_approver and current_approver != reporting_manager:
-        try:
-            from core.models import AuditLog
-            AuditLog.objects.create(
-                user=user, action='ROUTING_FALLBACK', model_name='Trip',
-                object_id='SYSTEM', object_repr=user.employee_id,
-                details={'routed_to': str(current_approver), 'reason': 'Direct manager not found or same as requester'}
-            )
-        except: pass
-
     return current_approver, h_level, reporting_manager, senior_manager, hod_director
 
 class TripListCreateView(generics.ListCreateAPIView):
@@ -434,8 +244,19 @@ class TripListCreateView(generics.ListCreateAPIView):
             from rest_framework.exceptions import AuthenticationFailed
             raise AuthenticationFailed("Authentication required.")
         
-        # We no longer auto-approve for admins here to ensure correct flow.
-        # Flow logic below handles hierarchy.
+        # Admin / Superuser skip approvals
+        user_role = user.role.name.lower() if user.role else ''
+        if user_role in ['admin', 'superuser', 'it-admin']:
+            trip = serializer.save(
+                user=user,
+                status='Approved',
+                current_approver=None,
+                hierarchy_level=0,
+                consider_as_local=is_local
+            )
+            label = "Travel" if is_local else "Trip"
+            update_trip_lifecycle(trip, "Auto-Approved", f"{label} request auto-approved for Administrator.")
+            return
 
         members_data = serializer.validated_data.get('members', [])
         current_approver, h_level, rm, sm, hod = resolve_approver(user, members_data)
@@ -443,7 +264,7 @@ class TripListCreateView(generics.ListCreateAPIView):
         try:
             trip = serializer.save(
                 user=user,
-                status='Submitted',
+                status='Pending',
                 current_approver=current_approver,
                 hierarchy_level=h_level,
                 consider_as_local=is_local,
@@ -469,30 +290,10 @@ class TripListCreateView(generics.ListCreateAPIView):
         if current_approver:
             Notification.objects.create(
                 user=current_approver,
-                title=f"New {label} Request Pending Approval",
-                message=f"{user.name} has submitted a new {label.lower()} request (ID: {trip.trip_id}) to {trip.destination}. Please review it in your Inbox.",
-                type='info',
-                link='/inbox'
+                title=f"New {label} Request",
+                message=f"{user.name} has submitted a new {label.lower()} request to {trip.destination}.",
+                type='info'
             )
-        else:
-            # No approver found - notify all HR users as a fallback
-            hr_users = User.objects.filter(role__name__icontains='hr', is_active=True)
-            for hr_user in hr_users:
-                Notification.objects.create(
-                    user=hr_user,
-                    title=f"Unrouted {label} Request",
-                    message=f"{user.name} submitted a {label.lower()} request (ID: {trip.trip_id}) but no reporting manager was found. Please assign and approve manually.",
-                    type='warning',
-                    link='/inbox'
-                )
-        
-        # Notify requester that submission was received
-        Notification.objects.create(
-            user=user,
-            title=f"{label} Request Submitted",
-            message=f"Your {label.lower()} request (ID: {trip.trip_id}) to {trip.destination} has been submitted successfully{' and is pending approval from ' + current_approver.name if current_approver else '. An approver will be assigned shortly.'}.",
-            type='success'
-        )
         
         if trip.accommodation_requests and any('Room' in r for r in trip.accommodation_requests):
             gh_managers = User.objects.filter(role__name='GuestHouseManager', is_active=True)
@@ -584,14 +385,20 @@ class TripTrackingView(APIView):
     permission_classes = [IsCustomAuthenticated]
 
     def get(self, request, trip_id):
+        print(f"DEBUG: TripTrackingView.get called for trip_id: {trip_id}")
         real_trip_id = decode_id(trip_id)
+        # Verify trip exists and user has access
         try:
             trip = Trip.objects.get(trip_id=real_trip_id)
         except Trip.DoesNotExist:
+            print(f"DEBUG: Trip {real_trip_id} not found")
             return Response({"error": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
 
+        # Basic access check: requester or manager or finance or admin
         user = getattr(request, 'custom_user', None)
-
+        print(f"DEBUG: Requester: {user.employee_id if user else 'Anonymous'}")
+        
+        # ... existing logic ...
         is_owner = (trip.user == user)
         is_manager = False
         if user:
@@ -601,38 +408,41 @@ class TripTrackingView(APIView):
         is_privileged = user_role in ['admin', 'finance', 'cfo', 'guesthousemanager']
 
         if not (is_owner or is_manager or is_privileged):
+            print(f"DEBUG: Unauthorized access attempt to trip {real_trip_id}")
             return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
 
-        # Optimization: Return only the latest 100 points for the map
-        tracking_data = TripTracking.objects.filter(trip=trip).order_by('-timestamp')[:100]
-        # Reverse back to chronological order for the frontend map/graph
-        serializer = TripTrackingSerializer(reversed(tracking_data), many=True)
+        tracking_data = TripTracking.objects.filter(trip=trip).order_by('timestamp')
+        print(f"DEBUG: Returning {tracking_data.count()} points")
+        serializer = TripTrackingSerializer(tracking_data, many=True)
         return Response(serializer.data)
 
     def post(self, request, trip_id):
+        print(f"DEBUG: TripTrackingView.post called for trip_id: {trip_id}")
         real_trip_id = decode_id(trip_id)
         try:
             trip = Trip.objects.get(trip_id=real_trip_id)
         except Trip.DoesNotExist:
+            print(f"DEBUG: Trip {real_trip_id} not found for POST")
             return Response({"error": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
 
+        # Only trip owner can post tracking points
         user = getattr(request, 'custom_user', None)
+        print(f"DEBUG: POST Requester: {user.employee_id if user else 'Anonymous'}")
         
         if not user or trip.user != user:
+            print(f"DEBUG: POST Unauthorized for user {user.employee_id if user else 'None'}")
             return Response({"error": "Only trip owner can submit tracking data"}, status=status.HTTP_403_FORBIDDEN)
 
         data = request.data.copy()
         data['trip'] = trip.trip_id
         
-        # ALWAYS force server-side timestamp for reliable live tracking timeline.
-        # This prevents "future points" bugs caused by client clock drift or timezone mismatch.
-        data['timestamp'] = timezone.now().isoformat()
-            
         serializer = TripTrackingSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
+            print("DEBUG: Tracking point saved successfully")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
+        print(f"DEBUG: Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ApprovalCountView(APIView):
@@ -645,42 +455,29 @@ class ApprovalCountView(APIView):
         
         user_role = (user.role.name.lower() if user.role else '')
         is_admin = user_role in ['admin', 'it-admin', 'superuser']
-        is_finance = _is_finance_executive(user) or _is_finance_head(user)
-        is_hr = _is_hr(user)
+        is_finance = 'finance' in user_role
         
-        trip_count = 0
-        advance_count = 0
-        claim_count = 0
-
-        # 1. Management Hierarchy (Any user who is a current approver)
-        all_pending = ['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved', 'PENDING_EXECUTIVE', 'PENDING_HEAD', 'PENDING_FINAL_RELEASE', 'REJECTED_BY_HEAD']
-        trip_count += Trip.objects.filter(current_approver=user, status__in=all_pending).count()
-        advance_count += TravelAdvance.objects.filter(current_approver=user, status__in=all_pending).count()
-        claim_count += TravelClaim.objects.filter(current_approver=user, status__in=all_pending).count()
-
-        # 2. Functional Roles (Add to counts if user occupies these roles)
         if is_admin:
-            # Overwrite for admin to see everything (cumulative view)
-            trip_count = Trip.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved']).count()
-            advance_count = TravelAdvance.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved', 'PENDING_EXECUTIVE', 'PENDING_HEAD', 'PENDING_FINAL_RELEASE']).count()
-            claim_count = TravelClaim.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved', 'PENDING_EXECUTIVE', 'PENDING_HEAD', 'PENDING_FINAL_RELEASE']).count()
+            trip_count = Trip.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded']).count()
+            advance_count = TravelAdvance.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded']).count()
+            claim_count = TravelClaim.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded']).count()
+        elif is_finance:
+            if user.office_level == 1:
+                # Finance Head counts
+                trip_count = 0
+                advance_count = TravelAdvance.objects.filter(status='PENDING_HEAD').count()
+                claim_count = TravelClaim.objects.filter(status='PENDING_HEAD').count()
+            else:
+                # Finance Executive counts
+                trip_count = 0
+                pending_money_statuses = ['PENDING_EXECUTIVE', 'HR Approved', 'REJECTED_BY_HEAD', 'PENDING_FINAL_RELEASE', 'Approved', 'Under Process']
+                advance_count = TravelAdvance.objects.filter(status__in=pending_money_statuses).count()
+                claim_count = TravelClaim.objects.filter(status__in=pending_money_statuses).count()
         else:
-            if is_finance:
-                if getattr(user, 'office_level', 3) == 1 or _is_finance_head(user):
-                    # Finance Head
-                    advance_count += TravelAdvance.objects.filter(status='PENDING_HEAD').count()
-                    claim_count += TravelClaim.objects.filter(status='PENDING_HEAD').count()
-                
-                # Executive or anyone in finance can see executive tasks
-                pending_money_statuses = ['PENDING_EXECUTIVE', 'REJECTED_BY_HEAD', 'PENDING_FINAL_RELEASE']
-                advance_count += TravelAdvance.objects.filter(status__in=pending_money_statuses).count()
-                claim_count += TravelClaim.objects.filter(status__in=pending_money_statuses).count()
-                
-            if is_hr:
-                # HR verification
-                trip_count += Trip.objects.filter(status='Manager Approved').count()
-                advance_count += TravelAdvance.objects.filter(status='Manager Approved').count()
-                claim_count += TravelClaim.objects.filter(status='Manager Approved').count()
+            # Manager counts
+            trip_count = Trip.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved']).count()
+            advance_count = TravelAdvance.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved']).count()
+            claim_count = TravelClaim.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved']).count()
             
         return Response({
             "total": trip_count + advance_count + claim_count,
@@ -714,12 +511,14 @@ class ApprovalsView(APIView):
 
         if tab == 'history':
             from core.models import AuditLog
+            # Include 'UPDATE' to capture older approvals or edits made by managers
             involved_logs = AuditLog.objects.filter(user=user, action__in=['APPROVE', 'FORWARD', 'REJECT', 'UPDATE'])
             
             trip_pks = involved_logs.filter(model_name='Trip').values_list('object_id', flat=True)
             advance_pks_raw = involved_logs.filter(model_name='TravelAdvance').values_list('object_id', flat=True)
             claim_pks_raw = involved_logs.filter(model_name='TravelClaim').values_list('object_id', flat=True)
             
+            # Convert string IDs to integers for numeric primary keys
             advance_pks = [int(pk) for pk in advance_pks_raw if pk and pk.isdigit()]
             claim_pks = [int(pk) for pk in claim_pks_raw if pk and pk.isdigit()]
             
@@ -727,91 +526,43 @@ class ApprovalsView(APIView):
             advances = TravelAdvance.objects.filter(id__in=advance_pks)
             claims = TravelClaim.objects.filter(id__in=claim_pks)
             
-            if is_admin or is_finance:
-                history_statuses = ['Approved', 'Rejected', 'Resolved', 'Paid', 'HR Approved', 'Manager Approved', 'COMPLETED', 'Settled']
+            # Admins see everything in history
+            if is_admin:
+                history_statuses = ['Approved', 'Rejected', 'Resolved', 'Paid', 'HR Approved', 'Manager Approved', 'COMPLETED']
                 trips = Trip.objects.filter(status__in=history_statuses)
                 advances = TravelAdvance.objects.filter(status__in=history_statuses)
                 claims = TravelClaim.objects.filter(status__in=history_statuses)
-        elif tab == 'processing':
-            if is_admin or is_finance:
-                trips = Trip.objects.filter(status='Under Process')
-                advances = TravelAdvance.objects.filter(status='Under Process')
-                claims = TravelClaim.objects.filter(status='Under Process')
-        elif tab == 'completed':
-            if is_admin or is_finance:
-                trips = Trip.objects.filter(status__in=['Paid', 'COMPLETED', 'Settled'])
-                advances = TravelAdvance.objects.filter(status__in=['Paid', 'COMPLETED', 'Settled'])
-                claims = TravelClaim.objects.filter(status__in=['Paid', 'COMPLETED', 'Settled'])
-        elif tab == 'rejected':
-            if is_admin or is_finance:
-                rejected_statuses = ['Rejected', 'Rejected by Finance', 'REJECTED_BY_HEAD']
-                trips = Trip.objects.filter(status__in=rejected_statuses)
-                advances = TravelAdvance.objects.filter(status__in=rejected_statuses)
-                claims = TravelClaim.objects.filter(status__in=rejected_statuses)
         else:
-            # --- Pending Tab (Cumulative Logic) ---
-            
-            # 1. Start with Management Hierarchy (Always show tasks assigned directly to me)
-            all_pending = ['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved', 'PENDING_EXECUTIVE', 'PENDING_HEAD', 'PENDING_FINAL_RELEASE', 'REJECTED_BY_HEAD']
-            trips = Trip.objects.filter(current_approver=user, status__in=all_pending)
-            advances = TravelAdvance.objects.filter(current_approver=user, status__in=all_pending)
-            claims = TravelClaim.objects.filter(current_approver=user, status__in=all_pending)
-
-            # 1b. FALLBACK: Also catch trips where reporting_manager_name snapshot matches
-            # this user's name. This handles trips created when the external API was skipped,
-            # meaning current_approver was not set but the snapshot name was recorded.
-            user_name_str = user.name  # calls the @property
-            if user_name_str:
-                orphan_trips = Trip.objects.filter(
-                    current_approver__isnull=True,
-                    reporting_manager_name=user_name_str,
-                    status__in=all_pending
-                )
-                if orphan_trips.exists():
-                    # Re-route these trips to this user and notify
-                    orphan_trips.update(current_approver=user)
-                    trips = Trip.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
-
-                orphan_advances = TravelAdvance.objects.filter(
-                    current_approver__isnull=True,
-                    reporting_manager_name=user_name_str,
-                    status__in=all_pending
-                )
-                if orphan_advances.exists():
-                    orphan_advances.update(current_approver=user)
-                    advances = TravelAdvance.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
-
-                orphan_claims = TravelClaim.objects.filter(
-                    current_approver__isnull=True,
-                    reporting_manager_name=user_name_str,
-                    status__in=all_pending
-                )
-                if orphan_claims.exists():
-                    orphan_claims.update(current_approver=user)
-                    claims = TravelClaim.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
-
-            # 2. Add Admin tasks (Additive)
+            # Pending Tab
             if is_admin:
                 finance_pending = ['PENDING_EXECUTIVE', 'PENDING_HEAD', 'PENDING_FINAL_RELEASE', 'REJECTED_BY_HEAD']
-                trips |= Trip.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
-                advances |= TravelAdvance.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
-                claims |= TravelClaim.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
-            
-            # 3. Add Finance tasks (Additive)
-            if is_finance:
+                trips = Trip.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
+                advances = TravelAdvance.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
+                claims = TravelClaim.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
+            elif is_finance:
                 if is_finance_head:
-                    advances |= TravelAdvance.objects.filter(status='PENDING_HEAD')
-                    claims |= TravelClaim.objects.filter(status='PENDING_HEAD')
+                    advances = TravelAdvance.objects.filter(status='PENDING_HEAD')
+                    claims = TravelClaim.objects.filter(status='PENDING_HEAD')
                 else:
                     pending_money_statuses = ['PENDING_EXECUTIVE', 'REJECTED_BY_HEAD', 'PENDING_FINAL_RELEASE']
-                    advances |= TravelAdvance.objects.filter(status__in=pending_money_statuses)
-                    claims |= TravelClaim.objects.filter(status__in=pending_money_statuses)
-            
-            # 4. Add HR tasks (Additive)
-            if is_hr:
-                trips |= Trip.objects.filter(status='Manager Approved')
-                advances |= TravelAdvance.objects.filter(status='Manager Approved')
-                claims |= TravelClaim.objects.filter(status='Manager Approved')
+                    advances = TravelAdvance.objects.filter(status__in=pending_money_statuses)
+                    claims = TravelClaim.objects.filter(status__in=pending_money_statuses)
+                
+                # Filter by project/dept if needed
+                finance_dept = user.department
+                if finance_dept and finance_dept.lower() not in ['finance', 'finance department', 'accounts', 'finance head dept', 'finance executive dept']:
+                    advances = advances.filter(trip__project_code__istartswith=finance_dept)
+                    claims = claims.filter(trip__project_code__istartswith=finance_dept)
+            elif is_hr:
+                # HR verification stage
+                trips = Trip.objects.filter(status='Manager Approved')
+                advances = TravelAdvance.objects.filter(status='Manager Approved')
+                claims = TravelClaim.objects.filter(status='Manager Approved')
+            else:
+                # Regular hierarchy
+                trips = Trip.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
+                advances = TravelAdvance.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
+                claims = TravelClaim.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
         
         tasks = []
         # Support filtering by type if specified
@@ -825,11 +576,6 @@ class ApprovalsView(APIView):
                     "trip_id": t.trip_id,
                     "is_local": t.consider_as_local,
                     "cost": t.cost_estimate,
-                    "current_approver_name": (
-                        t.current_approver.name if t.current_approver else (
-                            t.status if t.status in ['Approved', 'Rejected', 'Settled', 'Cancelled'] else t.reporting_manager_name
-                        )
-                    ),
                     "details": {
                         "source": t.source, "destination": t.destination, 
                         "start_date": t.start_date.strftime("%b %d, %Y"),
@@ -868,15 +614,6 @@ class ApprovalsView(APIView):
                     "hierarchy_level": a.hierarchy_level,
                     "trip_id": a.trip.trip_id,
                     "is_local": a.trip.consider_as_local,
-                    "current_approver_name": (
-                        a.current_approver.name if a.current_approver else (
-                            a.status if a.status in ['Approved', 'Rejected', 'Paid', 'Transferred', 'COMPLETED', 'Cancelled'] else a.reporting_manager_name
-                        )
-                    ),
-                    "transaction_id": a.transaction_id if hasattr(a, 'transaction_id') else "",
-                    "payment_mode": a.payment_mode if hasattr(a, 'payment_mode') else "",
-                    "payment_date": a.payment_date.isoformat() if hasattr(a, 'payment_date') and a.payment_date else "",
-                    "finance_remarks": a.finance_remarks if hasattr(a, 'finance_remarks') else "",
                     "details": {
                         "source": a.trip.source,
                         "destination": a.trip.destination,
@@ -902,15 +639,6 @@ class ApprovalsView(APIView):
                     "hierarchy_level": c.hierarchy_level,
                     "trip_id": c.trip.trip_id,
                     "is_local": c.trip.consider_as_local,
-                    "current_approver_name": (
-                        c.current_approver.name if c.current_approver else (
-                            c.status if c.status in ['Approved', 'Rejected', 'Settled', 'Paid', 'COMPLETED', 'Cancelled'] else c.reporting_manager_name
-                        )
-                    ),
-                    "transaction_id": c.transaction_id if hasattr(c, 'transaction_id') else "",
-                    "payment_mode": c.payment_mode if hasattr(c, 'payment_mode') else "",
-                    "payment_date": c.payment_date.isoformat() if hasattr(c, 'payment_date') and c.payment_date else "",
-                    "finance_remarks": c.finance_remarks if hasattr(c, 'finance_remarks') else "",
                     "details": {
                         "source": c.trip.source,
                         "destination": c.trip.destination,
@@ -1050,36 +778,21 @@ class ApprovalsView(APIView):
 
         from core.models import AuditLog
         if action == 'Reject':
-            remarks_text = data.get('remarks', '') if data else ''
             obj.status = 'Rejected'
             obj.current_approver = None
-            if hasattr(obj, 'rejection_reason'):
-                obj.rejection_reason = remarks_text
-            if hasattr(obj, 'rejected_by'):
-                obj.rejected_by = user
             obj.save()
             
             AuditLog.objects.create(
                 user=user, action='REJECT', model_name=obj.__class__.__name__,
                 object_id=str(obj.pk), object_repr=str(obj),
-                details={'reason': remarks_text}
+                details={'reason': data.get('remarks') if data else ''}
             )
-            
-            # Notify requester of rejection
-            Notification.objects.create(
-                user=requester,
-                title=f"{request_type} Rejected",
-                message=f"Your {request_type.lower()} has been rejected by {user.name}." + (f" Reason: {remarks_text}" if remarks_text else ""),
-                type='error'
-            )
-            return
-
 
         if action == 'Forward':
-            # Identify next managers from the requester's hierarchy
-            mgr_l1 = requester.reporting_manager
-            mgr_l2 = requester.senior_manager
-            mgr_l3 = requester.hod_director
+            # This is now mostly handled by 'Approve' automatic progression, 
+            # but we keep it for manual overrides if needed by admins.
+            mgr_l2 = getattr(obj, 'senior_manager', None)
+            mgr_l3 = getattr(obj, 'hod_director', None)
             
             next_approver = None
             next_level = obj.hierarchy_level
@@ -1140,9 +853,9 @@ class ApprovalsView(APIView):
                 
                 # Try explicit levels first
                 if obj.hierarchy_level == 1:
-                    next_approver = requester.senior_manager or requester.hod_director
+                    next_approver = getattr(obj, 'senior_manager', None) or getattr(obj, 'hod_director', None)
                 elif obj.hierarchy_level == 2:
-                    next_approver = requester.hod_director
+                    next_approver = getattr(obj, 'hod_director', None)
                 
                 # DYNAMIC FALLBACK: If no explicit level but current user has a manager
                 if not next_approver:
@@ -1194,8 +907,7 @@ class ApprovalsView(APIView):
                                 user=ghm,
                                 title="Pending Room Request",
                                 message=f"{requester.name}'s trip to {obj.destination} is management-approved. Room booking may be initiated.",
-                                type='info',
-                                link='/guesthouse?tab=requests'
+                                type='info'
                             )
                     
                     if hr_head:
@@ -1203,8 +915,7 @@ class ApprovalsView(APIView):
                             user=hr_head,
                             title=f"HR Verification Required",
                             message=f"{requester.name}'s {request_type} is management-approved and awaits your verification.",
-                            type='info',
-                            link='/approvals'
+                            type='info'
                         )
                 return Response({"message": "Sent to HR for verification"})
 
@@ -1235,8 +946,7 @@ class ApprovalsView(APIView):
                                 user=ghm,
                                 title="Room Request Ready",
                                 message=f"Trip {obj.trip_id} to {obj.destination} has been approved. Room booking is now required.",
-                                type='info',
-                                link='/guesthouse?tab=requests'
+                                type='info'
                             )
                 else:
                     # --- MONEY REQUESTS MOVE TO FINANCE EXECUTIVE ---
@@ -1266,8 +976,7 @@ class ApprovalsView(APIView):
                             user=finance_exec,
                             title=f"Finance Verification Required",
                             message=f"{requester.name}'s {request_type} is HR-verified and awaits your verification.",
-                            type='info',
-                            link='/approvals'
+                            type='info'
                         )
                 return Response({"message": "HR recommendation processed"})
             # --- STAGE 3: Finance Approval ---
@@ -1293,19 +1002,9 @@ class ApprovalsView(APIView):
                         user=obj.current_approver,
                         title="Finance Authorization Required",
                         message=f"{requester.name}'s request verified by executive and awaits your authorization.",
-                        type='info',
-                        link='/approvals'
-                    )
-
-                    # Notify Requester
-                    Notification.objects.create(
-                        user=requester,
-                        title=f"Finance Verified",
-                        message=f"Your {request_type} has been verified by Finance Executive and forwarded for Head authorization.",
-                        type='success'
+                        type='info'
                     )
                     return Response({"message": "Verified and sent to Head"})
-
 
                 # Case B: Finance Head Authorization (from PENDING_HEAD)
                 if _is_finance_head(user) and obj.status == 'PENDING_HEAD':
@@ -1324,28 +1023,9 @@ class ApprovalsView(APIView):
                         
                         if trip:
                             update_trip_lifecycle(trip, "Finance Authorized", f"Authorized by Head {user.name}. Sent to {final_exec.name if final_exec else 'Executive'} for payout.")
-
-                        # Notification for Final Executive (Executive 2)
-                        if final_exec:
-                            Notification.objects.create(
-                                user=final_exec,
-                                title=f"Payout Processing Required",
-                                message=f"{requester.name}'s {request_type} is authorized and ready for disbursement.",
-                                type='info',
-                                link='/approvals'
-                            )
-                        
-                        # Notification for Requester
-                        Notification.objects.create(
-                            user=requester,
-                            title=f"Finance Authorized",
-                            message=f"Your {request_type} has been authorized by Finance Head and is now in the payout queue.",
-                            type='success'
-                        )
                     
                     elif action == 'Reject':
                         obj.status = 'REJECTED_BY_HEAD'
-
                         obj.head_action = 'Rejected'
                         obj.current_approver = obj.sent_by_executive
                         obj.save()
@@ -1388,25 +1068,7 @@ class ApprovalsView(APIView):
                 # Capture details
                 if hasattr(obj, 'payment_mode'): obj.payment_mode = payment_mode
                 if hasattr(obj, 'transaction_id'): obj.transaction_id = transaction_id
-                if hasattr(obj, 'payment_date'): 
-                    raw_date = data.get('payment_date')
-                    final_date = None
-                    if raw_date:
-                        from django.utils.dateparse import parse_datetime, parse_date
-                        parsed = parse_datetime(str(raw_date))
-                        if not parsed:
-                            d = parse_date(str(raw_date))
-                            if d:
-                                # Combine date with min time and make aware
-                                parsed = timezone.datetime.combine(d, timezone.datetime.min.time())
-                        
-                        if parsed:
-                            if timezone.is_naive(parsed):
-                                final_date = timezone.make_aware(parsed)
-                            else:
-                                final_date = parsed
-                    
-                    obj.payment_date = final_date or timezone.now()
+                if hasattr(obj, 'payment_date'): obj.payment_date = data.get('payment_date') or timezone.now()
                 if hasattr(obj, 'finance_remarks'): obj.finance_remarks = data.get('remarks', '')
                 if hasattr(obj, 'processed_by'): obj.processed_by = user
             
@@ -1434,58 +1096,26 @@ class ApprovalsView(APIView):
                 message=f"Your {request_type} has been fully approved and the amount has been credited to your account.",
                 type='success'
             )
-
-            # Notify HR
-            hr_head = get_hr_head(requester)
-            if hr_head:
-                Notification.objects.create(
-                    user=hr_head,
-                    title="Payment Completed",
-                    message=f"Disbursement finished for {requester.name}'s {request_type}.",
-                    type='info'
-                )
-
-            # Notify Reporting Manager
-            if requester.reporting_manager:
-                Notification.objects.create(
-                    user=requester.reporting_manager,
-                    title="Payment Completed",
-                    message=f"Disbursement finished for {requester.name}'s {request_type}.",
-                    type='info'
-                )
-
-            # Notify Finance Head
-            fh = get_finance_head(user)
-            if fh:
-                Notification.objects.create(
-                    user=fh,
-                    title="Payment Completed",
-                    message=f"Disbursement finished for {requester.name}'s {request_type}.",
-                    type='info'
-                )
-
             return Response({"message": f"{action} completed and phase closed."})
 
-
-            return Response({"message": "Rejected by Finance"})
-
-        if action == 'Unreject':
-            obj.status = 'PENDING_EXECUTIVE' # Set it back to a state finance can work on
-            if hasattr(obj, 'finance_remarks'): obj.finance_remarks = "Unrejected for re-audit."
+        if action == 'RejectByFinance':
+            obj.status = 'Rejected by Finance'
+            reason = data.get('remarks', 'No reason provided') if data else ""
+            if hasattr(obj, 'finance_remarks'): obj.finance_remarks = reason
             obj.save()
             Notification.objects.create(
                 user=requester,
-                title="Finance: Request Reopened",
-                message=f"Your {request_type} has been unrejected by Finance and returned for audit.",
-                type='info'
+                title="Finance: Request Rejected",
+                message=f"Your {request_type} was rejected by Finance. Reason: {reason}",
+                type='error'
             )
-            return Response({"message": "Successfully unrejected request."})
+            return Response({"message": "Rejected by Finance"})
 
 class ExpenseViewSet(viewsets.ModelViewSet):
     queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
     permission_classes = [IsCustomAuthenticated]
-    http_method_names = ['get', 'post', 'patch', 'put', 'delete', 'head', 'options']
+    http_method_names = ['get', 'post', 'patch', 'put', 'head', 'options']
 
     def get_queryset(self):
         user = getattr(self.request, 'custom_user', None)
@@ -1579,7 +1209,25 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
         if trip and trip.user != user:
             raise serializers.ValidationError("Unauthorized trip association")
         
-        current_approver, h_level, rm, sm, hod = resolve_approver(user)
+        reporting_manager = user.reporting_manager
+        senior_manager = user.senior_manager
+        hod_director = user.hod_director
+        
+        # Logic to find first available approver
+        current_approver = reporting_manager
+        h_level = 1
+        
+        if not current_approver:
+            current_approver = senior_manager
+            h_level = 2
+        
+        if not current_approver:
+            current_approver = hod_director
+            h_level = 3
+            
+        if not current_approver:
+            # If no managers at all, go to HR
+            current_approver = get_hr_head(user)
 
         from django.db.models import Sum
         total_expense_sum = trip.expenses.aggregate(s=Sum('amount'))['s'] or 0
@@ -1595,9 +1243,9 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
             user_name=user.name,
             user_designation=user.designation,
             user_department=user.department,
-            reporting_manager_name=rm.name if rm else None,
-            senior_manager_name=sm.name if sm else None,
-            hod_director_name=hod.name if hod else None
+            reporting_manager_name=reporting_manager.name if reporting_manager else None,
+            senior_manager_name=senior_manager.name if senior_manager else None,
+            hod_director_name=hod_director.name if hod_director else None
         )
         
         if current_approver:
@@ -1605,8 +1253,7 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
                 user=current_approver,
                 title="New Expense Claim",
                 message=f"{user.name} has submitted an expense claim for Trip {claim.trip.trip_id}.",
-                type='info',
-                link='/approvals'
+                type='info'
             )
             
         # Notify HR
@@ -1657,7 +1304,25 @@ class TravelAdvanceViewSet(viewsets.ModelViewSet):
         if trip and trip.user != user:
             raise serializers.ValidationError("Unauthorized trip association")
             
-        current_approver, h_level, rm, sm, hod = resolve_approver(user)
+        reporting_manager = user.reporting_manager
+        senior_manager = user.senior_manager
+        hod_director = user.hod_director
+
+        # Logic to find first available approver
+        current_approver = reporting_manager
+        h_level = 1
+        
+        if not current_approver:
+            current_approver = senior_manager
+            h_level = 2
+        
+        if not current_approver:
+            current_approver = hod_director
+            h_level = 3
+            
+        if not current_approver:
+            # If no managers at all, go to HR
+            current_approver = get_hr_head(user)
 
         advance = serializer.save(
             status='Submitted',
@@ -1668,9 +1333,9 @@ class TravelAdvanceViewSet(viewsets.ModelViewSet):
             user_name=user.name,
             user_designation=user.designation,
             user_department=user.department,
-            reporting_manager_name=rm.name if rm else None,
-            senior_manager_name=sm.name if sm else None,
-            hod_director_name=hod.name if hod else None
+            reporting_manager_name=reporting_manager.name if reporting_manager else None,
+            senior_manager_name=senior_manager.name if senior_manager else None,
+            hod_director_name=hod_director.name if hod_director else None
         )
         
         if current_approver:
@@ -1678,8 +1343,7 @@ class TravelAdvanceViewSet(viewsets.ModelViewSet):
                 user=current_approver,
                 title="New Advance Request",
                 message=f"{user.name} has requested an advance of ₹{advance.requested_amount} for Trip {advance.trip.trip_id}.",
-                type='info',
-                link='/approvals'
+                type='info'
             )
             
         # Notify HR
@@ -2694,20 +2358,37 @@ class AirlineMasterViewSet(viewsets.ModelViewSet):
     queryset = AirlineMaster.objects.all()
     serializer_class = AirlineMasterSerializer
 
-class FlightClassMasterViewSet(viewsets.ModelViewSet):
+class TravelOperatorMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = FlightClassMaster.objects.all()
-    serializer_class = FlightClassMasterSerializer
+    queryset = TravelOperatorMaster.objects.all()
+    serializer_class = TravelOperatorMasterSerializer
 
-class TrainClassMasterViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCustomAuthenticated]
-    queryset = TrainClassMaster.objects.all()
-    serializer_class = TrainClassMasterSerializer
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        is_flight = self.request.query_params.get('is_flight')
+        is_train = self.request.query_params.get('is_train')
+        is_bus = self.request.query_params.get('is_bus')
+        
+        if is_flight is not None: queryset = queryset.filter(is_flight=is_flight.lower() == 'true')
+        if is_train is not None: queryset = queryset.filter(is_train=is_train.lower() == 'true')
+        if is_bus is not None: queryset = queryset.filter(is_bus=is_bus.lower() == 'true')
+        return queryset
 
-class BusOperatorMasterViewSet(viewsets.ModelViewSet):
+class TravelClassMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = BusOperatorMaster.objects.all()
-    serializer_class = BusOperatorMasterSerializer
+    queryset = TravelClassMaster.objects.all()
+    serializer_class = TravelClassMasterSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        is_flight = self.request.query_params.get('is_flight')
+        is_train = self.request.query_params.get('is_train')
+        is_bus = self.request.query_params.get('is_bus')
+        
+        if is_flight is not None: queryset = queryset.filter(is_flight=is_flight.lower() == 'true')
+        if is_train is not None: queryset = queryset.filter(is_train=is_train.lower() == 'true')
+        if is_bus is not None: queryset = queryset.filter(is_bus=is_bus.lower() == 'true')
+        return queryset
 
 class BusTypeMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
@@ -2724,20 +2405,33 @@ class TravelProviderMasterViewSet(viewsets.ModelViewSet):
     queryset = TravelProviderMaster.objects.all()
     serializer_class = TravelProviderMasterSerializer
 
-class TrainProviderMasterViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCustomAuthenticated]
-    queryset = TrainProviderMaster.objects.all()
-    serializer_class = TrainProviderMasterSerializer
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        is_flight = self.request.query_params.get('is_flight')
+        is_train = self.request.query_params.get('is_train')
+        is_bus = self.request.query_params.get('is_bus')
+        is_intercity_cab = self.request.query_params.get('is_intercity_cab')
+        
+        if is_flight is not None: queryset = queryset.filter(is_flight=is_flight.lower() == 'true')
+        if is_train is not None: queryset = queryset.filter(is_train=is_train.lower() == 'true')
+        if is_bus is not None: queryset = queryset.filter(is_bus=is_bus.lower() == 'true')
+        if is_intercity_cab is not None: queryset = queryset.filter(is_intercity_cab=is_intercity_cab.lower() == 'true')
+        return queryset
 
-class BusProviderMasterViewSet(viewsets.ModelViewSet):
+class TravelVehicleMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = BusProviderMaster.objects.all()
-    serializer_class = BusProviderMasterSerializer
+    queryset = TravelVehicleMaster.objects.all()
+    serializer_class = TravelVehicleMasterSerializer
 
-class IntercityCabProviderMasterViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCustomAuthenticated]
-    queryset = IntercityCabProviderMaster.objects.all()
-    serializer_class = IntercityCabProviderMasterSerializer
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        is_bus = self.request.query_params.get('is_bus')
+        is_intercity_cab = self.request.query_params.get('is_intercity_cab')
+        
+        if is_bus is not None: queryset = queryset.filter(is_bus=is_bus.lower() == 'true')
+        if is_intercity_cab is not None: queryset = queryset.filter(is_intercity_cab=is_intercity_cab.lower() == 'true')
+        return queryset
+
 
 class JobReportViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
@@ -2758,20 +2452,41 @@ class LocalTravelModeMasterViewSet(viewsets.ModelViewSet):
     queryset = LocalTravelModeMaster.objects.all()
     serializer_class = LocalTravelModeMasterSerializer
 
-class LocalCarSubTypeMasterViewSet(viewsets.ModelViewSet):
+class LocalSubTypeMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = LocalCarSubTypeMaster.objects.all()
-    serializer_class = LocalCarSubTypeMasterSerializer
+    queryset = LocalSubTypeMaster.objects.all()
+    serializer_class = LocalSubTypeMasterSerializer
 
-class LocalBikeSubTypeMasterViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCustomAuthenticated]
-    queryset = LocalBikeSubTypeMaster.objects.all()
-    serializer_class = LocalBikeSubTypeMasterSerializer
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        is_car = self.request.query_params.get('is_car')
+        is_bike = self.request.query_params.get('is_bike')
+        is_auto = self.request.query_params.get('is_auto')
+        
+        if is_car is not None: queryset = queryset.filter(is_car=is_car.lower() == 'true')
+        if is_bike is not None: queryset = queryset.filter(is_bike=is_bike.lower() == 'true')
+        if is_auto is not None: queryset = queryset.filter(is_auto=is_auto.lower() == 'true')
+        return queryset
 
 class LocalProviderMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = LocalProviderMaster.objects.all()
     serializer_class = LocalProviderMasterSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        is_car = self.request.query_params.get('is_car')
+        is_bike = self.request.query_params.get('is_bike')
+        is_auto = self.request.query_params.get('is_auto')
+        is_bus = self.request.query_params.get('is_bus')
+        is_metro = self.request.query_params.get('is_metro')
+        
+        if is_car is not None: queryset = queryset.filter(is_car=is_car.lower() == 'true')
+        if is_bike is not None: queryset = queryset.filter(is_bike=is_bike.lower() == 'true')
+        if is_auto is not None: queryset = queryset.filter(is_auto=is_auto.lower() == 'true')
+        if is_bus is not None: queryset = queryset.filter(is_bus=is_bus.lower() == 'true')
+        if is_metro is not None: queryset = queryset.filter(is_metro=is_metro.lower() == 'true')
+        return queryset
 
 class StayTypeMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
@@ -2798,131 +2513,21 @@ class IncidentalTypeMasterViewSet(viewsets.ModelViewSet):
     queryset = IncidentalTypeMaster.objects.all()
     serializer_class = IncidentalTypeMasterSerializer
 
-
-class DynamicMasterBundleView(APIView):
-    permission_classes = [IsCustomAuthenticated]
-
-    def get(self, request):
-        ensure_default_master_setup()
-
-        requested_keys = [key.strip() for key in (request.query_params.get('keys') or '').split(',') if key.strip()]
-        definitions = CustomMasterDefinition.objects.filter(status=True).select_related('module_ref').prefetch_related('values')
-        if requested_keys:
-            definitions = definitions.filter(key__in=requested_keys)
-
-        payload = {}
-        for definition in definitions.order_by('module_ref__display_order', 'table_name'):
-            payload[definition.key] = {
-                "id": definition.id,
-                "key": definition.key,
-                "table_name": definition.table_name,
-                "module": definition.module_ref.name if definition.module_ref else definition.module,
-                "values": [
-                    {
-                        "id": value.id,
-                        "name": value.name,
-                        "code": value.code,
-                        "status": value.status,
-                        "extra_data": value.extra_data or {}
-                    }
-                    for value in definition.values.filter(status=True).order_by('name')
-                ]
-            }
-        return Response(payload)
-
-
 class MasterModuleViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = MasterModule.objects.all()
     serializer_class = MasterModuleSerializer
-
-    def get_queryset(self):
-        ensure_default_master_setup()
-        return MasterModule.objects.all().order_by('display_order', 'name')
 
 class CustomMasterDefinitionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = CustomMasterDefinition.objects.all()
     serializer_class = CustomMasterDefinitionSerializer
 
-    def get_queryset(self):
-        ensure_default_master_setup()
-        queryset = CustomMasterDefinition.objects.all().select_related('module_ref')
-        module_ref = self.request.query_params.get('module_ref')
-        key = self.request.query_params.get('key')
-        if module_ref:
-            queryset = queryset.filter(module_ref_id=module_ref)
-        if key:
-            queryset = queryset.filter(key=key)
-        return queryset.order_by('module_ref__display_order', 'table_name')
-
 class CustomMasterValueViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = CustomMasterValue.objects.all()
     serializer_class = CustomMasterValueSerializer
+    filter_backends = [DjangoFilterBackend]
     filterset_fields = ['definition']
 
-
-@api_view(['GET'])
-@permission_classes([IsCustomAuthenticated])
-def debug_routing_view(request):
-    """
-    Diagnostic endpoint — shows who resolve_approver() picks for the current user.
-    Helps debug why reporting manager inbox might be empty.
-    Access via: GET /api/debug-routing/
-    """
-    user = getattr(request, 'custom_user', None)
-    if not user:
-        return Response({"error": "Not authenticated"}, status=401)
-
-    try:
-        rm = user.reporting_manager
-        sm = user.senior_manager
-        hod = user.hod_director
-    except Exception as e:
-        return Response({"error": f"Error resolving hierarchy: {str(e)}"}, status=500)
-
-    approver, h_level, _, _, _ = resolve_approver(user)
-
-    # Find pending trips created by this user
-    pending_trips = Trip.objects.filter(
-        user=user,
-        status__in=['Submitted', 'Pending', 'Forwarded']
-    ).values('trip_id', 'status', 'current_approver__employee_id', 'reporting_manager_name')
-
-    # Find pending trips assigned to this user as approver
-    assigned_trips = Trip.objects.filter(
-        current_approver=user,
-        status__in=['Submitted', 'Pending', 'Forwarded']
-    ).values('trip_id', 'status', 'user__employee_id')
-
-    # Check for orphan trips (no current_approver but rm_name matches this user)
-    user_name_str = user.name
-    orphan_trips = Trip.objects.filter(
-        current_approver__isnull=True,
-        reporting_manager_name=user_name_str,
-        status__in=['Submitted', 'Pending', 'Forwarded']
-    ).values('trip_id', 'status', 'user__employee_id', 'reporting_manager_name')
-
-    return Response({
-        "current_user": {
-            "employee_id": user.employee_id,
-            "name": user_name_str,
-            "role": user.role.name if user.role else None,
-        },
-        "hierarchy": {
-            "reporting_manager": {"employee_id": rm.employee_id, "name": rm.name} if rm else None,
-            "senior_manager": {"employee_id": sm.employee_id, "name": sm.name} if sm else None,
-            "hod_director": {"employee_id": hod.employee_id, "name": hod.name} if hod else None,
-        },
-        "resolved_approver": {
-            "employee_id": approver.employee_id if approver else None,
-            "name": approver.name if approver else None,
-            "hierarchy_level": h_level,
-        },
-        "pending_trips_by_you": list(pending_trips),
-        "trips_assigned_to_you_for_approval": list(assigned_trips),
-        "orphan_trips_matching_your_name": list(orphan_trips),
-        "api_note": "External API is used for routing on POST /api/trips/. Check backend logs for resolve_approver() output.",
-    })
 

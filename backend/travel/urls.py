@@ -6,16 +6,12 @@ from .views import (
     ApprovalsView, ApprovalCountView, TripBookingSearchView, DisputeViewSet,
     PolicyDocumentViewSet, TripSettlementView, CFOWarRoomView, BulkActivityBatchViewSet, JobReportViewSet,
     TripTrackingView,
-    TravelModeMasterViewSet, BookingTypeMasterViewSet, AirlineMasterViewSet,
-    FlightClassMasterSerializer, FlightClassMasterViewSet, TrainClassMasterViewSet, BusOperatorMasterViewSet, BusTypeMasterViewSet,
+    TravelModeMasterViewSet, BookingTypeMasterViewSet, AirlineMasterViewSet, BusTypeMasterViewSet,
     IntercityCabVehicleMasterViewSet, TravelProviderMasterViewSet,
-    TrainProviderMasterViewSet, BusProviderMasterViewSet, IntercityCabProviderMasterViewSet,
-    LocalTravelModeMasterViewSet, LocalCarSubTypeMasterViewSet, LocalBikeSubTypeMasterViewSet,
-    LocalProviderMasterViewSet, StayTypeMasterViewSet, RoomTypeMasterViewSet,
+    LocalTravelModeMasterViewSet, LocalProviderMasterViewSet, StayTypeMasterViewSet, RoomTypeMasterViewSet,
     MealCategoryMasterViewSet, MealTypeMasterViewSet, IncidentalTypeMasterViewSet,
     CustomMasterDefinitionViewSet, CustomMasterValueViewSet, MasterModuleViewSet,
-    DynamicMasterBundleView,
-    debug_routing_view
+    TravelOperatorMasterViewSet, TravelClassMasterViewSet, TravelVehicleMasterViewSet, LocalSubTypeMasterViewSet
 )
 from .views_export import ExpenseStatementPDFView, ExpenseStatementExcelView
 
@@ -33,20 +29,16 @@ router.register(r'job-reports', JobReportViewSet)
 router.register(r'travel-mode-masters', TravelModeMasterViewSet)
 router.register(r'booking-type-masters', BookingTypeMasterViewSet)
 router.register(r'airline-masters', AirlineMasterViewSet)
-router.register(r'flight-class-masters', FlightClassMasterViewSet)
-router.register(r'train-class-masters', TrainClassMasterViewSet)
-router.register(r'bus-operator-masters', BusOperatorMasterViewSet)
+router.register(r'travel-operator-masters', TravelOperatorMasterViewSet)
+router.register(r'travel-class-masters', TravelClassMasterViewSet)
 router.register(r'bus-type-masters', BusTypeMasterViewSet)
 router.register(r'intercity-cab-vehicle-masters', IntercityCabVehicleMasterViewSet)
 router.register(r'travel-provider-masters', TravelProviderMasterViewSet)
-router.register(r'train-provider-masters', TrainProviderMasterViewSet)
-router.register(r'bus-provider-masters', BusProviderMasterViewSet)
-router.register(r'intercity-cab-provider-masters', IntercityCabProviderMasterViewSet)
+router.register(r'travel-vehicle-masters', TravelVehicleMasterViewSet)
 
 # Master route registers (Local)
 router.register(r'local-travel-mode-masters', LocalTravelModeMasterViewSet)
-router.register(r'local-car-subtype-masters', LocalCarSubTypeMasterViewSet)
-router.register(r'local-bike-subtype-masters', LocalBikeSubTypeMasterViewSet)
+router.register(r'local-subtype-masters', LocalSubTypeMasterViewSet)
 router.register(r'local-provider-masters', LocalProviderMasterViewSet)
 
 # Master route registers (Stay)
@@ -77,11 +69,9 @@ urlpatterns = [
     path('trips/<str:trip_id>/export/pdf/',   ExpenseStatementPDFView.as_view(),   name='trip-export-pdf'),
     path('trips/<str:trip_id>/export/excel/', ExpenseStatementExcelView.as_view(), name='trip-export-excel'),
     path('dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
-    path('dynamic-masters/', DynamicMasterBundleView.as_view(), name='dynamic-masters'),
     path('approvals/', ApprovalsView.as_view(), name='approvals'),
     path('approvals/count/', ApprovalCountView.as_view(), name='approvals-count'),
     path('settlement/', TripSettlementView.as_view(), name='trip-settlement'),
     path('war-room/', CFOWarRoomView.as_view(), name='war-room'),
-    path('debug-routing/', debug_routing_view, name='debug-routing'),
     path('', include(router.urls)),
 ]

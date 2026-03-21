@@ -99,7 +99,9 @@ const JobReport = () => {
         setLoading(true);
         try {
             const response = await api.get('/api/expenses/');
-            let data = response.data || [];
+            let data = response.data.results || response.data || [];
+            
+            if (!Array.isArray(data)) data = [];
 
             const filtered = data.filter(exp => {
                 const matchesEmployee = filters.employee
@@ -400,8 +402,8 @@ const JobReport = () => {
             </div>
 
             {/* High-End Report Table */}
-            <div className="jr-report-container">
-                <table className="jr-table">
+            <div className="jr-report-container" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                <table className="jr-table" style={{ minWidth: '1000px' }}>
                     <thead>
                         <tr>
                             <th>Activity Date</th>

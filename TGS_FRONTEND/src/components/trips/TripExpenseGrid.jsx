@@ -130,7 +130,8 @@ const TripExpenseGrid = ({
     allowedNatures = null,
     // whether to show the bulk upload button (default true)
     showBulkUpload = true,
-    onJobReportClick
+    onJobReportClick,
+    hasAdditionalLuggage = false
 }) => {
     // Master data states
     const [travelModes, setTravelModes] = useState(FALLBACK_TRAVEL_MODES);
@@ -150,15 +151,20 @@ const TripExpenseGrid = ({
     const [localTravelModes, setLocalTravelModes] = useState(FALLBACK_LOCAL_TRAVEL_MODES);
     const [localCarSubTypes, setLocalCarSubTypes] = useState(FALLBACK_LOCAL_CAR_SUBTYPES);
     const [localBikeSubTypes, setLocalBikeSubTypes] = useState(FALLBACK_LOCAL_BIKE_SUBTYPES);
+    const [localAutoSubTypes, setLocalAutoSubTypes] = useState([]);
     const [localProviders, setLocalProviders] = useState([]);
 
     // Stay Masters
     const [stayTypes, setStayTypes] = useState(FALLBACK_ACCOM_TYPES);
     const [roomTypes, setRoomTypes] = useState(FALLBACK_ROOM_TYPES);
+    const [stayBookingTypes, setStayBookingTypes] = useState([]);
+    const [stayBookingSources, setStayBookingSources] = useState([]);
 
     // Food Masters
     const [mealCategories, setMealCategories] = useState(['Self Meal', 'Working Meal', 'Client Hosted']);
     const [mealTypes, setMealTypes] = useState([]);
+    const [mealSources, setMealSources] = useState([]);
+    const [mealProviders, setMealProviders] = useState([]);
 
     // Incidental Masters
     const [incidentalTypes, setIncidentalTypes] = useState(FALLBACK_INCIDENTAL_TYPES);
@@ -176,8 +182,6 @@ const TripExpenseGrid = ({
     const [isSaving, setIsSaving] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLocating, setIsLocating] = useState(false);
-    const [carryingLuggage, setCarryingLuggage] = useState(false);
-    const [luggageWeight, setLuggageWeight] = useState('');
     const { showToast, confirm } = useToast();
     const navigate = useNavigate();
     const fileInputRef = useRef(null);
@@ -195,13 +199,16 @@ const TripExpenseGrid = ({
     // Bulk Upload State
     const [bulkModal, setBulkModal] = useState({ visible: false, file: null, uploading: false });
 
+    // Image Preview State
+    const [previewImage, setPreviewImage] = useState(null);
+
     useEffect(() => {
         const fetchMasters = async () => {
             try {
                 const [
                     modesRes, bookedByRes, fClassesRes, tClassesRes, busTypesRes,
                     cabVehiclesRes, airlinesRes, busOpsRes, travProvRes,
-                    locModesRes, carSubRes, bikeSubRes, locProvRes,
+                    locModesRes, carSubRes, bikeSubRes, autoSubRes, locProvRes,
                     stayTypeRes, roomTypeRes,
                     mealCatRes, mealTypeRes,
                     incTypeRes,
@@ -209,25 +216,26 @@ const TripExpenseGrid = ({
                 ] = await Promise.all([
                     api.get('/api/travel-mode-masters/'),
                     api.get('/api/booking-type-masters/'),
-                    api.get('/api/flight-class-masters/'),
-                    api.get('/api/train-class-masters/'),
-                    api.get('/api/bus-type-masters/'),
-                    api.get('/api/intercity-cab-vehicle-masters/'),
-                    api.get('/api/airline-masters/'),
-                    api.get('/api/bus-operator-masters/'),
+                    api.get('/api/travel-class-masters/?is_flight=true'),
+                    api.get('/api/travel-class-masters/?is_train=true'),
+                    api.get('/api/travel-class-masters/?is_bus=true'),
+                    api.get('/api/travel-vehicle-masters/?is_intercity_cab=true'),
+                    api.get('/api/travel-operator-masters/?is_flight=true'),
+                    api.get('/api/travel-operator-masters/?is_bus=true'),
                     api.get('/api/travel-provider-masters/'),
                     api.get('/api/local-travel-mode-masters/'),
-                    api.get('/api/local-car-subtype-masters/'),
-                    api.get('/api/local-bike-subtype-masters/'),
+                    api.get('/api/local-subtype-masters/?is_car=true'),
+                    api.get('/api/local-subtype-masters/?is_bike=true'),
+                    api.get('/api/local-subtype-masters/?is_auto=true'),
                     api.get('/api/local-provider-masters/'),
                     api.get('/api/stay-type-masters/'),
                     api.get('/api/room-type-masters/'),
                     api.get('/api/meal-category-masters/'),
                     api.get('/api/meal-type-masters/'),
                     api.get('/api/incidental-type-masters/'),
-                    api.get('/api/train-provider-masters/'),
-                    api.get('/api/bus-provider-masters/'),
-                    api.get('/api/intercity-cab-provider-masters/')
+                    api.get('/api/travel-provider-masters/?is_train=true'),
+                    api.get('/api/travel-provider-masters/?is_bus=true'),
+                    api.get('/api/travel-provider-masters/?is_intercity_cab=true')
                 ]);
 
                 // Populate Travel
@@ -235,9 +243,9 @@ const TripExpenseGrid = ({
                 if (bookedByRes.data.length > 0) setBookedByOptions(bookedByRes.data.filter(m => m.status).map(m => m.booking_type));
                 if (fClassesRes.data.length > 0) setFlightClasses(fClassesRes.data.filter(m => m.status).map(m => m.class_name));
                 if (tClassesRes.data.length > 0) setTrainClasses(tClassesRes.data.filter(m => m.status).map(m => m.class_name));
-                if (busTypesRes.data.length > 0) setBusSeatTypes(busTypesRes.data.filter(m => m.status).map(m => m.bus_type));
-                if (cabVehiclesRes.data.length > 0) setIntercityCabVehicleTypes(cabVehiclesRes.data.filter(m => m.status).map(m => m.vehicle_type));
-                if (airlinesRes.data.length > 0) setAirlines(airlinesRes.data.filter(m => m.status).map(m => m.airline_name));
+                if (busTypesRes.data.length > 0) setBusSeatTypes(busTypesRes.data.filter(m => m.status).map(m => m.class_name));
+                if (cabVehiclesRes.data.length > 0) setIntercityCabVehicleTypes(cabVehiclesRes.data.filter(m => m.status).map(m => m.vehicle_name));
+                if (airlinesRes.data.length > 0) setAirlines(airlinesRes.data.filter(m => m.status).map(m => m.operator_name));
                 if (busOpsRes.data.length > 0) setBusOperators(busOpsRes.data.filter(m => m.status).map(m => m.operator_name));
                 if (travProvRes.data.length > 0) setTravelProviders(travProvRes.data.filter(m => m.status).map(m => m.provider_name));
                 if (trainProvRes.data.length > 0) setTrainProviders(trainProvRes.data.filter(m => m.status).map(m => m.provider_name));
@@ -248,6 +256,7 @@ const TripExpenseGrid = ({
                 if (locModesRes.data.length > 0) setLocalTravelModes(locModesRes.data.filter(m => m.status).map(m => m.mode_name));
                 if (carSubRes.data.length > 0) setLocalCarSubTypes(carSubRes.data.filter(m => m.status).map(m => m.sub_type));
                 if (bikeSubRes.data.length > 0) setLocalBikeSubTypes(bikeSubRes.data.filter(m => m.status).map(m => m.sub_type));
+                if (autoSubRes.data.length > 0) setLocalAutoSubTypes(autoSubRes.data.filter(m => m.status).map(m => m.sub_type));
                 if (locProvRes.data.length > 0) setLocalProviders(locProvRes.data.filter(m => m.status).map(m => m.provider_name));
 
                 // Populate Stay
@@ -266,6 +275,50 @@ const TripExpenseGrid = ({
             }
         };
         fetchMasters();
+
+        const fetchStayBookingMasters = async () => {
+            try {
+                const definitionsRes = await api.get('/api/custom-master-definitions/');
+                const definitions = definitionsRes.data || [];
+                const bookingTypeDef = definitions.find(def => def.table_name === 'Stay Booking Type');
+                const bookingSourceDef = definitions.find(def => def.table_name === 'Stay Booking Source');
+
+                const requests = [];
+                if (bookingTypeDef?.id) requests.push(api.get(`/api/custom-master-values/?definition=${bookingTypeDef.id}`));
+                else requests.push(Promise.resolve({ data: [] }));
+                if (bookingSourceDef?.id) requests.push(api.get(`/api/custom-master-values/?definition=${bookingSourceDef.id}`));
+                else requests.push(Promise.resolve({ data: [] }));
+
+                const [bookingTypeRes, bookingSourceRes] = await Promise.all(requests);
+                setStayBookingTypes((bookingTypeRes.data || []).filter(item => item.status !== false).map(item => item.name));
+                setStayBookingSources((bookingSourceRes.data || []).filter(item => item.status !== false).map(item => item.name));
+            } catch (error) {
+                console.warn('Could not fetch stay booking masters:', error);
+            }
+        };
+        fetchStayBookingMasters();
+
+        const fetchFoodMasters = async () => {
+            try {
+                const definitionsRes = await api.get('/api/custom-master-definitions/');
+                const definitions = definitionsRes.data || [];
+                const mealSourceDef = definitions.find(def => ['Meal Source', 'MealSource', 'Food Source', 'Meal Source Master'].includes(def.table_name));
+                const mealProviderDef = definitions.find(def => ['Provider', 'Meal Provider', 'Food Provider', 'Meal Provider Master'].includes(def.table_name));
+
+                const requests = [];
+                if (mealSourceDef?.id) requests.push(api.get(`/api/custom-master-values/?definition=${mealSourceDef.id}`));
+                else requests.push(Promise.resolve({ data: [] }));
+                if (mealProviderDef?.id) requests.push(api.get(`/api/custom-master-values/?definition=${mealProviderDef.id}`));
+                else requests.push(Promise.resolve({ data: [] }));
+
+                const [mealSourceRes, mealProviderRes] = await Promise.all(requests);
+                setMealSources((mealSourceRes.data || []).filter(item => item.status !== false).map(item => item.name));
+                setMealProviders((mealProviderRes.data || []).filter(item => item.status !== false).map(item => item.name));
+            } catch (error) {
+                console.warn('Could not fetch food masters:', error);
+            }
+        };
+        fetchFoodMasters();
 
         // Fetch fuel rates for 2 Wheeler and 4 Wheeler for current user's state
         const fetchFuelRates = async () => {
@@ -382,26 +435,28 @@ const TripExpenseGrid = ({
         prevCategoryRef.current = activeCategory;
     }, [activeCategory]);
 
-    const saveRegistry = async () => {
+    const saveRegistry = async (saveAll = false) => {
         setErrors({}); // clear previous inline errors
-        if (rows.length === 0) {
+        const targetRows = saveAll ? rows : displayRows;
+
+        if (targetRows.length === 0) {
             showToast("No expenses to save", "info");
             return false;
         }
 
         // --- DUPLICATE ENTRY CHECK ---
         const entrySet = new Set();
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
+        for (let i = 0; i < targetRows.length; i++) {
+            const row = targetRows[i];
             let key = '';
             if (row.nature === 'Travel') {
                 key = `Travel|${row.date}|${row.details.mode}|${row.details.origin}|${row.details.destination}|${row.details.pnr || ''}`;
             } else if (row.nature === 'Local Travel') {
                 key = `Local|${row.date}|${row.details.mode || ''}|${row.details.subType || ''}|${row.details.origin || ''}|${row.details.destination || ''}`;
             } else if (row.nature === 'Food') {
-                key = `Food|${row.date}|${row.details.mealType}|${row.details.restaurant}`;
+                key = `Food|${row.date}|${row.details.mealType || ''}|${row.details.mealCategory || ''}|${row.details.mealSource || ''}|${row.details.provider || ''}`;
             } else if (row.nature === 'Accommodation') {
-                key = `Hotel|${row.date}|${row.details.hotelName}|${row.details.city}`;
+                key = `Hotel|${row.date}|${row.details.hotelName || ''}|${row.details.bookingType || ''}|${row.details.bookingSource || ''}|${row.details.accomType || ''}`;
             } else if (row.nature === 'Incidental') {
                 key = `Incidental|${row.date}|${row.details.incidentalType}`;
             } else {
@@ -409,6 +464,7 @@ const TripExpenseGrid = ({
             }
 
             if (entrySet.has(key)) {
+                setActiveCategory(row.nature);
                 showToast(`Duplicate entry detected at row #${i + 1}. Please remove or modify unique details like PNR or Route.`, "error");
                 return false;
             }
@@ -416,9 +472,24 @@ const TripExpenseGrid = ({
         }
 
         // --- PRE-FLIGHT VALIDATION ---
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
+        for (let i = 0; i < targetRows.length; i++) {
+            const row = targetRows[i];
             const rowNum = i + 1;
+
+            const _originalShowToast = showToast;
+            const _originalSetRowError = setRowError;
+            const _scopedShowToast = (msg, type) => {
+                 if (type === 'error') setActiveCategory(row.nature);
+                 _originalShowToast(msg, type);
+            };
+            const _scopedSetRowError = (id, key, msg) => {
+                 setActiveCategory(row.nature);
+                 _originalSetRowError(id, key, msg);
+            };
+
+            // Temporary override just for this block
+            const showToast = _scopedShowToast;
+            const setRowError = _scopedSetRowError;
 
             // DATE RANGE VALIDATION
             if (minDate && maxDate) {
@@ -583,6 +654,15 @@ const TripExpenseGrid = ({
                     }
                 }
 
+                if ((row.bills || []).length > 0) {
+                    const travelInvoiceNumbers = getTravelInvoiceNumbers(row);
+                    const missingInvoice = travelInvoiceNumbers.some(invoice => !invoice || !invoice.trim());
+                    if (missingInvoice) {
+                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded file.`, "error");
+                        return false;
+                    }
+                }
+
                 // Cancellation/No-Show Logic
                 if (travelStatus === 'Cancelled') {
                     const charges = parseFloat(row.details.cancellationCharges || 0);
@@ -705,83 +785,132 @@ const TripExpenseGrid = ({
                         return false;
                     }
                 }
+
+                if ((row.bills || []).length > 0) {
+                    const localInvoiceNumbers = getLocalInvoiceNumbers(row);
+                    const missingInvoice = localInvoiceNumbers.some(invoice => !invoice || !invoice.trim());
+                    if (missingInvoice) {
+                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
+                        return false;
+                    }
+                }
             }
 
             if (row.nature === 'Food') {
-                if (!row.details.mealCategory) {
-                    showToast(`Item #${rowNum}: Please select Meal Category.`, "error");
+                const mealSource = normalizeMealSource(row.details.mealSource);
+                const isSelfMeal = row.details.mealCategory === 'Self Meal';
+                if (!row.date) { showToast(`Item #${rowNum}: Date is required.`, "error"); return false; }
+                if (!row.details.mealType) { showToast(`Item #${rowNum}: Please select Meal Type.`, "error"); return false; }
+                if (!row.details.mealTime) { showToast(`Item #${rowNum}: Meal Time is required.`, "error"); return false; }
+                if (!row.details.mealCategory) { showToast(`Item #${rowNum}: Please select Meal Category.`, "error"); return false; }
+                if (isSelfMeal) {
+                    if (!row.details.mealSource) { showToast(`Item #${rowNum}: Please select Meal Source.`, "error"); return false; }
+                    if (mealSource === 'online' && (!row.details.provider || !row.details.provider.trim())) { showToast(`Item #${rowNum}: Provider is required for Online meal source.`, "error"); return false; }
+                    if (mealSource === 'hotel' && !row.details.hotelName?.trim()) { showToast(`Item #${rowNum}: Hotel Name is required.`, "error"); return false; }
+                    if (mealSource === 'restaurant' && !row.details.restaurant?.trim()) { showToast(`Item #${rowNum}: Restaurant Name is required.`, "error"); return false; }
+                    if (mealSource === 'online' && !row.details.hotelName?.trim()) { showToast(`Item #${rowNum}: Hotel/Outlet Name is required for Online meal source.`, "error"); return false; }
+                    if (!row.amount || parseFloat(row.amount) <= 0) { showToast(`Item #${rowNum}: Amount must be greater than 0 for Self Meal.`, "error"); return false; }
+                } else if (parseFloat(row.amount || 0) !== 0) {
+                    showToast(`Item #${rowNum}: Amount must be 0 for Client Hosted and Working Meal.`, "error");
                     return false;
                 }
-
-                // meal time mandatory regardless of category
-                if (!row.details.mealTime) { showToast(`Item #${rowNum}: Meal Time is required.`, "error"); return false; }
-                if (row.details.mealCategory === 'Self Meal') {
-                    if (!row.details.mealType) { showToast(`Item #${rowNum}: Please select Meal Type.`, "error"); return false; }
-                    if (!row.details.restaurant) { showToast(`Item #${rowNum}: Restaurant / Hotel Name is required.`, "error"); return false; }
-                    if (!row.details.purpose) { showToast(`Item #${rowNum}: Address is required.`, "error"); return false; }
-                    if (!row.details.invoiceNo) { showToast(`Item #${rowNum}: Invoice Number is required.`, "error"); return false; }
-                    if (!row.amount || parseFloat(row.amount) <= 0) { showToast(`Item #${rowNum}: Amount must be > 0 for Self Meal.`, "error"); return false; }
-                    if (!row.bills || row.bills.length === 0) { showToast(`Item #${rowNum}: Bill upload is mandatory for Self Meal.`, "error"); return false; }
-
-                    const sameDaySelfMeals = rows.filter(r => r.nature === 'Food' && r.date === row.date && r.details.mealCategory === 'Self Meal' && r.details.mealType === row.details.mealType);
-                    if (sameDaySelfMeals.length > 1 && ['Breakfast', 'Lunch', 'Dinner'].includes(row.details.mealType)) {
-                        showToast(`Item #${rowNum}: Only one ${row.details.mealType} per day is allowed.`, "error");
+                if ((row.bills || []).length > 0) {
+                    const foodInvoiceNumbers = getFoodInvoiceNumbers(row);
+                    const missingInvoice = foodInvoiceNumbers.some(invoice => !invoice || !invoice.trim());
+                    if (missingInvoice) {
+                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
                         return false;
                     }
                 }
             }
 
             if (row.nature === 'Accommodation') {
+                const scheduledCheckInDate = row.details.scheduledCheckInDate || row.details.checkIn;
+                const scheduledCheckInTime = row.details.scheduledCheckInTime || row.details.checkInTime;
+                const scheduledCheckOutDate = row.details.scheduledCheckOutDate || row.details.checkOut;
+                const scheduledCheckOutTime = row.details.scheduledCheckOutTime || row.details.checkOutTime;
+                const actualCheckInDate = row.details.actualCheckInDate || row.details.checkIn;
+                const actualCheckInTime = row.details.actualCheckInTime || row.details.checkInTime;
+                const actualCheckOutDate = row.details.actualCheckOutDate || row.details.checkOut;
+                const actualCheckOutTime = row.details.actualCheckOutTime || row.details.checkOutTime;
+
+                if (!scheduledCheckInDate || !scheduledCheckInTime || !scheduledCheckOutDate || !scheduledCheckOutTime) {
+                    showToast(`Item #${rowNum}: Scheduled check-in and check-out date/time are required.`, "error");
+                    return false;
+                }
+                if (!actualCheckInDate || !actualCheckInTime || !actualCheckOutDate || !actualCheckOutTime) {
+                    showToast(`Item #${rowNum}: Actual check-in and check-out date/time are required.`, "error");
+                    return false;
+                }
+                if (!row.details.bookingType) {
+                    showToast(`Item #${rowNum}: Please select a Booking Type.`, "error");
+                    return false;
+                }
+                if (!row.details.bookingSource) {
+                    showToast(`Item #${rowNum}: Please select a Booking Source.`, "error");
+                    return false;
+                }
                 if (!row.details.accomType) {
-                    showToast(`Item #${rowNum}: Please select an Accommodation Type.`, "error");
+                    showToast(`Item #${rowNum}: Please select a Stay Type.`, "error");
                     return false;
                 }
                 if (!['No Stay', 'Self Stay'].includes(row.details.accomType) && !row.details.hotelName) {
                     showToast(`Item #${rowNum}: Please provide the Hotel/Guest House name.`, "error");
                     return false;
                 }
-                if (!['No Stay'].includes(row.details.accomType) && (!row.details.checkIn || !row.details.checkOut)) {
-                    showToast(`Item #${rowNum}: Check-In and Check-Out dates are required for stays.`, "error");
+                if (actualCheckInDate && actualCheckOutDate && new Date(actualCheckInDate) > new Date(actualCheckOutDate)) {
+                    showToast(`Item #${rowNum}: Actual check-out date cannot be before actual check-in date.`, "error");
                     return false;
                 }
-                if (row.details.checkIn && row.details.checkOut && new Date(row.details.checkIn) > new Date(row.details.checkOut)) {
-                    showToast(`Item #${rowNum}: Check-Out date cannot be before Check-In date.`, "error");
+                if (!row.amount || parseFloat(row.amount) <= 0) {
+                    showToast(`Item #${rowNum}: Amount must be greater than 0.`, "error");
                     return false;
                 }
-                if (row.details.checkIn && !row.details.checkInTime) {
-                    showToast(`Item #${rowNum}: Check-In time is required for stays.`, "error");
-                    return false;
-                }
-                if (row.details.checkOut && !row.details.checkOutTime) {
-                    showToast(`Item #${rowNum}: Check-Out time is required for stays.`, "error");
-                    return false;
+                if ((row.bills || []).length > 0) {
+                    const accommodationInvoiceNumbers = getAccommodationInvoiceNumbers(row);
+                    const missingInvoice = accommodationInvoiceNumbers.some(invoice => !invoice || !invoice.trim());
+                    if (missingInvoice) {
+                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
+                        return false;
+                    }
                 }
             }
 
             if (row.nature === 'Incidental') {
+                if (!row.date) {
+                    showToast(`Item #${rowNum}: Date is mandatory for incidental expenses.`, "error");
+                    return false;
+                }
+                if (!row.details.incidentalTime) {
+                    showToast(`Item #${rowNum}: Time is mandatory for incidental expenses.`, "error");
+                    return false;
+                }
                 if (!row.details.incidentalType) {
                     showToast(`Item #${rowNum}: Please select an Incidental Type.`, "error");
                     return false;
                 }
-                if (!row.details.location) {
-                    showToast(`Item #${rowNum}: Location is mandatory for incidental expenses.`, "error");
+                if (!row.details.location || row.details.location.trim().length < 3) {
+                    showToast(`Item #${rowNum}: Location must be at least 3 characters.`, "error");
+                    return false;
+                }
+                if (!/^\d+(\.\d{1,2})?$/.test(String(row.amount || '').trim())) {
+                    showToast(`Item #${rowNum}: Amount must be a valid number with up to 2 decimal places.`, "error");
                     return false;
                 }
                 if (parseFloat(row.amount) <= 0) {
                     showToast(`Item #${rowNum}: Amount must be greater than 0.`, "error");
                     return false;
                 }
-                if (!row.bills || row.bills.length === 0) {
-                    showToast(`Item #${rowNum}: Bill upload is mandatory for incidental expenses.`, "error");
-                    return false;
+                if (isIncidentalOthersType(row.details.incidentalType)) {
+                    if (countWords(row.details.otherReason) < 5) { showToast(`Item #${rowNum}: Reason must be at least 5 words.`, "error"); return false; }
+                    if (!row.details.notes || !row.details.notes.trim()) { showToast(`Item #${rowNum}: Remarks are required for 'Others'.`, "error"); return false; }
+                    if (countWords(row.details.notes) > 50) { showToast(`Item #${rowNum}: Remarks can have up to 50 words.`, "error"); return false; }
                 }
-                if (row.details.incidentalType === 'Others') {
-                    if (!row.details.otherReason) {
-                        showToast(`Item #${rowNum}: Reason is required for 'Others' expense type.`, "error");
-                        return false;
-                    }
-                    if (!row.details.description) {
-                        showToast(`Item #${rowNum}: Description is required for 'Others' expense type.`, "error");
+                if ((row.bills || []).length > 0) {
+                    const invoiceNumbers = getIncidentalInvoiceNumbers(row);
+                    const missingInvoice = invoiceNumbers.some(invoice => !invoice || !invoice.trim());
+                    if (missingInvoice) {
+                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
                         return false;
                     }
                 }
@@ -789,7 +918,7 @@ const TripExpenseGrid = ({
         }
 
         // Overlap Validation (Simplified: check if multiple travel segments have same start date)
-        const travelRows = rows.filter(r => r.nature === 'Travel');
+        const travelRows = targetRows.filter(r => r.nature === 'Travel');
         const dates = travelRows.map(r => r.date);
         const hasOverlap = new Set(dates).size !== dates.length;
         if (hasOverlap) {
@@ -799,7 +928,7 @@ const TripExpenseGrid = ({
         }
 
         // Meal overlap validation
-        for (const row of rows) {
+        for (const row of targetRows) {
             if (row.nature === 'Food') {
                 const hasMealBenefit = rows.some(r => r.nature === 'Travel' && r.date === row.date && r.details.mealIncluded);
                 if (hasMealBenefit) {
@@ -811,7 +940,7 @@ const TripExpenseGrid = ({
 
         setIsSaving(true);
         try {
-            const newRows = rows.filter(r => !r.isSaved);
+            const newRows = targetRows.filter(r => !r.isSaved);
 
             if (newRows.length === 0) {
                 setIsSaving(false);
@@ -865,6 +994,36 @@ const TripExpenseGrid = ({
                         delete filteredDetails.nightHaltCharges;
                     }
                     delete filteredDetails.travelStatus;
+                }
+
+                if (row.nature === 'Incidental') {
+                    const incidentalInvoices = getIncidentalInvoiceNumbers(row);
+                    filteredDetails.invoiceNumbers = incidentalInvoices;
+                    filteredDetails.invoiceNo = incidentalInvoices[0] || '';
+                }
+
+                if (row.nature === 'Travel') {
+                    const travelInvoices = getTravelInvoiceNumbers(row);
+                    filteredDetails.travelInvoiceNumbers = travelInvoices;
+                    filteredDetails.invoiceNo = travelInvoices[0] || '';
+                }
+
+                if (row.nature === 'Local Travel') {
+                    const localInvoices = getLocalInvoiceNumbers(row);
+                    filteredDetails.localInvoiceNumbers = localInvoices;
+                    filteredDetails.invoiceNo = localInvoices[0] || '';
+                }
+
+                if (row.nature === 'Food') {
+                    const foodInvoices = getFoodInvoiceNumbers(row);
+                    filteredDetails.foodInvoiceNumbers = foodInvoices;
+                    filteredDetails.invoiceNo = foodInvoices[0] || '';
+                }
+
+                if (row.nature === 'Accommodation') {
+                    const accommodationInvoices = getAccommodationInvoiceNumbers(row);
+                    filteredDetails.accommodationInvoiceNumbers = accommodationInvoices;
+                    filteredDetails.invoiceNo = accommodationInvoices[0] || '';
                 }
 
                 const payload = {
@@ -941,7 +1100,8 @@ const TripExpenseGrid = ({
             showToast("Registry committed successfully!", "success");
             if (onUpdate) onUpdate();
 
-            setRows(rows.map(r => ({ ...r, isSaved: true })));
+            const targetIds = new Set(targetRows.map(r => r.id));
+            setRows(rows.map(r => targetIds.has(r.id) ? { ...r, isSaved: true } : r));
             return true;
 
         } catch (error) {
@@ -970,7 +1130,7 @@ const TripExpenseGrid = ({
                 type: 'warning',
                 onConfirm: async () => {
                     setConfirmDialog(prev => ({ ...prev, show: false }));
-                    const saved = await saveRegistry();
+                    const saved = await saveRegistry(true);
                     if (saved) await submitFinalClaim();
                 }
             });
@@ -1022,10 +1182,20 @@ const TripExpenseGrid = ({
 
     const addRow = (nature = '') => {
         const targetNature = nature || activeCategory;
+        const todayStr = new Date().toISOString().split('T')[0];
+        let defaultDate = '';
+        if (startDate && endDate) {
+            if (todayStr >= startDate && todayStr <= endDate) {
+                defaultDate = todayStr;
+            }
+        } else if (startDate && todayStr >= startDate) {
+            defaultDate = todayStr;
+        }
+
         const newRow = {
             id: Math.random().toString(36).substr(2, 9),
-            date: new Date().toISOString().split('T')[0],
-            endDate: new Date().toISOString().split('T')[0],
+            date: defaultDate,
+            endDate: defaultDate,
             nature: targetNature,
             remarks: '',
             details: {
@@ -1107,6 +1277,179 @@ const TripExpenseGrid = ({
         }));
     };
 
+    const countWords = (text) => text ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+    const isIncidentalOthersType = (value) => (value || '').trim().toLowerCase() === 'others' || (value || '').trim().toLowerCase() === 'other';
+    const normalizeMealSource = (value) => (value || '').trim().toLowerCase();
+    const getAccommodationInvoiceNumbers = (row) => {
+        const storedInvoices = Array.isArray(row.details?.accommodationInvoiceNumbers)
+            ? row.details.accommodationInvoiceNumbers
+            : (row.details?.invoiceNo ? [row.details.invoiceNo] : []);
+        const billCount = (row.bills || []).length;
+        if (billCount === 0) return storedInvoices;
+        return Array.from({ length: billCount }, (_, index) => storedInvoices[index] || '');
+    };
+
+    const syncAccommodationInvoiceNumbers = (row, billCount) => {
+        const currentInvoices = getAccommodationInvoiceNumbers(row);
+        return Array.from({ length: billCount }, (_, index) => currentInvoices[index] || '');
+    };
+
+    const updateAccommodationInvoiceNumber = (id, index, value) => {
+        clearRowError(id, `accommodationInvoiceNumber_${index}`);
+        setRows(prevRows => prevRows.map(row => {
+            if (row.id === id) {
+                const accommodationInvoiceNumbers = getAccommodationInvoiceNumbers(row);
+                accommodationInvoiceNumbers[index] = value;
+                return {
+                    ...row,
+                    details: {
+                        ...row.details,
+                        accommodationInvoiceNumbers,
+                        invoiceNo: accommodationInvoiceNumbers[0] || ''
+                    },
+                    isSaved: false
+                };
+            }
+            return row;
+        }));
+    };
+
+    const getTravelInvoiceNumbers = (row) => {
+        const storedInvoices = Array.isArray(row.details?.travelInvoiceNumbers)
+            ? row.details.travelInvoiceNumbers
+            : (row.details?.invoiceNo ? [row.details.invoiceNo] : []);
+        const billCount = (row.bills || []).length;
+        if (billCount === 0) return storedInvoices;
+        return Array.from({ length: billCount }, (_, index) => storedInvoices[index] || '');
+    };
+
+    const syncTravelInvoiceNumbers = (row, billCount) => {
+        const currentInvoices = getTravelInvoiceNumbers(row);
+        return Array.from({ length: billCount }, (_, index) => currentInvoices[index] || '');
+    };
+
+    const updateTravelInvoiceNumber = (id, index, value) => {
+        clearRowError(id, `travelInvoiceNumber_${index}`);
+        setRows(prevRows => prevRows.map(row => {
+            if (row.id === id) {
+                const travelInvoiceNumbers = getTravelInvoiceNumbers(row);
+                travelInvoiceNumbers[index] = value;
+                return {
+                    ...row,
+                    details: {
+                        ...row.details,
+                        travelInvoiceNumbers,
+                        invoiceNo: travelInvoiceNumbers[0] || ''
+                    },
+                    isSaved: false
+                };
+            }
+            return row;
+        }));
+    };
+
+    const getFoodInvoiceNumbers = (row) => {
+        const storedInvoices = Array.isArray(row.details?.foodInvoiceNumbers)
+            ? row.details.foodInvoiceNumbers
+            : (row.details?.invoiceNo ? [row.details.invoiceNo] : []);
+        const billCount = (row.bills || []).length;
+        if (billCount === 0) return storedInvoices;
+        return Array.from({ length: billCount }, (_, index) => storedInvoices[index] || '');
+    };
+
+    const syncFoodInvoiceNumbers = (row, billCount) => {
+        const currentInvoices = getFoodInvoiceNumbers(row);
+        return Array.from({ length: billCount }, (_, index) => currentInvoices[index] || '');
+    };
+
+    const updateFoodInvoiceNumber = (id, index, value) => {
+        clearRowError(id, `foodInvoiceNumber_${index}`);
+        setRows(prevRows => prevRows.map(row => {
+            if (row.id === id) {
+                const foodInvoiceNumbers = getFoodInvoiceNumbers(row);
+                foodInvoiceNumbers[index] = value;
+                return {
+                    ...row,
+                    details: {
+                        ...row.details,
+                        foodInvoiceNumbers,
+                        invoiceNo: foodInvoiceNumbers[0] || ''
+                    },
+                    isSaved: false
+                };
+            }
+            return row;
+        }));
+    };
+
+    const getLocalInvoiceNumbers = (row) => {
+        const storedInvoices = Array.isArray(row.details?.localInvoiceNumbers)
+            ? row.details.localInvoiceNumbers
+            : (row.details?.invoiceNo ? [row.details.invoiceNo] : []);
+        const billCount = (row.bills || []).length;
+        if (billCount === 0) return storedInvoices;
+        return Array.from({ length: billCount }, (_, index) => storedInvoices[index] || '');
+    };
+
+    const syncLocalInvoiceNumbers = (row, billCount) => {
+        const currentInvoices = getLocalInvoiceNumbers(row);
+        return Array.from({ length: billCount }, (_, index) => currentInvoices[index] || '');
+    };
+
+    const updateLocalInvoiceNumber = (id, index, value) => {
+        clearRowError(id, `localInvoiceNumber_${index}`);
+        setRows(prevRows => prevRows.map(row => {
+            if (row.id === id) {
+                const localInvoiceNumbers = getLocalInvoiceNumbers(row);
+                localInvoiceNumbers[index] = value;
+                return {
+                    ...row,
+                    details: {
+                        ...row.details,
+                        localInvoiceNumbers,
+                        invoiceNo: localInvoiceNumbers[0] || ''
+                    },
+                    isSaved: false
+                };
+            }
+            return row;
+        }));
+    };
+
+    const getIncidentalInvoiceNumbers = (row) => {
+        const storedInvoices = Array.isArray(row.details?.invoiceNumbers)
+            ? row.details.invoiceNumbers
+            : (row.details?.invoiceNo ? [row.details.invoiceNo] : []);
+        const billCount = (row.bills || []).length;
+        if (billCount === 0) return storedInvoices;
+        return Array.from({ length: billCount }, (_, index) => storedInvoices[index] || '');
+    };
+
+    const syncIncidentalInvoiceNumbers = (row, billCount) => {
+        const currentInvoices = getIncidentalInvoiceNumbers(row);
+        return Array.from({ length: billCount }, (_, index) => currentInvoices[index] || '');
+    };
+
+    const updateIncidentalInvoiceNumber = (id, index, value) => {
+        clearRowError(id, `invoiceNumber_${index}`);
+        setRows(prevRows => prevRows.map(row => {
+            if (row.id === id) {
+                const invoiceNumbers = getIncidentalInvoiceNumbers(row);
+                invoiceNumbers[index] = value;
+                return {
+                    ...row,
+                    details: {
+                        ...row.details,
+                        invoiceNumbers,
+                        invoiceNo: invoiceNumbers[0] || ''
+                    },
+                    isSaved: false
+                };
+            }
+            return row;
+        }));
+    };
+
     const updateRow = (id, field, value) => {
         // clear error for this field
         clearRowError(id, field);
@@ -1142,6 +1485,7 @@ const TripExpenseGrid = ({
         setRows(prevRows => prevRows.map(row => {
             if (row.id === id) {
                 let updatedAmount = row.amount;
+                let updatedDate = row.date;
 
                 // Rule: If switching to Company Booked, force amount to 0
                 if (detailField === 'bookedBy' && value === 'Company Booked' && row.nature === 'Travel') {
@@ -1149,6 +1493,35 @@ const TripExpenseGrid = ({
                 }
 
                 const newDetails = { ...row.details, [detailField]: value };
+
+                if (row.nature === 'Incidental' && detailField === 'incidentalType' && !isIncidentalOthersType(value)) {
+                    newDetails.otherReason = '';
+                }
+
+                if (row.nature === 'Food' && detailField === 'mealCategory') {
+                    if (value !== 'Self Meal') {
+                        newDetails.mealSource = '';
+                        newDetails.provider = '';
+                        newDetails.hotelName = '';
+                        newDetails.restaurant = '';
+                        updatedAmount = '0';
+                    } else if (!row.amount || parseFloat(row.amount || 0) === 0) {
+                        updatedAmount = '';
+                    }
+                }
+
+                if (row.nature === 'Food' && detailField === 'mealSource') {
+                    const normalizedSource = normalizeMealSource(value);
+                    if (normalizedSource !== 'online') {
+                        newDetails.provider = '';
+                    }
+                    if (!['hotel', 'online'].includes(normalizedSource)) {
+                        newDetails.hotelName = '';
+                    }
+                    if (normalizedSource !== 'restaurant') {
+                        newDetails.restaurant = '';
+                    }
+                }
 
                 if (detailField === 'odoStart' || detailField === 'odoEnd' || detailField === 'subType') {
                     const start = parseFloat(newDetails.odoStart || 0);
@@ -1180,6 +1553,28 @@ const TripExpenseGrid = ({
                     }
                 }
 
+                if (['scheduledCheckInDate', 'scheduledCheckOutDate', 'actualCheckInDate', 'actualCheckOutDate'].includes(detailField)) {
+                    const checkInDate = newDetails.actualCheckInDate || newDetails.scheduledCheckInDate;
+                    const checkOutDate = newDetails.actualCheckOutDate || newDetails.scheduledCheckOutDate;
+                    newDetails.checkIn = checkInDate || '';
+                    newDetails.checkOut = checkOutDate || '';
+                    if (checkInDate) updatedDate = checkInDate;
+
+                    if (checkInDate && checkOutDate) {
+                        const start = new Date(checkInDate);
+                        const end = new Date(checkOutDate);
+                        const diffMs = end - start;
+                        newDetails.nights = diffMs >= 0 ? Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24))) : 0;
+                    } else {
+                        newDetails.nights = 0;
+                    }
+                }
+
+                if (['scheduledCheckInTime', 'scheduledCheckOutTime', 'actualCheckInTime', 'actualCheckOutTime'].includes(detailField)) {
+                    newDetails.checkInTime = newDetails.actualCheckInTime || newDetails.scheduledCheckInTime || '';
+                    newDetails.checkOutTime = newDetails.actualCheckOutTime || newDetails.scheduledCheckOutTime || '';
+                }
+
                 if (detailField === 'startTime' || detailField === 'endTime' || detailField === 'nightTravel') {
                     if (row.nature === 'Travel' && row.details.mode === 'Intercity Car') {
                         if (newDetails.startTime && newDetails.endTime) {
@@ -1208,7 +1603,7 @@ const TripExpenseGrid = ({
                     }
                 }
 
-                return { ...row, details: newDetails, amount: updatedAmount, isSaved: false };
+                return { ...row, date: updatedDate, details: newDetails, amount: updatedAmount, isSaved: false };
             }
             return row;
         }));
@@ -1342,19 +1737,89 @@ const TripExpenseGrid = ({
         );
     };
 
-    const handleFileUpload = (id, file) => {
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onloadend = () => {
+    const handleFileUpload = (id, files) => {
+        const validFiles = Array.from(files || []).filter(Boolean);
+        if (validFiles.length === 0) return;
+
+        Promise.all(validFiles.map(file => new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(file);
+        }))).then((uploadedBills) => {
             setRows(prevRows => prevRows.map(row => {
                 if (row.id === id) {
                     const currentBills = row.bills || [];
-                    return { ...row, bills: [...currentBills, reader.result], isSaved: false };
+                    const nextBills = [...currentBills, ...uploadedBills];
+                    if (row.nature === 'Travel') {
+                        const travelInvoiceNumbers = syncTravelInvoiceNumbers(row, nextBills.length);
+                        return {
+                            ...row,
+                            bills: nextBills,
+                            details: {
+                                ...row.details,
+                                travelInvoiceNumbers,
+                                invoiceNo: travelInvoiceNumbers[0] || ''
+                            },
+                            isSaved: false
+                        };
+                    }
+                    if (row.nature === 'Local Travel') {
+                        const localInvoiceNumbers = syncLocalInvoiceNumbers(row, nextBills.length);
+                        return {
+                            ...row,
+                            bills: nextBills,
+                            details: {
+                                ...row.details,
+                                localInvoiceNumbers,
+                                invoiceNo: localInvoiceNumbers[0] || ''
+                            },
+                            isSaved: false
+                        };
+                    }
+                    if (row.nature === 'Food') {
+                        const foodInvoiceNumbers = syncFoodInvoiceNumbers(row, nextBills.length);
+                        return {
+                            ...row,
+                            bills: nextBills,
+                            details: {
+                                ...row.details,
+                                foodInvoiceNumbers,
+                                invoiceNo: foodInvoiceNumbers[0] || ''
+                            },
+                            isSaved: false
+                        };
+                    }
+                    if (row.nature === 'Incidental') {
+                        const invoiceNumbers = syncIncidentalInvoiceNumbers(row, nextBills.length);
+                        return {
+                            ...row,
+                            bills: nextBills,
+                            details: {
+                                ...row.details,
+                                invoiceNumbers,
+                                invoiceNo: invoiceNumbers[0] || ''
+                            },
+                            isSaved: false
+                        };
+                    }
+                    if (row.nature === 'Accommodation') {
+                        const accommodationInvoiceNumbers = syncAccommodationInvoiceNumbers(row, nextBills.length);
+                        return {
+                            ...row,
+                            bills: nextBills,
+                            details: {
+                                ...row.details,
+                                accommodationInvoiceNumbers,
+                                invoiceNo: accommodationInvoiceNumbers[0] || ''
+                            },
+                            isSaved: false
+                        };
+                    }
+                    return { ...row, bills: nextBills, isSaved: false };
                 }
                 return row;
             }));
-        };
-        reader.readAsDataURL(file);
+        });
     };
 
     const removeBill = (rowId, index) => {
@@ -1362,6 +1827,81 @@ const TripExpenseGrid = ({
             if (row.id === rowId) {
                 const newBills = [...(row.bills || [])];
                 newBills.splice(index, 1);
+                if (row.nature === 'Travel') {
+                    const currentInvoices = getTravelInvoiceNumbers(row);
+                    currentInvoices.splice(index, 1);
+                    const travelInvoiceNumbers = Array.from({ length: newBills.length }, (_, invoiceIndex) => currentInvoices[invoiceIndex] || '');
+                    return {
+                        ...row,
+                        bills: newBills,
+                        details: {
+                            ...row.details,
+                            travelInvoiceNumbers,
+                            invoiceNo: travelInvoiceNumbers[0] || ''
+                        },
+                        isSaved: false
+                    };
+                }
+                if (row.nature === 'Local Travel') {
+                    const currentInvoices = getLocalInvoiceNumbers(row);
+                    currentInvoices.splice(index, 1);
+                    const localInvoiceNumbers = Array.from({ length: newBills.length }, (_, invoiceIndex) => currentInvoices[invoiceIndex] || '');
+                    return {
+                        ...row,
+                        bills: newBills,
+                        details: {
+                            ...row.details,
+                            localInvoiceNumbers,
+                            invoiceNo: localInvoiceNumbers[0] || ''
+                        },
+                        isSaved: false
+                    };
+                }
+                if (row.nature === 'Food') {
+                    const currentInvoices = getFoodInvoiceNumbers(row);
+                    currentInvoices.splice(index, 1);
+                    const foodInvoiceNumbers = Array.from({ length: newBills.length }, (_, invoiceIndex) => currentInvoices[invoiceIndex] || '');
+                    return {
+                        ...row,
+                        bills: newBills,
+                        details: {
+                            ...row.details,
+                            foodInvoiceNumbers,
+                            invoiceNo: foodInvoiceNumbers[0] || ''
+                        },
+                        isSaved: false
+                    };
+                }
+                if (row.nature === 'Incidental') {
+                    const currentInvoices = getIncidentalInvoiceNumbers(row);
+                    currentInvoices.splice(index, 1);
+                    const invoiceNumbers = Array.from({ length: newBills.length }, (_, invoiceIndex) => currentInvoices[invoiceIndex] || '');
+                    return {
+                        ...row,
+                        bills: newBills,
+                        details: {
+                            ...row.details,
+                            invoiceNumbers,
+                            invoiceNo: invoiceNumbers[0] || ''
+                        },
+                        isSaved: false
+                    };
+                }
+                if (row.nature === 'Accommodation') {
+                    const currentInvoices = getAccommodationInvoiceNumbers(row);
+                    currentInvoices.splice(index, 1);
+                    const accommodationInvoiceNumbers = Array.from({ length: newBills.length }, (_, invoiceIndex) => currentInvoices[invoiceIndex] || '');
+                    return {
+                        ...row,
+                        bills: newBills,
+                        details: {
+                            ...row.details,
+                            accommodationInvoiceNumbers,
+                            invoiceNo: accommodationInvoiceNumbers[0] || ''
+                        },
+                        isSaved: false
+                    };
+                }
                 return { ...row, bills: newBills, isSaved: false };
             }
             return row;
@@ -1370,9 +1910,1323 @@ const TripExpenseGrid = ({
 
     const previewBill = (bill) => {
         if (!bill) return;
-        const src = (bill.startsWith('data:') || bill.startsWith('http')) ? bill : `data:image/jpeg;base64,${bill}`;
-        const newWindow = window.open();
-        newWindow.document.write(`<img src="${src}" style="max-width:100%; height:auto;" />`);
+        let src = String(bill);
+        if (!src.startsWith('data:') && !src.startsWith('http') && !src.startsWith('/')) {
+             if (src.startsWith('/9j/') || src.startsWith('JVBER')) {
+                 src = src.startsWith('JVBER') ? `data:application/pdf;base64,${src}` : `data:image/jpeg;base64,${src}`;
+             } else {
+                 src = `data:image/jpeg;base64,${src}`;
+             }
+        }
+        setPreviewImage(src);
+    };
+
+    const renderIncidentalCard = (row) => {
+        const invoiceNumbers = getIncidentalInvoiceNumbers(row);
+
+        return (
+            <tr key={row.id} className="category-row-block incidental-card-row">
+                <td>
+                    <div className="incidental-entry-shell">
+                        <div className="incidental-entry-header">
+                            <div className="incidental-entry-title">
+                                <Receipt size={16} />
+                                <div>
+                                    <strong>Incidental Expense Entry</strong>
+                                    <span>Card-based entry for cleaner expense capture</span>
+                                </div>
+                            </div>
+                            {!isLocked && (
+                                <button className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
+                                    <Trash2 size={14} />
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="trip-incidental-card-grid incidental-card-grid">
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <Calendar size={14} />
+                                    <span>Date &amp; Time</span>
+                                </div>
+                                <div className="incidental-card-body incidental-date-time-stack">
+                                    <div className="input-with-label-mini">
+                                        <label>Date *</label>
+                                        <input type="date" min={minDate} max={maxDate} className="cat-input" value={row.date || ''} onChange={e => updateRow(row.id, 'date', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Time *</label>
+                                        <input type="time" className="cat-input" value={row.details.incidentalTime || ''} onChange={e => updateDetails(row.id, 'incidentalTime', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <MapPin size={14} />
+                                    <span>Expense Type &amp; Location</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Expense Type *</label>
+                                        <select className="cat-input" value={row.details.incidentalType || ''} onChange={e => updateDetails(row.id, 'incidentalType', e.target.value)} disabled={isLocked}>
+                                            <option value="">Select Type</option>
+                                            {incidentalTypes.filter(t => t !== 'Porter Charges' || hasAdditionalLuggage).map(t => (
+                                                <option key={t} value={t}>{t}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Location *</label>
+                                        <input type="text" className="cat-input" placeholder="Enter expense location" value={row.details.location || ''} onChange={e => updateDetails(row.id, 'location', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <FileText size={14} />
+                                    <span>Remarks / Details</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    {isIncidentalOthersType(row.details.incidentalType) && (
+                                        <div className="incidental-others-stack">
+                                            <div className="input-with-label-mini">
+                                                <label>Reason *</label>
+                                                <textarea className="cat-input incidental-textarea" placeholder="Enter the reason" value={row.details.otherReason || ''} onChange={e => updateDetails(row.id, 'otherReason', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Remarks *</label>
+                                                <textarea className="cat-input incidental-textarea" placeholder="Enter remarks" value={row.details.notes || ''} onChange={e => updateDetails(row.id, 'notes', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                        </div>
+                                    )}
+                                    {!isIncidentalOthersType(row.details.incidentalType) && (
+                                        <div className="input-with-label-mini">
+                                            <label>Remarks</label>
+                                            <input type="text" className="cat-input" placeholder="Add a short note" value={row.details.notes || ''} onChange={e => updateDetails(row.id, 'notes', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="incidental-form-card incidental-amount-card">
+                                <div className="incidental-card-head">
+                                    <IndianRupee size={14} />
+                                    <span>Expense</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Amount *</label>
+                                        <div className="amount-with-currency">
+                                            <span className="currency-symbol">₹</span>
+                                            <input
+                                                type="text"
+                                                className={`cat-input ${errors[row.id]?.amount ? 'error' : ''}`}
+                                                placeholder="0.00"
+                                                value={row.amount || ''}
+                                                onChange={e => {
+                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                    if (!/^\d*\.?\d{0,2}$/.test(val)) return;
+                                                    updateRow(row.id, 'amount', val);
+                                                }}
+                                                disabled={isLocked}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="incidental-form-card incidental-upload-card">
+                                <div className="incidental-card-head">
+                                    <Upload size={14} />
+                                    <span>Upload</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="incidental-upload-top">
+                                        {!isLocked && (
+                                            <label className="incidental-upload-btn" htmlFor={`f-${row.id}`}>
+                                                <Upload size={14} />
+                                                <span>Upload Bills</span>
+                                            </label>
+                                        )}
+                                        <input
+                                            type="file"
+                                            id={`f-${row.id}`}
+                                            hidden
+                                            multiple
+                                            accept="image/*,.pdf"
+                                            onChange={e => {
+                                                handleFileUpload(row.id, e.target.files);
+                                                e.target.value = '';
+                                            }}
+                                        />
+                                        <span className="incidental-upload-count">
+                                            {(row.bills || []).length > 0 ? `${(row.bills || []).length} file(s) attached` : 'No files attached'}
+                                        </span>
+                                    </div>
+
+                                    {(row.bills || []).length > 0 && (
+                                        <div className="incidental-upload-list">
+                                            {row.bills.map((bill, idx) => (
+                                                <div key={idx} className="incidental-upload-item">
+                                                    <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
+                                                        <FileText size={14} />
+                                                        <span>Bill {idx + 1}</span>
+                                                    </button>
+                                                    {!isLocked && (
+                                                        <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {(row.bills || []).length > 0 && (
+                                        <div className="incidental-invoice-stack">
+                                            {invoiceNumbers.map((invoice, idx) => (
+                                                <div key={idx} className="input-with-label-mini">
+                                                    <label>Invoice Number {idx + 1} *</label>
+                                                    <input type="text" className="cat-input" placeholder={`Invoice for bill ${idx + 1}`} value={invoice || ''} onChange={e => updateIncidentalInvoiceNumber(row.id, idx, e.target.value)} disabled={isLocked} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        );
+    };
+
+    const renderTravelCard = (row) => {
+        const travelInvoiceNumbers = getTravelInvoiceNumbers(row);
+        const mode = row.details.mode || '';
+        const providerOptions = mode === 'Flight'
+            ? airlines
+            : mode === 'Train'
+                ? trainProviders
+                : mode === 'Intercity Bus'
+                    ? busProviders
+                    : mode === 'Intercity Cab'
+                        ? cabProviders
+                        : travelProviders;
+        const classOptions = mode === 'Flight'
+            ? flightClasses
+            : mode === 'Train'
+                ? trainClasses
+                : mode === 'Intercity Bus'
+                    ? busSeatTypes
+                    : [];
+        const journeyNumberLabel = mode === 'Flight' ? 'Flight Number' : mode === 'Train' ? 'Train Number' : 'Journey Number';
+        const carrierLabel = mode === 'Train' ? 'Train Name' : mode === 'Intercity Bus' ? 'Bus Operator' : 'Carrier Name';
+
+        return (
+            <tr key={row.id} className="category-row-block incidental-card-row">
+                <td>
+                    <div className="incidental-entry-shell travel-entry-shell">
+                        <div className="incidental-entry-header">
+                            <div className="incidental-entry-title">
+                                <Plane size={16} />
+                                <div>
+                                    <strong>Long Distance Travel Entry</strong>
+                                    <span>Card-based travel entry for cleaner journey capture</span>
+                                </div>
+                            </div>
+                            {!isLocked && (
+                                <button className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
+                                    <Trash2 size={14} />
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="trip-travel-card-grid travel-card-grid">
+                            {/* 1. Mode & Booking */}
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <Receipt size={14} />
+                                    <span>Mode &amp; Booking</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Mode *</label>
+                                        <select className="cat-input" value={row.details.mode || ''} onChange={e => {
+                                            updateDetails(row.id, 'mode', e.target.value);
+                                            updateDetails(row.id, 'provider', '');
+                                            updateDetails(row.id, 'classType', '');
+                                        }} disabled={isLocked}>
+                                            <option value="">Select Mode</option>
+                                            {travelModes.map(option => <option key={option} value={option}>{option}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Booked By *</label>
+                                        <select className="cat-input" value={row.details.bookedBy || 'Self Booked'} onChange={e => {
+                                            updateDetails(row.id, 'bookedBy', e.target.value);
+                                            if (e.target.value === 'Company Booked') {
+                                                updateRow(row.id, 'amount', '0.00');
+                                            }
+                                        }} disabled={isLocked}>
+                                            {bookedByOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            {/* 2. Booking Details */}
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <Calendar size={14} />
+                                    <span>Booking Details</span>
+                                </div>
+                                <div className="incidental-card-body incidental-date-time-stack">
+                                    <div className="input-with-label-mini">
+                                        <label>Booking Date *</label>
+                                        <input type="date" min={minDate} max={maxDate} className="cat-input" value={row.date || ''} onChange={e => updateRow(row.id, 'date', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Booking Time</label>
+                                        <input type="time" className="cat-input" value={row.details.bookingTime || ''} onChange={e => updateDetails(row.id, 'bookingTime', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Booking ID {row.details.bookedBy === 'Agent' ? '*' : ''}</label>
+                                        <input type="text" className="cat-input" placeholder="Enter Booking ID" value={row.details.bookingId || ''} onChange={e => updateDetails(row.id, 'bookingId', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                </div>
+                            </div>
+                            {/* 3. Route Details */}
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <MapPin size={14} />
+                                    <span>Route Details</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>From *</label>
+                                        <input type="text" className="cat-input" placeholder="Enter origin" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>To *</label>
+                                        <input type="text" className="cat-input" placeholder="Enter destination" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    {['Train', 'Intercity Bus', 'Intercity Cab'].includes(mode) && (
+                                        <div className="input-with-label-mini">
+                                            <label>Boarding Point</label>
+                                            <input type="text" className="cat-input" placeholder="Enter boarding point" value={row.details.boardingPoint || ''} onChange={e => updateDetails(row.id, 'boardingPoint', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            {/* 4. Travel Details (Dynamic) */}
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <Plane size={14} />
+                                    <span>Travel Details</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    {mode === 'Train' && (
+                                        <>
+                                            <div className="input-with-label-mini">
+                                                <label>Train Name</label>
+                                                <input type="text" className="cat-input" placeholder="Enter Train Name" value={row.details.carrier || ''} onChange={e => updateDetails(row.id, 'carrier', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Ticket Status</label>
+                                                <select className="cat-input" value={row.details.ticketStatus || ''} onChange={e => updateDetails(row.id, 'ticketStatus', e.target.value)} disabled={isLocked}>
+                                                    <option value="">Select Status</option>
+                                                    <option value="Confirmed">Confirmed</option>
+                                                    <option value="RAC">RAC</option>
+                                                    <option value="WL">WL</option>
+                                                </select>
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Class *</label>
+                                                <select className="cat-input" value={row.details.classType || ''} onChange={e => updateDetails(row.id, 'classType', e.target.value)} disabled={isLocked}>
+                                                    <option value="">Select Class</option>
+                                                    {trainClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Coach & Seat</label>
+                                                <input type="text" className="cat-input" placeholder="e.g. B1, 24" value={row.details.seatNumber || ''} onChange={e => updateDetails(row.id, 'seatNumber', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Quota Type</label>
+                                                <select className="cat-input" value={row.details.isTatkal === true ? 'Tatkal' : 'General'} onChange={e => updateDetails(row.id, 'isTatkal', e.target.value === 'Tatkal')} disabled={isLocked}>
+                                                    <option value="General">General</option>
+                                                    <option value="Tatkal">Tatkal</option>
+                                                </select>
+                                            </div>
+                                        </>
+                                    )}
+                                    {mode === 'Flight' && (
+                                        <>
+                                            <div className="input-with-label-mini">
+                                                <label>Airline Name</label>
+                                                <input type="text" className="cat-input" placeholder="Enter Airline" value={row.details.carrier || ''} onChange={e => updateDetails(row.id, 'carrier', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Flight Number *</label>
+                                                <input type="text" className="cat-input" placeholder="Enter Flight No." value={row.details.travelNo || ''} onChange={e => updateDetails(row.id, 'travelNo', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Class *</label>
+                                                <select className="cat-input" value={row.details.classType || ''} onChange={e => updateDetails(row.id, 'classType', e.target.value)} disabled={isLocked}>
+                                                    <option value="">Select Class</option>
+                                                    {flightClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Seat Number</label>
+                                                <input type="text" className="cat-input" placeholder="e.g. 12A" value={row.details.seatNumber || ''} onChange={e => updateDetails(row.id, 'seatNumber', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                        </>
+                                    )}
+                                    {mode === 'Intercity Bus' && (
+                                        <>
+                                            <div className="input-with-label-mini">
+                                                <label>Operator Name</label>
+                                                <input type="text" className="cat-input" placeholder="Enter Operator" value={row.details.carrier || ''} onChange={e => updateDetails(row.id, 'carrier', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Bus Type *</label>
+                                                <select className="cat-input" value={row.details.classType || ''} onChange={e => updateDetails(row.id, 'classType', e.target.value)} disabled={isLocked}>
+                                                    <option value="">Select Type</option>
+                                                    {busSeatTypes.map(c => <option key={c} value={c}>{c}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Seat Number</label>
+                                                <input type="text" className="cat-input" placeholder="e.g. 15" value={row.details.seatNumber || ''} onChange={e => updateDetails(row.id, 'seatNumber', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                        </>
+                                    )}
+                                    {mode === 'Intercity Cab' && (
+                                        <>
+                                            <div className="input-with-label-mini">
+                                                <label>Cab Type</label>
+                                                <select className="cat-input" value={row.details.vehicleType || ''} onChange={e => updateDetails(row.id, 'vehicleType', e.target.value)} disabled={isLocked}>
+                                                    <option value="">Select Type</option>
+                                                    {intercityCabVehicleTypes.map(v => <option key={v} value={v}>{v}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Driver Name</label>
+                                                <input type="text" className="cat-input" placeholder="Enter Driver Name" value={row.details.driverName || ''} onChange={e => updateDetails(row.id, 'driverName', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Vehicle Number</label>
+                                                <input type="text" className="cat-input" placeholder="Enter Vehicle No." value={row.details.travelNo || ''} onChange={e => updateDetails(row.id, 'travelNo', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                        </>
+                                    )}
+                                    {!['Train', 'Flight', 'Intercity Bus', 'Intercity Cab'].includes(mode) && (
+                                        <div className="text-muted" style={{ fontSize: '0.8rem', fontStyle: 'italic' }}>Please select Travel Mode to see details</div>
+                                    )}
+                                </div>
+                            </div>
+                            {/* 5. Schedule Details */}
+                            <div className="incidental-form-card travel-schedule-card">
+                                <div className="incidental-card-head">
+                                    <Clock size={14} />
+                                    <span>Schedule Details</span>
+                                </div>
+                                <div className="incidental-card-body travel-schedule-grid">
+                                    <div className="input-with-label-mini">
+                                        <label>Departure Date *</label>
+                                        <input type="date" min={minDate} max={maxDate} className="cat-input" value={row.details.depDate || row.date || ''} onChange={e => updateDetails(row.id, 'depDate', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Arrival Date *</label>
+                                        <input type="date" min={minDate} max={maxDate} className="cat-input" value={row.details.arrDate || row.date || ''} onChange={e => updateDetails(row.id, 'arrDate', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Departure Time *</label>
+                                        <input type="time" className="cat-input" value={row.timeDetails?.boardingTime || ''} onChange={e => updateTimeDetails(row.id, 'boardingTime', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Scheduled Arrival</label>
+                                        <input type="time" className="cat-input" value={row.timeDetails?.scheduledTime || ''} onChange={e => updateTimeDetails(row.id, 'scheduledTime', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Actual Arrival *</label>
+                                        <input type="time" className="cat-input" value={row.timeDetails?.actualTime || ''} onChange={e => updateTimeDetails(row.id, 'actualTime', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Delay (Mins)</label>
+                                        <input type="number" readOnly className="cat-input" value={row.timeDetails?.delay || 0} disabled />
+                                    </div>
+                                    <div className="input-with-label-mini" style={{ gridColumn: 'span 2' }}>
+                                        <label>Journey Duration</label>
+                                        <input type="text" readOnly className="cat-input" value={row.timeDetails?.boardingTime && row.timeDetails?.actualTime ? "Calculated on View" : "N/A"} disabled />
+                                    </div>
+                                </div>
+                            </div>
+                            {/* 6. Ticket Details */}
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <Receipt size={14} />
+                                    <span>Ticket Details</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Provider / Agent</label>
+                                        <select className="cat-input" value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} disabled={isLocked || providerOptions.length === 0}>
+                                            <option value="">{providerOptions.length === 0 ? 'No Providers' : 'Select Provider'}</option>
+                                            {providerOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Ticket Number</label>
+                                        <input type="text" className="cat-input" placeholder="Enter ticket number" value={row.details.ticketNo || ''} onChange={e => updateDetails(row.id, 'ticketNo', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>PNR / Reference</label>
+                                        <input type="text" className="cat-input" placeholder="Enter PNR" value={row.details.pnr || ''} onChange={e => updateDetails(row.id, 'pnr', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                </div>
+                            </div>
+                            {/* 7. Expense */}
+                            <div className="incidental-form-card incidental-amount-card">
+                                <div className="incidental-card-head">
+                                    <IndianRupee size={14} />
+                                    <span>Expense</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Amount *</label>
+                                        <div className="amount-with-currency">
+                                            <span className="currency-symbol">₹</span>
+                                            <input
+                                                type="text"
+                                                className="cat-input"
+                                                placeholder="0.00"
+                                                value={row.amount || ''}
+                                                onChange={e => {
+                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                    if (!/^\d*\.?\d{0,2}$/.test(val)) return;
+                                                    updateRow(row.id, 'amount', val);
+                                                }}
+                                                disabled={isLocked || row.details.bookedBy === 'Company Booked'}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="incidental-form-card incidental-upload-card">
+                                <div className="incidental-card-head">
+                                    <Upload size={14} />
+                                    <span>Upload</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="incidental-upload-top">
+                                        {!isLocked && (
+                                            <label className="incidental-upload-btn" htmlFor={`travel-f-${row.id}`}>
+                                                <Upload size={14} />
+                                                <span>Upload Bills</span>
+                                            </label>
+                                        )}
+                                        <input
+                                            type="file"
+                                            id={`travel-f-${row.id}`}
+                                            hidden
+                                            multiple
+                                            accept="image/*,.pdf"
+                                            onChange={e => {
+                                                handleFileUpload(row.id, e.target.files);
+                                                e.target.value = '';
+                                            }}
+                                        />
+                                        <span className="incidental-upload-count">
+                                            {(row.bills || []).length > 0 ? `${(row.bills || []).length} file(s) attached` : 'No files attached'}
+                                        </span>
+                                    </div>
+
+                                    {(row.bills || []).length > 0 && (
+                                        <div className="incidental-upload-list">
+                                            {row.bills.map((bill, idx) => (
+                                                <div key={idx} className="incidental-upload-item">
+                                                    <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
+                                                        <FileText size={14} />
+                                                        <span>File {idx + 1}</span>
+                                                    </button>
+                                                    {!isLocked && (
+                                                        <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {(row.bills || []).length > 0 && (
+                                        <div className="incidental-invoice-stack">
+                                            {travelInvoiceNumbers.map((invoice, idx) => (
+                                                <div key={idx} className="input-with-label-mini">
+                                                    <label>Invoice Number {idx + 1} *</label>
+                                                    <input type="text" className="cat-input" placeholder={`Invoice for file ${idx + 1}`} value={invoice || ''} onChange={e => updateTravelInvoiceNumber(row.id, idx, e.target.value)} disabled={isLocked} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        );
+    };
+
+    const renderLocalTravelCard = (row) => {
+        const localInvoiceNumbers = getLocalInvoiceNumbers(row);
+        const showOdoFields = ['Own Car', 'Company Car', 'Own Bike', 'Self Drive Rental'].includes(row.details.subType);
+
+        return (
+            <tr key={row.id} className="category-row-block incidental-card-row">
+                <td>
+                    <div className="incidental-entry-shell local-entry-shell">
+                        <div className="incidental-entry-header">
+                            <div className="incidental-entry-title">
+                                <Car size={16} />
+                                <div>
+                                    <strong>Local Conveyance Entry</strong>
+                                    <span>Card-based local travel entry with grouped tracking and billing</span>
+                                </div>
+                            </div>
+                            {!isLocked && (
+                                <button className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
+                                    <Trash2 size={14} />
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="incidental-card-grid local-card-grid trip-local-card-grid">
+                            {/* 1. Mode & Booking */}
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <Receipt size={14} />
+                                    <span>Mode &amp; Booking</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Mode *</label>
+                                        <select className="cat-input" value={row.details.mode || ''} onChange={e => {
+                                            if (!isFixedLocal) {
+                                                updateDetails(row.id, 'mode', e.target.value);
+                                                updateDetails(row.id, 'subType', '');
+                                            }
+                                        }} disabled={isLocked || isFixedLocal}>
+                                            <option value="">Select Mode</option>
+                                            {localTravelModes.map(option => <option key={option} value={option}>{option}</option>)}
+                                        </select>
+                                    </div>
+                                    {row.details.mode === 'Car' && (
+                                        <div className="input-with-label-mini">
+                                            <label>Type *</label>
+                                            <select className="cat-input" value={row.details.subType || ''} onChange={e => updateDetails(row.id, 'subType', e.target.value)} disabled={isLocked || isFixedLocal}>
+                                                <option value="">Select Type</option>
+                                                {localCarSubTypes.map(option => <option key={option} value={option}>{option}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                    {row.details.mode === 'Bike' && (
+                                        <div className="input-with-label-mini">
+                                            <label>Type *</label>
+                                            <select className="cat-input" value={row.details.subType || ''} onChange={e => updateDetails(row.id, 'subType', e.target.value)} disabled={isLocked || isFixedLocal}>
+                                                <option value="">Select Type</option>
+                                                {localBikeSubTypes.map(option => <option key={option} value={option}>{option}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                    {row.details.mode === 'Public Transport' && (
+                                        <div className="input-with-label-mini">
+                                            <label>Type *</label>
+                                            <select className="cat-input" value={row.details.subType || ''} onChange={e => updateDetails(row.id, 'subType', e.target.value)} disabled={isLocked || isFixedLocal}>
+                                                <option value="">Select Type</option>
+                                                {localProviders.map(option => <option key={option} value={option}>{option}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                    {!['Own Bike', 'Company Bike', 'Own Car', 'Company Car'].includes(row.details.subType) && !['Metro Train', 'Bus'].includes(row.details.mode) && (
+                                        <div className="input-with-label-mini">
+                                            <label>Booking Type</label>
+                                            <select className="cat-input" value={row.details.bookedBy || 'Self Booked'} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'bookedBy', e.target.value); }} disabled={isLocked || isFixedLocal}>
+                                                {bookedByOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 2. Location */}
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <MapPin size={14} />
+                                    <span>Location</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>From Location</label>
+                                        <input type="text" className="cat-input" placeholder="Enter start location" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>To Location</label>
+                                        <input type="text" className="cat-input" placeholder="Enter destination" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 3. Expense */}
+                            <div className="incidental-form-card incidental-amount-card">
+                                <div className="incidental-card-head">
+                                    <IndianRupee size={14} />
+                                    <span>Expense</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Amount</label>
+                                        <div className="amount-with-currency">
+                                            <span className="currency-symbol">₹</span>
+                                            <input
+                                                type="text"
+                                                className="cat-input"
+                                                placeholder="0.00"
+                                                value={row.amount || ''}
+                                                onChange={e => updateRow(row.id, 'amount', e.target.value)}
+                                                disabled={isLocked || row.details.bookedBy === 'Company Booked'}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 4. Date & Time */}
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <Calendar size={14} />
+                                    <span>Date &amp; Time</span>
+                                </div>
+                                <div className="incidental-card-body local-date-time-grid">
+                                    <div className="input-with-label-mini">
+                                        <label>Start Date *</label>
+                                        <input type="date" min={minDate} max={maxDate} className="cat-input" value={row.date || ''} onChange={e => updateRow(row.id, 'date', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>End Date *</label>
+                                        <input type="date" min={minDate} max={maxDate} className="cat-input" value={row.endDate || row.date || ''} onChange={e => updateRow(row.id, 'endDate', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Start Time</label>
+                                        <input type="time" className="cat-input" value={row.timeDetails?.boardingTime || ''} onChange={e => updateTimeDetails(row.id, 'boardingTime', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>End Time</label>
+                                        <input type="time" className="cat-input" value={row.timeDetails?.actualTime || ''} onChange={e => updateTimeDetails(row.id, 'actualTime', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 5. Tracking (ODO) */}
+                            <div className="incidental-form-card local-tracking-card">
+                                <div className="incidental-card-head">
+                                    <Camera size={14} />
+                                    <span>Tracking (ODO)</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    {showOdoFields && (
+                                        <div className="local-odo-grid">
+                                            <div className="input-with-label-mini">
+                                                <label>Odometer Start *</label>
+                                                <input type="number" className="cat-input" placeholder="0" value={row.details.odoStart || ''} onChange={e => updateDetails(row.id, 'odoStart', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Odometer End *</label>
+                                                <input type="number" className="cat-input" placeholder="0" value={row.details.odoEnd || ''} onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                            {!isLocked && (
+                                                <>
+                                                    <button type="button" className="incidental-upload-btn" onClick={() => handleOdoCapture(row.id, 'odoStart')}>
+                                                        <Camera size={14} />
+                                                        <span>{row.details.odoStartImg ? 'Start ODO Captured' : 'Capture Start ODO'}</span>
+                                                    </button>
+                                                    <button type="button" className="incidental-upload-btn" onClick={() => handleOdoCapture(row.id, 'odoEnd')}>
+                                                        <Camera size={14} />
+                                                        <span>{row.details.odoEndImg ? 'End ODO Captured' : 'Capture End ODO'}</span>
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div className="input-with-label-mini">
+                                        <label>Selfie Proof Upload</label>
+                                        <div className="local-selfie-list">
+                                            {(row.details.selfies || []).map((selfie, idx) => (
+                                                <div key={idx} className="local-selfie-item">
+                                                    <button type="button" className="incidental-upload-preview" onClick={() => previewBill(selfie)}>
+                                                        <FileText size={14} />
+                                                        <span>Selfie {idx + 1}</span>
+                                                    </button>
+                                                    {!isLocked && (
+                                                        <button type="button" className="incidental-upload-remove" onClick={() => removeSelfie(row.id, idx)}>
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {!isLocked && (
+                                            <button type="button" className="incidental-upload-btn" onClick={() => handleSelfieCapture(row.id)}>
+                                                <Camera size={14} />
+                                                <span>Add Selfie Proof</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 6. Upload */}
+                            <div className="incidental-form-card incidental-upload-card">
+                                <div className="incidental-card-head">
+                                    <Upload size={14} />
+                                    <span>Upload</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="incidental-upload-top">
+                                        {!isLocked && (
+                                            <label className="incidental-upload-btn" htmlFor={`local-f-${row.id}`}>
+                                                <Upload size={14} />
+                                                <span>Upload Bills</span>
+                                            </label>
+                                        )}
+                                        <input
+                                            type="file"
+                                            id={`local-f-${row.id}`}
+                                            hidden
+                                            multiple
+                                            accept="image/*,.pdf"
+                                            onChange={e => {
+                                                handleFileUpload(row.id, e.target.files);
+                                                e.target.value = '';
+                                            }}
+                                        />
+                                        <span className="incidental-upload-count">
+                                            {(row.bills || []).length > 0 ? `${(row.bills || []).length} file(s) attached` : 'No files attached'}
+                                        </span>
+                                    </div>
+
+                                    {(row.bills || []).length > 0 && (
+                                        <div className="incidental-upload-list">
+                                            {row.bills.map((bill, idx) => (
+                                                <div key={idx} className="incidental-upload-item">
+                                                    <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
+                                                        <FileText size={14} />
+                                                        <span>Bill {idx + 1}</span>
+                                                    </button>
+                                                    {!isLocked && (
+                                                        <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {(row.bills || []).length > 0 && (
+                                        <div className="incidental-invoice-stack">
+                                            {localInvoiceNumbers.map((invoice, idx) => (
+                                                <div key={idx} className="input-with-label-mini">
+                                                    <label>Invoice Number {idx + 1} *</label>
+                                                    <input type="text" className="cat-input" placeholder={`Invoice for bill ${idx + 1}`} value={invoice || ''} onChange={e => updateLocalInvoiceNumber(row.id, idx, e.target.value)} disabled={isLocked} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        );
+    };
+
+    const renderFoodCard = (row) => {
+        const foodInvoiceNumbers = getFoodInvoiceNumbers(row);
+        const mealSource = normalizeMealSource(row.details.mealSource);
+        const isSelfMeal = row.details.mealCategory === 'Self Meal';
+        const showMealSourceFields = isSelfMeal;
+        const showProvider = isSelfMeal && mealSource === 'online';
+        const showHotelName = isSelfMeal && (mealSource === 'hotel' || mealSource === 'online');
+        const showRestaurantName = isSelfMeal && mealSource === 'restaurant';
+        const amountDisabled = isLocked || !isSelfMeal;
+
+        return (
+            <tr key={row.id} className="category-row-block incidental-card-row">
+                <td>
+                    <div className="incidental-entry-shell food-entry-shell">
+                        <div className="incidental-entry-header">
+                            <div className="incidental-entry-title">
+                                <Coffee size={16} />
+                                <div>
+                                    <strong>Food & Refreshment Entry</strong>
+                                    <span>Card-based meal entry for cleaner capture</span>
+                                </div>
+                            </div>
+                            {!isLocked && (
+                                <button className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
+                                    <Trash2 size={14} />
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="trip-food-card-grid food-card-grid">
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <Calendar size={14} />
+                                    <span>Date &amp; Time</span>
+                                </div>
+                                <div className="incidental-card-body incidental-date-time-stack">
+                                    <div className="input-with-label-mini">
+                                        <label>Date *</label>
+                                        <input type="date" min={minDate} max={maxDate} className="cat-input" value={row.date || ''} onChange={e => updateRow(row.id, 'date', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Time *</label>
+                                        <input type="time" className="cat-input" value={row.details.mealTime || ''} onChange={e => updateDetails(row.id, 'mealTime', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <Coffee size={14} />
+                                    <span>Meal Info</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Meal Type *</label>
+                                        <select className="cat-input" value={row.details.mealType || ''} onChange={e => updateDetails(row.id, 'mealType', e.target.value)} disabled={isLocked}>
+                                            <option value="">Select Meal Type</option>
+                                            {mealTypes.map(option => <option key={option} value={option}>{option}</option>)}
+                                        </select>
+                                    </div>
+                                    {row.details.mealType && (
+                                        <div className="input-with-label-mini">
+                                            <label>Meal Time *</label>
+                                            <input type="time" className="cat-input" value={row.details.mealTime || ''} onChange={e => updateDetails(row.id, 'mealTime', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <Receipt size={14} />
+                                    <span>Meal Category &amp; Source</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Meal Category *</label>
+                                        <select className="cat-input" value={row.details.mealCategory || ''} onChange={e => updateDetails(row.id, 'mealCategory', e.target.value)} disabled={isLocked}>
+                                            <option value="">Select Meal Category</option>
+                                            {mealCategories.map(option => <option key={option} value={option}>{option}</option>)}
+                                        </select>
+                                    </div>
+                                    {showMealSourceFields && (
+                                        <div className="input-with-label-mini">
+                                            <label>Meal Source *</label>
+                                            <select className="cat-input" value={row.details.mealSource || ''} onChange={e => updateDetails(row.id, 'mealSource', e.target.value)} disabled={isLocked}>
+                                                <option value="">Select Meal Source</option>
+                                                {mealSources.map(option => <option key={option} value={option}>{option}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                    {showProvider && (
+                                        <div className="input-with-label-mini">
+                                            <label>Provider *</label>
+                                            <select className="cat-input" value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} disabled={isLocked || mealProviders.length === 0}>
+                                                <option value="">{mealProviders.length === 0 ? 'No Provider Masters' : 'Select Provider'}</option>
+                                                {mealProviders.map(option => <option key={option} value={option}>{option}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                    {showHotelName && (
+                                        <div className="input-with-label-mini">
+                                            <label>{mealSource === 'online' ? 'Hotel/Outlet Name *' : 'Hotel Name *'}</label>
+                                            <input type="text" className="cat-input" placeholder={mealSource === 'online' ? 'Enter hotel or outlet name' : 'Enter hotel name'} value={row.details.hotelName || ''} onChange={e => updateDetails(row.id, 'hotelName', e.target.value)} disabled={isLocked || (mealSource === 'online' && !row.details.provider)} />
+                                        </div>
+                                    )}
+                                    {showRestaurantName && (
+                                        <div className="input-with-label-mini">
+                                            <label>Restaurant Name *</label>
+                                            <input type="text" className="cat-input" placeholder="Enter restaurant name" value={row.details.restaurant || ''} onChange={e => updateDetails(row.id, 'restaurant', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="incidental-form-card incidental-amount-card">
+                                <div className="incidental-card-head">
+                                    <IndianRupee size={14} />
+                                    <span>Expense</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Amount *</label>
+                                        <div className="amount-with-currency">
+                                            <span className="currency-symbol">₹</span>
+                                            <input
+                                                type="text"
+                                                className="cat-input"
+                                                placeholder="0.00"
+                                                value={!isSelfMeal ? '0.00' : (row.amount || '')}
+                                                onChange={e => {
+                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                    if (!/^\d*\.?\d{0,2}$/.test(val)) return;
+                                                    updateRow(row.id, 'amount', val);
+                                                }}
+                                                disabled={amountDisabled}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="incidental-form-card incidental-upload-card">
+                                <div className="incidental-card-head">
+                                    <Upload size={14} />
+                                    <span>Upload</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="incidental-upload-top">
+                                        {!isLocked && (
+                                            <label className="incidental-upload-btn" htmlFor={`food-f-${row.id}`}>
+                                                <Upload size={14} />
+                                                <span>Upload Bills</span>
+                                            </label>
+                                        )}
+                                        <input
+                                            type="file"
+                                            id={`food-f-${row.id}`}
+                                            hidden
+                                            multiple
+                                            accept="image/*,.pdf"
+                                            onChange={e => {
+                                                handleFileUpload(row.id, e.target.files);
+                                                e.target.value = '';
+                                            }}
+                                        />
+                                        <span className="incidental-upload-count">
+                                            {(row.bills || []).length > 0 ? `${(row.bills || []).length} file(s) attached` : 'No files attached'}
+                                        </span>
+                                    </div>
+
+                                    {(row.bills || []).length > 0 && (
+                                        <div className="incidental-upload-list">
+                                            {row.bills.map((bill, idx) => (
+                                                <div key={idx} className="incidental-upload-item">
+                                                    <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
+                                                        <FileText size={14} />
+                                                        <span>Bill {idx + 1}</span>
+                                                    </button>
+                                                    {!isLocked && (
+                                                        <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {(row.bills || []).length > 0 && (
+                                        <div className="incidental-invoice-stack">
+                                            {foodInvoiceNumbers.map((invoice, idx) => (
+                                                <div key={idx} className="input-with-label-mini">
+                                                    <label>Invoice Number {idx + 1} *</label>
+                                                    <input type="text" className="cat-input" placeholder={`Invoice for bill ${idx + 1}`} value={invoice || ''} onChange={e => updateFoodInvoiceNumber(row.id, idx, e.target.value)} disabled={isLocked} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        );
+    };
+
+    const renderAccommodationCard = (row) => {
+        const accommodationInvoiceNumbers = getAccommodationInvoiceNumbers(row);
+        const stayBookingTypesLocal = ['Company Booking', 'Walk-in', 'Self Booking (Offline)', 'Online Booking'];
+        const stayBookingSourcesLocal = ['Agoda', 'Booking.com', 'OYO'];
+        const stayTypesLocal = ['Hotel Stay', 'Guest House', 'Client Provided', 'Self Stay'];
+        const roomTypesLocal = ['Standard', 'Deluxe', 'Executive', 'Suite'];
+        const numberOfNights = row.details.nights || 0;
+        const scheduledCheckInDate = row.details.scheduledCheckInDate || row.details.checkIn || '';
+        const scheduledCheckInTime = row.details.scheduledCheckInTime || row.details.checkInTime || '';
+        const scheduledCheckOutDate = row.details.scheduledCheckOutDate || row.details.checkOut || '';
+        const scheduledCheckOutTime = row.details.scheduledCheckOutTime || row.details.checkOutTime || '';
+        const actualCheckInDate = row.details.actualCheckInDate || row.details.checkIn || '';
+        const actualCheckInTime = row.details.actualCheckInTime || row.details.checkInTime || '';
+        const actualCheckOutDate = row.details.actualCheckOutDate || row.details.checkOut || '';
+        const actualCheckOutTime = row.details.actualCheckOutTime || row.details.checkOutTime || '';
+
+        return (
+            <tr key={row.id} className="category-row-block incidental-card-row">
+                <td>
+                    <div className="incidental-entry-shell accommodation-entry-shell">
+                        <div className="incidental-entry-header">
+                            <div className="incidental-entry-title">
+                                <Hotel size={16} />
+                                <div>
+                                    <strong>Stay & Lodging Entry</strong>
+                                    <span>Card-based stay entry with grouped scheduling and billing</span>
+                                </div>
+                            </div>
+                            {!isLocked && (
+                                <button className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
+                                    <Trash2 size={14} />
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="incidental-card-grid accommodation-card-grid trip-accommodation-card-grid">
+                            <div className="incidental-form-card accommodation-schedule-card">
+                                <div className="incidental-card-head">
+                                    <Calendar size={14} />
+                                    <span>Stay Schedule</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="accommodation-schedule-grid">
+                                        <div className="input-with-label-mini">
+                                            <label>Scheduled Check-in Date *</label>
+                                            <input type="date" min={minDate} max={maxDate} className="cat-input" value={scheduledCheckInDate} onChange={e => updateDetails(row.id, 'scheduledCheckInDate', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                        <div className="input-with-label-mini">
+                                            <label>Scheduled Check-in Time *</label>
+                                            <input type="time" className="cat-input" value={scheduledCheckInTime} onChange={e => updateDetails(row.id, 'scheduledCheckInTime', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                        <div className="input-with-label-mini">
+                                            <label>Scheduled Check-out Date *</label>
+                                            <input type="date" min={minDate} max={maxDate} className="cat-input" value={scheduledCheckOutDate} onChange={e => updateDetails(row.id, 'scheduledCheckOutDate', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                        <div className="input-with-label-mini">
+                                            <label>Scheduled Check-out Time *</label>
+                                            <input type="time" className="cat-input" value={scheduledCheckOutTime} onChange={e => updateDetails(row.id, 'scheduledCheckOutTime', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                        <div className="input-with-label-mini">
+                                            <label>Actual Check-in Date *</label>
+                                            <input type="date" min={minDate} max={maxDate} className="cat-input" value={actualCheckInDate} onChange={e => updateDetails(row.id, 'actualCheckInDate', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                        <div className="input-with-label-mini">
+                                            <label>Actual Check-in Time *</label>
+                                            <input type="time" className="cat-input" value={actualCheckInTime} onChange={e => updateDetails(row.id, 'actualCheckInTime', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                        <div className="input-with-label-mini">
+                                            <label>Actual Check-out Date *</label>
+                                            <input type="date" min={minDate} max={maxDate} className="cat-input" value={actualCheckOutDate} onChange={e => updateDetails(row.id, 'actualCheckOutDate', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                        <div className="input-with-label-mini">
+                                            <label>Actual Check-out Time *</label>
+                                            <input type="time" className="cat-input" value={actualCheckOutTime} onChange={e => updateDetails(row.id, 'actualCheckOutTime', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                    </div>
+                                    <div className="accommodation-nights-chip">
+                                        <span>Nights</span>
+                                        <strong>{numberOfNights}</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <Receipt size={14} />
+                                    <span>Booking Details</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Booking Type *</label>
+                                        <select className="cat-input" value={row.details.bookingType || ''} onChange={e => {
+                                            const val = e.target.value;
+                                            updateDetails(row.id, 'bookingType', val);
+                                            if (val === 'Company Booking') {
+                                                updateRow(row.id, 'amount', '0.00');
+                                            } else if (val === 'Online Booking') {
+                                                updateDetails(row.id, 'accomType', 'Hotel Stay');
+                                            }
+                                        }} disabled={isLocked}>
+                                            <option value="">Select Booking Type</option>
+                                            {stayBookingTypesLocal.map(option => <option key={option} value={option}>{option}</option>)}
+                                        </select>
+                                    </div>
+                                    {row.details.bookingType === 'Online Booking' && (
+                                        <>
+                                            <div className="input-with-label-mini">
+                                                <label>Booking Source *</label>
+                                                <select className="cat-input" value={row.details.bookingSource || ''} onChange={e => updateDetails(row.id, 'bookingSource', e.target.value)} disabled={isLocked}>
+                                                    <option value="">Select Booking Source</option>
+                                                    {stayBookingSourcesLocal.map(option => <option key={option} value={option}>{option}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="input-with-label-mini">
+                                                <label>Booking ID *</label>
+                                                <input type="text" className="cat-input" placeholder="Enter Booking ID" value={row.details.bookingId || ''} onChange={e => updateDetails(row.id, 'bookingId', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="incidental-form-card">
+                                <div className="incidental-card-head">
+                                    <Home size={14} />
+                                    <span>Lodging Info</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Stay Type *</label>
+                                        <select className="cat-input" value={row.details.accomType || ''} onChange={e => updateDetails(row.id, 'accomType', e.target.value)} disabled={isLocked}>
+                                            <option value="">Select Stay Type</option>
+                                            {stayTypesLocal.map(option => <option key={option} value={option}>{option}</option>)}
+                                        </select>
+                                    </div>
+                                    {['Hotel Stay', 'Guest House'].includes(row.details.accomType) && (
+                                        <div className="input-with-label-mini">
+                                            <label>{row.details.accomType === 'Guest House' ? 'Guest House Name *' : 'Hotel Name *'}</label>
+                                            <input type="text" className="cat-input" placeholder={row.details.accomType === 'Guest House' ? 'Enter guest house name' : 'Enter hotel name'} value={row.details.hotelName || ''} onChange={e => updateDetails(row.id, 'hotelName', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                    )}
+                                    {row.details.accomType === 'Hotel Stay' && (
+                                        <div className="input-with-label-mini">
+                                            <label>Room Type *</label>
+                                            <select className="cat-input" value={row.details.roomType || ''} onChange={e => updateDetails(row.id, 'roomType', e.target.value)} disabled={isLocked}>
+                                                <option value="">Select Room Type</option>
+                                                {roomTypesLocal.map(option => <option key={option} value={option}>{option}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                    <div className="input-with-label-mini">
+                                        <label>{['Client Provided', 'Self Stay'].includes(row.details.accomType) ? 'Remarks *' : 'Remarks'}</label>
+                                        <textarea className="cat-input" placeholder="Enter remarks" value={row.details.remarks || ''} onChange={e => updateDetails(row.id, 'remarks', e.target.value)} disabled={isLocked} rows={2} style={{ resize: 'vertical' }} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="incidental-form-card incidental-amount-card">
+                                <div className="incidental-card-head">
+                                    <IndianRupee size={14} />
+                                    <span>Expense</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="input-with-label-mini">
+                                        <label>Amount *</label>
+                                        <div className="amount-with-currency">
+                                            <span className="currency-symbol">₹</span>
+                                            <input
+                                                type="text"
+                                                className="cat-input"
+                                                placeholder="0.00"
+                                                value={row.amount || ''}
+                                                onChange={e => updateRow(row.id, 'amount', e.target.value)}
+                                                disabled={isLocked || row.details.bookingType === 'Company Booking'}
+                                                onBlur={e => {
+                                                    if (row.details.accomType === 'Self Stay' && e.target.value) {
+                                                        const reduced = (parseFloat(e.target.value) * 0.5).toFixed(2);
+                                                        updateRow(row.id, 'amount', reduced);
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                        {row.details.accomType === 'Self Stay' && row.amount && (
+                                            <div style={{ color: '#0369a1', fontSize: '11px', marginTop: '4px', fontWeight: 500 }}>
+                                                💡 50% Reimbursement Applied: {row.amount ? `₹${(parseFloat(row.amount) * 0.5).toFixed(2)}` : '₹0.00'} will be stored on leave.
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Early Check-in Charges</label>
+                                        <input type="number" className="cat-input" placeholder="0.00" value={row.details.earlyCheckInCharges || ''} onChange={e => updateDetails(row.id, 'earlyCheckInCharges', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                    <div className="input-with-label-mini">
+                                        <label>Late Check-out Charges</label>
+                                        <input type="number" className="cat-input" placeholder="0.00" value={row.details.lateCheckOutCharges || ''} onChange={e => updateDetails(row.id, 'lateCheckOutCharges', e.target.value)} disabled={isLocked} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="incidental-form-card incidental-upload-card">
+                                <div className="incidental-card-head">
+                                    <Upload size={14} />
+                                    <span>Upload</span>
+                                </div>
+                                <div className="incidental-card-body">
+                                    <div className="incidental-upload-top">
+                                        {!isLocked && (
+                                            <label className="incidental-upload-btn" htmlFor={`accom-f-${row.id}`}>
+                                                <Upload size={14} />
+                                                <span>Upload Bills</span>
+                                            </label>
+                                        )}
+                                        <input
+                                            type="file"
+                                            id={`accom-f-${row.id}`}
+                                            hidden
+                                            multiple
+                                            accept="image/*,.pdf"
+                                            onChange={e => {
+                                                handleFileUpload(row.id, e.target.files);
+                                                e.target.value = '';
+                                            }}
+                                        />
+                                        <span className="incidental-upload-count">
+                                            {(row.bills || []).length > 0 ? `${(row.bills || []).length} file(s) attached` : 'No files attached'}
+                                        </span>
+                                    </div>
+
+                                    {(row.bills || []).length > 0 && (
+                                        <div className="incidental-upload-list">
+                                            {row.bills.map((bill, idx) => (
+                                                <div key={idx} className="incidental-upload-item">
+                                                    <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
+                                                        <FileText size={14} />
+                                                        <span>Bill {idx + 1}</span>
+                                                    </button>
+                                                    {!isLocked && (
+                                                        <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {(row.bills || []).length > 0 && (
+                                        <div className="incidental-invoice-stack">
+                                            {accommodationInvoiceNumbers.map((invoice, idx) => (
+                                                <div key={idx} className="input-with-label-mini">
+                                                    <label>Invoice Number {idx + 1} *</label>
+                                                    <input type="text" className="cat-input" placeholder={`Invoice for bill ${idx + 1}`} value={invoice || ''} onChange={e => updateAccommodationInvoiceNumber(row.id, idx, e.target.value)} disabled={isLocked} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        );
     };
 
     const handleSelfieCapture = (id) => {
@@ -1442,11 +3296,11 @@ const TripExpenseGrid = ({
 
         const gridTemplateColumns = (() => {
             switch (nature) {
-                case 'Travel': return '260px 180px 1fr 300px 240px 100px 50px';
-                case 'Local Travel': return '240px 160px 1fr 280px 230px 100px 50px';
-                case 'Food': return '140px 80px 180px 1fr 180px 100px 50px';
-                case 'Accommodation': return '220px 220px 1fr 180px 100px 50px';
-                case 'Incidental': return '140px 220px 1fr 180px 100px 50px';
+                case 'Travel': return '1fr';
+                case 'Local Travel': return '1fr';
+                case 'Food': return '1fr';
+                case 'Accommodation': return '1fr';
+                case 'Incidental': return '1fr';
                 default: return '1fr';
             }
         })();
@@ -1458,25 +3312,9 @@ const TripExpenseGrid = ({
                         {icon}
                         <h4>{title}</h4>
                         <span className="cat-count">{categoryRows.length} Items</span>
-
-                        {nature === 'Incidental' && (
-                            <div className="header-actions-extra ml-4" style={{ marginLeft: '2rem', display: 'flex', alignItems: 'center' }}>
-                                <label className="toggle-switch-mini">
-                                    <input type="checkbox" checked={carryingLuggage} onChange={e => setCarryingLuggage(e.target.checked)} />
-                                    <span className="slider-mini"></span>
-                                    <span className="label-text" style={{ marginLeft: '8px', fontSize: '0.65rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Carrying Luggage</span>
-                                </label>
-                            </div>
-                        )}
                     </div>
                     {!isLocked && (
                         <div style={{ display: 'flex', gap: '10px' }}>
-                            {showBulkUpload && nature === 'Local Travel' && (
-                                <button className="add-cat-row-btn" style={{ background: '#10b981', color: 'white', borderColor: '#10b981' }} onClick={() => setBulkModal(prev => ({ ...prev, visible: true }))}>
-                                    <Upload size={14} />
-                                    <span>Bulk Upload (Excel)</span>
-                                </button>
-                            )}
                             <button className="add-cat-row-btn" onClick={() => addRow(nature)}>
                                 <Plus size={14} />
                                 <span>Add {title}</span>
@@ -1488,59 +3326,13 @@ const TripExpenseGrid = ({
                 <div className="category-table-wrapper">
                     <table className="category-table">
                         <thead>
-                            {nature === 'Travel' && (
-                                <tr className="category-grid-row" style={{ gridTemplateColumns }}>
-                                    <th>Dates (Book - Journey)</th>
-                                    <th>Mode & Booking</th>
-                                    <th>Route & Carrier Info</th>
-                                    <th>
-                                        {categoryRows.some(r => r.details.mode === 'Flight') ? 'Flight Schedule' : 'Journey Schedule'}
-                                    </th>
-                                    <th>Expense</th>
-                                    <th>Upload</th>
-                                    <th></th>
-                                </tr>
-                            )}
-                            {nature === 'Local Travel' && (
-                                <tr className="category-grid-row" style={{ gridTemplateColumns }}>
-                                    <th>Dates (Start - End)</th>
-                                    <th>Mode & Type</th>
-                                    <th>Location</th>
-                                    <th>Tracking (Odo Capture)</th>
-                                    <th>Expense</th>
-                                    <th>Upload</th>
-                                    <th></th>
-                                </tr>
-                            )}
-                            {nature === 'Food' && (
-                                <tr className="category-grid-row" style={{ gridTemplateColumns }}>
-                                    <th>Date</th>
-                                    <th>Time</th>
-                                    <th>Meal Info</th>
-                                    <th>Restaurant & Purpose</th>
-                                    <th>Expense</th>
-                                    <th>Upload</th>
-                                    <th></th>
-                                </tr>
-                            )}
-                            {nature === 'Accommodation' && (
-                                <tr className="category-grid-row" style={{ gridTemplateColumns }}>
-                                    <th>Dates (In - Out)</th>
-                                    <th>Lodging Info</th>
-                                    <th>City & Reason</th>
-                                    <th>Expense</th>
-                                    <th>Upload</th>
-                                    <th></th>
-                                </tr>
-                            )}
+                            {nature === 'Travel' && null}
+                            {nature === 'Local Travel' && null}
+                            {nature === 'Food' && null}
+                            {nature === 'Accommodation' && null}
                             {nature === 'Incidental' && (
                                 <tr className="category-grid-row" style={{ gridTemplateColumns }}>
-                                    <th>Date</th>
-                                    <th>Type & Location</th>
-                                    <th>Details / Other info</th>
-                                    <th>Expense</th>
-                                    <th>Upload</th>
-                                    <th></th>
+                                    <th>Incidental Expense Cards</th>
                                 </tr>
                             )}
                         </thead>
@@ -1852,7 +3644,7 @@ const TripExpenseGrid = ({
                                                                                     <button type="button" className="upload-bill-btn" onClick={() => document.getElementById(`f-${row.id}`).click()}>
                                                                                         <Upload size={13} /> Upload Bill
                                                                                     </button>
-                                                                                    <input type="file" id={`f-${row.id}`} hidden onChange={e => handleFileUpload(row.id, e.target.files[0])} accept="image/*,.pdf" />
+                                                                                    <input type="file" id={`f-${row.id}`} hidden onChange={e => { handleFileUpload(row.id, e.target.files); e.target.value = ''; }} accept="image/*,.pdf" />
                                                                                 </>
                                                                             )}
                                                                             {(row.bills || []).length > 0 && (
@@ -1889,658 +3681,541 @@ const TripExpenseGrid = ({
                                 ) : (
                                     categoryRows.map(row => (
                                         <React.Fragment key={row.id}>
-                                            <tr className={`category-row category-grid-row ${row.details.travelStatus && row.details.travelStatus !== 'Completed' ? 'status-row-' + row.details.travelStatus.toLowerCase() : ''}`} style={{ gridTemplateColumns }}>
-                                                {/* DATE COLUMN */}
-                                                <td>
-                                                    {nature === 'Travel' ? (
-                                                        <div className="row-fields">
-                                                            <div className="input-with-label-mini">
-                                                                <label>BOOKING DATE & TIME</label>
-                                                                <div className="field-group">
-                                                                    <input type="date" min={minDate} max={maxDate} value={row.date} onChange={e => updateRow(row.id, 'date', e.target.value)} style={{ flex: 1.5 }} />
-                                                                    <input type="time" value={row.details.bookingTime || ''} onChange={e => updateDetails(row.id, 'bookingTime', e.target.value)} style={{ flex: 1 }} />
-                                                                </div>
-                                                                {errors[row.id]?.date && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].date}</div>}
-                                                            </div>
-                                                            {['Flight', 'Train', 'Intercity Bus', 'Intercity Cab'].includes(row.details.mode) && row.date && row.details.depDate && new Date(row.date) > new Date(row.details.depDate) && (
-                                                                <div className="text-danger" style={{ fontSize: '0.55rem', fontWeight: 700, marginTop: '2px', textTransform: 'uppercase' }}>⚠️ Booking Date &gt; Departure Date</div>
-                                                            )}
-                                                            {['Flight', 'Train', 'Intercity Bus', 'Intercity Cab'].includes(row.details.mode) && row.details.depDate && row.details.arrDate && new Date(row.details.depDate) > new Date(row.details.arrDate) && (
-                                                                <div className="text-danger" style={{ fontSize: '0.55rem', fontWeight: 700, marginTop: '2px', textTransform: 'uppercase' }}>⚠️ Dep Date &gt; Arr Date</div>
-                                                            )}
-                                                        </div>
-                                                    ) : nature === 'Accommodation' ? (
-                                                        <div className="field-group">
-                                                            <div className="input-with-label-mini">
-                                                                <label>CHECK-IN</label>
-                                                                <input type="date" min={minDate} max={maxDate} value={row.details.checkIn || ''} onChange={e => updateDetails(row.id, 'checkIn', e.target.value)} />
-                                                                <input type="time" value={row.details.checkInTime || ''} onChange={e => updateDetails(row.id, 'checkInTime', e.target.value)} />
-                                                            </div>
-                                                            <div className="input-with-label-mini">
-                                                                <label>CHECK-OUT</label>
-                                                                <input type="date" min={minDate} max={maxDate} value={row.details.checkOut || ''} onChange={e => updateDetails(row.id, 'checkOut', e.target.value)} />
-                                                                <input type="time" value={row.details.checkOutTime || ''} onChange={e => updateDetails(row.id, 'checkOutTime', e.target.value)} />
-                                                            </div>
-                                                        </div>
-                                                    ) : nature === 'Local Travel' ? (
-                                                        <div className="field-group">
-                                                            <div className="input-with-label-mini">
-                                                                <label>START DATE</label>
-                                                                <input type="date" value={row.date} onChange={e => updateRow(row.id, 'date', e.target.value)} />
-                                                            </div>
-                                                            <div className="input-with-label-mini">
-                                                                <label>END DATE</label>
-                                                                <input type="date" min={minDate} max={maxDate} value={row.endDate || row.date} onChange={e => updateRow(row.id, 'endDate', e.target.value)} />
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <input type="date" min={minDate} max={maxDate} className="cat-input" value={row.date} onChange={e => updateRow(row.id, 'date', e.target.value)} />
-                                                    )}
-                                                </td>
-
-                                                {/* NATURE SPECIFIC DETAILS */}
-                                                {nature === 'Travel' && (
-                                                    <>
-                                                        {/* TRAVEL MODE COLUMN (Matches Header: Travel Mode) */}
-                                                        <td>
+                                            {nature === 'Travel' ? renderTravelCard(row) : nature === 'Local Travel' ? renderLocalTravelCard(row) : nature === 'Incidental' ? renderIncidentalCard(row) : nature === 'Accommodation' ? renderAccommodationCard(row) : nature === 'Food' ? renderFoodCard(row) : (
+                                                <tr className={`category-row category-grid-row ${row.details.travelStatus && row.details.travelStatus !== 'Completed' ? 'status-row-' + row.details.travelStatus.toLowerCase() : ''}`} style={{ gridTemplateColumns }}>
+                                                    {/* DATE COLUMN */}
+                                                    <td>
+                                                        {nature === 'Travel' ? (
                                                             <div className="row-fields">
-                                                                <div style={{ flex: 1 }}>
-                                                                    <select className="cat-input" value={row.details.mode || ''} onChange={e => {
-                                                                        updateDetails(row.id, 'mode', e.target.value);
-                                                                        if (e.target.value === 'Intercity Cab') {
-                                                                            updateDetails(row.id, 'cancellationDate', null);
-                                                                            updateDetails(row.id, 'refundAmount', 0);
-                                                                        }
-                                                                    }}>
-                                                                        <option value="">Mode</option>
-                                                                        {travelModes.map(m => <option key={m} value={m}>{m}</option>)}
-                                                                    </select>
-                                                                    {errors[row.id]?.mode && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].mode}</div>}
-                                                                </div>
-                                                                <select className="cat-input mt-1" value={row.details.bookedBy || 'Self Booked'} onChange={e => updateDetails(row.id, 'bookedBy', e.target.value)}>
-                                                                    {bookedByOptions.map(b => <option key={b} value={b}>{b}</option>)}
-                                                                </select>
-                                                            </div>
-                                                        </td>
-
-
-                                                        {/* ROUTE & CARRIER INFO (Matches Header: Route & Carrier Info) */}
-                                                        <td>
-                                                            <div className="row-fields">
-                                                                {row.details.mode === 'Flight' ? (
-                                                                    <>
-                                                                        <div className="field-group">
-                                                                            <div style={{ flex: 1 }}>
-                                                                                <input type="text" placeholder="From Airport" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} style={{ flex: 1 }} />
-                                                                                {errors[row.id]?.origin && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].origin}</div>}
-                                                                            </div>
-                                                                            <div style={{ flex: 1 }}>
-                                                                                <input type="text" placeholder="To Airport" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} style={{ flex: 1 }} />
-                                                                                {errors[row.id]?.destination && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].destination}</div>}
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="field-group mt-1">
-                                                                            <div style={{ flex: 1.5 }}>
-                                                                                <input type="text" placeholder="Airline Name" value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} style={{ flex: 1.5 }} />
-                                                                                {errors[row.id]?.provider && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].provider}</div>}
-                                                                            </div>
-                                                                            <div style={{ flex: 1 }}>
-                                                                                <input type="text" placeholder="Flight No." value={row.details.travelNo || ''} onChange={e => updateDetails(row.id, 'travelNo', e.target.value)} style={{ flex: 1 }} />
-                                                                                {errors[row.id]?.travelNo && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].travelNo}</div>}
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="field-group mt-1">
-                                                                            <div style={{ flex: 1.5 }}>
-                                                                                <input type="text" placeholder="Ticket Number" value={row.details.ticketNo || ''} onChange={e => updateDetails(row.id, 'ticketNo', e.target.value)} style={{ flex: 1.5 }} />
-                                                                                {errors[row.id]?.ticketNo && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].ticketNo}</div>}
-                                                                            </div>
-                                                                            <div style={{ flex: 1 }}>
-                                                                                <input type="text" placeholder="PNR" value={row.details.pnr || ''} onChange={e => updateDetails(row.id, 'pnr', e.target.value)} style={{ flex: 1 }} />
-                                                                                {errors[row.id]?.pnr && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].pnr}</div>}
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="field-group mt-1">
-                                                                            <select style={{ width: '100%' }} value={row.details.classType || ''} onChange={e => updateDetails(row.id, 'classType', e.target.value)}>
-                                                                                <option value="">Travel Class</option>
-                                                                                {flightClasses.map(c => <option key={c} value={c}>{c}</option>)}
-                                                                            </select>
-                                                                        </div>
-                                                                    </>
-                                                                ) : row.details.mode === 'Intercity Cab' ? (
-                                                                    <>
-                                                                        <div className="field-group">
-                                                                            <input type="text" placeholder="From Location" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} style={{ flex: 1 }} />
-                                                                            <input type="text" placeholder="To Location" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} style={{ flex: 1 }} />
-                                                                        </div>
-                                                                        <div className="field-group mt-1">
-                                                                            <input type="text" placeholder="Provider / Vendor" value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} style={{ flex: 1.5 }} />
-
-                                                                        </div>
-                                                                        <div className="field-group mt-1">
-                                                                            <select value={row.details.vehicleType || ''} onChange={e => updateDetails(row.id, 'vehicleType', e.target.value)} style={{ flex: 1.5 }}>
-                                                                                <option value="">Vehicle Type</option>
-                                                                                {intercityCabVehicleTypes.map(v => <option key={v} value={v}>{v}</option>)}
-                                                                            </select>
-                                                                            <input type="text" placeholder="Driver Name" value={row.details.driverName || ''} onChange={e => updateDetails(row.id, 'driverName', e.target.value)} style={{ flex: 1 }} />
-                                                                        </div>
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        {/* Default (Train, Intercity Bus, Intercity Car etc.) */}
-                                                                        <div className="field-group">
-                                                                            <div style={{ flex: 1 }}>
-                                                                                <input type="text" placeholder="From" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} style={{ flex: 1 }} />
-                                                                                {errors[row.id]?.origin && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].origin}</div>}
-                                                                            </div>
-                                                                            <div style={{ flex: 1 }}>
-                                                                                <input type="text" placeholder="To" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} style={{ flex: 1 }} />
-                                                                                {errors[row.id]?.destination && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].destination}</div>}
-                                                                            </div>
-                                                                            {row.details.mode === 'Intercity Bus' && (
-                                                                                <input type="text" placeholder="Boarding Point" value={row.details.boardingPoint || ''} onChange={e => updateDetails(row.id, 'boardingPoint', e.target.value)} style={{ flex: 1 }} className="ml-1" />
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="field-group mt-1">
-                                                                            <input type="text" placeholder={row.details.mode === 'Intercity Bus' ? "Provider / Agent" : "Provider/Agent"} value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} style={{ flex: 1.5 }} />
-
-                                                                        </div>
-                                                                        <div className="field-group mt-1">
-                                                                            <input type="text" placeholder="Ticket No." value={row.details.ticketNo || ''} onChange={e => updateDetails(row.id, 'ticketNo', e.target.value)} style={{ flex: 1.5 }} />
-                                                                            <input type="text" placeholder="PNR / Ref" value={row.details.pnr || ''} onChange={e => updateDetails(row.id, 'pnr', e.target.value)} style={{ flex: 1 }} />
-                                                                        </div>
-                                                                        <div className="field-group mt-1">
-                                                                            <input type="text" placeholder={row.details.mode === 'Train' ? "Train Name" : (row.details.mode === 'Intercity Bus' ? "Bus Operator" : "Carrier Name")} value={row.details.carrier || ''} onChange={e => updateDetails(row.id, 'carrier', e.target.value)} style={{ flex: 1 }} />
-                                                                            {row.details.mode === 'Train' && (
-                                                                                <input type="text" placeholder="Tr No." style={{ width: '60px' }} value={row.details.travelNo || row.details.trainNo || ''} onChange={e => { updateDetails(row.id, 'travelNo', e.target.value); updateDetails(row.id, 'trainNo', e.target.value); }} />
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="field-group mt-1">
-                                                                            <select value={row.details.classType || ''} onChange={e => updateDetails(row.id, 'classType', e.target.value)}>
-                                                                                <option value="">{row.details.mode === 'Intercity Bus' ? 'Bus Type' : 'Cls'}</option>
-                                                                                {row.details.mode === 'Train' && trainClasses.map(c => <option key={c} value={c}>{c}</option>)}
-                                                                                {row.details.mode === 'Intercity Bus' && busSeatTypes.map(c => <option key={c} value={c}>{c}</option>)}
-                                                                            </select>
-                                                                            {row.details.mode === 'Train' && (
-                                                                                <label className="checkbox-item mini ml-2" style={{ whiteSpace: 'nowrap' }}>
-                                                                                    <input type="checkbox" checked={row.details.isTatkal === true} onChange={e => updateDetails(row.id, 'isTatkal', e.target.checked)} />
-                                                                                    <span>Tatkal?</span>
-                                                                                </label>
-                                                                            )}
-                                                                        </div>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </td>
-
-                                                        {/* JOURNEY SCHEDULE COLUMN */}
-                                                        <td>
-                                                            <div className="time-fields quad">
-                                                                {/* add departure/arrival dates here */}
-                                                                <div className="field-group">
-                                                                    <div className="input-with-label-mini">
-                                                                        <label>DEP. DATE</label>
-                                                                        <input type="date" min={minDate} max={maxDate} value={row.details.depDate || row.date} onChange={e => updateDetails(row.id, 'depDate', e.target.value)} />
-                                                                        {errors[row.id]?.depDate && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].depDate}</div>}
+                                                                <div className="input-with-label-mini">
+                                                                    <label>BOOKING DATE & TIME</label>
+                                                                    <div className="field-group">
+                                                                        <input type="date" min={minDate} max={maxDate} value={row.date} onChange={e => updateRow(row.id, 'date', e.target.value)} style={{ flex: 1.5 }} />
+                                                                        <input type="time" value={row.details.bookingTime || ''} onChange={e => updateDetails(row.id, 'bookingTime', e.target.value)} style={{ flex: 1 }} />
                                                                     </div>
-                                                                    <div className="input-with-label-mini">
-                                                                        <label>ARR. DATE</label>
-                                                                        <input type="date" min={minDate} max={maxDate} value={row.details.arrDate || row.date} onChange={e => updateDetails(row.id, 'arrDate', e.target.value)} />
-                                                                        {errors[row.id]?.arrDate && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].arrDate}</div>}
+                                                                    {errors[row.id]?.date && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].date}</div>}
+                                                                </div>
+                                                                {['Flight', 'Train', 'Intercity Bus', 'Intercity Cab'].includes(row.details.mode) && row.date && row.details.depDate && new Date(row.date) > new Date(row.details.depDate) && (
+                                                                    <div className="text-danger" style={{ fontSize: '0.55rem', fontWeight: 700, marginTop: '2px', textTransform: 'uppercase' }}>⚠️ Booking Date &gt; Departure Date</div>
+                                                                )}
+                                                                {['Flight', 'Train', 'Intercity Bus', 'Intercity Cab'].includes(row.details.mode) && row.details.depDate && row.details.arrDate && new Date(row.details.depDate) > new Date(row.details.arrDate) && (
+                                                                    <div className="text-danger" style={{ fontSize: '0.55rem', fontWeight: 700, marginTop: '2px', textTransform: 'uppercase' }}>⚠️ Dep Date &gt; Arr Date</div>
+                                                                )}
+                                                            </div>
+                                                        ) : nature === 'Local Travel' ? (
+                                                            <div className="field-group">
+                                                                <div className="input-with-label-mini">
+                                                                    <label>START DATE</label>
+                                                                    <input type="date" value={row.date} onChange={e => updateRow(row.id, 'date', e.target.value)} />
+                                                                </div>
+                                                                <div className="input-with-label-mini">
+                                                                    <label>END DATE</label>
+                                                                    <input type="date" min={minDate} max={maxDate} value={row.endDate || row.date} onChange={e => updateRow(row.id, 'endDate', e.target.value)} />
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <input type="date" min={minDate} max={maxDate} className="cat-input" value={row.date} onChange={e => updateRow(row.id, 'date', e.target.value)} />
+                                                        )}
+                                                    </td>
+
+                                                    {/* NATURE SPECIFIC DETAILS */}
+                                                    {nature === 'Travel' && (
+                                                        <>
+                                                            {/* TRAVEL MODE COLUMN (Matches Header: Travel Mode) */}
+                                                            <td>
+                                                                <div className="row-fields">
+                                                                    <div style={{ flex: 1 }}>
+                                                                        <select className="cat-input" value={row.details.mode || ''} onChange={e => {
+                                                                            updateDetails(row.id, 'mode', e.target.value);
+                                                                            if (e.target.value === 'Intercity Cab') {
+                                                                                updateDetails(row.id, 'cancellationDate', null);
+                                                                                updateDetails(row.id, 'refundAmount', 0);
+                                                                            }
+                                                                        }}>
+                                                                            <option value="">Mode</option>
+                                                                            {travelModes.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                        </select>
+                                                                        {errors[row.id]?.mode && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].mode}</div>}
                                                                     </div>
-                                                                </div>
-                                                                {['Flight', 'Intercity Bus', 'Intercity Cab'].includes(row.details.mode) ? (
-                                                                    <>
-                                                                        <div className="time-row-pair">
-                                                                            <div className="input-with-label-mini">
-                                                                                <label>DEP. TIME</label>
-                                                                                <input type="time" value={row.timeDetails.boardingTime || ''} onChange={e => updateTimeDetails(row.id, 'boardingTime', e.target.value)} />
-                                                                            </div>
-                                                                            <div className="input-with-label-mini">
-                                                                                <label>ARR. TIME</label>
-                                                                                <input type="time" value={row.timeDetails.actualTime || ''} onChange={e => updateTimeDetails(row.id, 'actualTime', e.target.value)} />
-                                                                            </div>
-                                                                        </div>
-                                                                        {row.details.mode === 'Flight' && (
-                                                                            <div className="time-row mt-1" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                                <label className="checkbox-item mini">
-                                                                                    <input type="checkbox" checked={row.details.mealIncluded === 'Yes' || row.details.mealIncluded === true} onChange={e => updateDetails(row.id, 'mealIncluded', e.target.checked ? 'Yes' : 'No')} />
-                                                                                    <span>Meal?</span>
-                                                                                </label>
-                                                                                <label className="checkbox-item mini">
-                                                                                    <input type="checkbox" checked={row.details.excessBaggage === 'Yes' || row.details.excessBaggage === true} onChange={e => updateDetails(row.id, 'excessBaggage', e.target.checked ? 'Yes' : 'No')} />
-                                                                                    <span>Baggage?</span>
-                                                                                </label>
-                                                                            </div>
-                                                                        )}
-                                                                    </>
-                                                                ) : (
-                                                                    // Standard Journey / Train
-                                                                    <>
-                                                                        <div className="time-row-pair">
-                                                                            <div className="input-with-label-mini">
-                                                                                <label>{row.details.mode === 'Train' ? 'DEP. TIME' : 'TIME'}</label>
-                                                                                <input type="time" value={row.timeDetails.boardingTime || ''} onChange={e => updateTimeDetails(row.id, 'boardingTime', e.target.value)} />
-                                                                            </div>
-                                                                            <div className="input-with-label-mini">
-                                                                                <label>{row.details.mode === 'Train' ? 'ARR. TIME' : 'SCHEDULED'}</label>
-                                                                                <input type="time" value={row.timeDetails.actualTime || ''} onChange={e => updateTimeDetails(row.id, 'actualTime', e.target.value)} />
-                                                                            </div>
-                                                                        </div>
-                                                                        {row.details.mode === 'Train' && (
-                                                                            <>
-                                                                                <div className="time-row">
-                                                                                    <label>Delay (Min)</label>
-                                                                                    <input type="number" readOnly value={row.timeDetails.delay || 0} style={{ width: '60px' }} />
-                                                                                </div>
-                                                                                <div className="time-row mt-1" style={{ gridColumn: '1 / -1' }}>
-                                                                                    <label className="checkbox-item mini">
-                                                                                        <input type="checkbox" checked={row.details.mealIncluded === 'Yes' || row.details.mealIncluded === true} onChange={e => updateDetails(row.id, 'mealIncluded', e.target.checked ? 'Yes' : 'No')} />
-                                                                                        <span>Meal Provided?</span>
-                                                                                    </label>
-                                                                                </div>
-                                                                            </>
-                                                                        )}
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    </>
-                                                )}
-
-                                                {nature === 'Local Travel' && (
-                                                    <>
-                                                        {/* MODE & SUBTYPE COLUMN */}
-                                                        <td>
-                                                            <div className="row-fields">
-                                                                <select className="cat-input" value={row.details.mode || ''} onChange={e => { if (!isFixedLocal) { updateDetails(row.id, 'mode', e.target.value); updateDetails(row.id, 'subType', ''); } }} disabled={isFixedLocal}>
-                                                                    <option value="">Select Mode</option>
-                                                                    {localTravelModes.map(m => <option key={m} value={m}>{m}</option>)}
-                                                                </select>
-
-                                                                {row.details.mode === 'Car / Cab' && (
-                                                                    <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'subType', e.target.value); }} disabled={isFixedLocal}>
-                                                                        <option value="">Select Sub-Type</option>
-                                                                        {localCarSubTypes.map(s => <option key={s} value={s}>{s}</option>)}
+                                                                    <select className="cat-input mt-1" value={row.details.bookedBy || 'Self Booked'} onChange={e => updateDetails(row.id, 'bookedBy', e.target.value)}>
+                                                                        {bookedByOptions.map(b => <option key={b} value={b}>{b}</option>)}
                                                                     </select>
-                                                                )}
-
-                                                                {row.details.mode === 'Bike' && (
-                                                                    <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'subType', e.target.value); }} disabled={isFixedLocal}>
-                                                                        <option value="">Select Sub-Type</option>
-                                                                        {localBikeSubTypes.map(s => <option key={s} value={s}>{s}</option>)}
-                                                                    </select>
-                                                                )}
-
-                                                                {row.details.mode === 'Public Transport' && (
-                                                                    <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'subType', e.target.value); }} disabled={isFixedLocal}>
-                                                                        <option value="">Select Sub-Type</option>
-                                                                        {localProviders.map(s => <option key={s} value={s}>{s}</option>)}
-                                                                    </select>
-                                                                )}
-                                                                <select className="cat-input mt-1" value={row.details.bookedBy || 'Self Booked'} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'bookedBy', e.target.value); }} disabled={isFixedLocal}>
-                                                                    {bookedByOptions.map(b => <option key={b} value={b}>{b}</option>)}
-                                                                </select>
-                                                            </div>
-                                                        </td>
-                                                        <td>
-                                                            <div className="row-fields">
-                                                                <div className="field-group">
-                                                                    <input type="text" placeholder="From Location" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} style={{ flex: 1 }} />
-                                                                    <input type="text" placeholder="To Location" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} style={{ flex: 1 }} />
                                                                 </div>
-                                                            </div>
-                                                        </td>
-                                                        {/* TIME & TRACKING COLUMN */}
-                                                        <td>
-                                                            <div className="time-fields quad">
-                                                                <div className="time-row">
-                                                                    <label>Start Time</label>
-                                                                    <input type="time" value={row.timeDetails.boardingTime || ''} onChange={e => updateTimeDetails(row.id, 'boardingTime', e.target.value)} />
-                                                                </div>
-                                                                <div className="time-row">
-                                                                    <label>End Time</label>
-                                                                    <input type="time" value={row.timeDetails.actualTime || ''} onChange={e => updateTimeDetails(row.id, 'actualTime', e.target.value)} />
-                                                                </div>
+                                                            </td>
 
-                                                                <div className="odo-tracking mt-2" style={{ gridColumn: '1 / -1' }}>
-                                                                    {['Own Car', 'Company Car', 'Own Bike', 'Self Drive Rental'].includes(row.details.subType) && (
+
+                                                            {/* ROUTE & CARRIER INFO (Matches Header: Route & Carrier Info) */}
+                                                            <td>
+                                                                <div className="row-fields">
+                                                                    {row.details.mode === 'Flight' ? (
                                                                         <>
-                                                                            {(() => {
-                                                                                const is4W = row.details.subType.includes('Car');
-                                                                                const rate = fuelRates[is4W ? '4 Wheeler' : '2 Wheeler'];
-                                                                                return (
-                                                                                    <div className="mb-1" style={{ fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.8 }}>
-                                                                                        {rate ? (
-                                                                                            <span className="text-success" style={{ fontWeight: 600 }}>(₹{rate}/km rate active)</span>
-                                                                                        ) : (
-                                                                                            <span className="text-muted italic">(Loading local rates...)</span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                );
-                                                                            })()}
-                                                                            <div className="odo-row mb-2">
-                                                                                <span className="odo-label">Start</span>
-                                                                                <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
-                                                                                    <input
-                                                                                        type="number"
-                                                                                        placeholder="0"
-                                                                                        value={row.details.odoStart || ''}
-                                                                                        onChange={e => updateDetails(row.id, 'odoStart', e.target.value)}
-                                                                                        className={errors[row.id]?.odoStart ? 'error' : ''}
-                                                                                        style={{ paddingRight: '50px', width: '100%' }}
-                                                                                    />
-                                                                                    <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoStart')}>
-                                                                                        {row.details.odoStartImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
-                                                                                    </button>
+                                                                            <div className="field-group">
+                                                                                <div style={{ flex: 1 }}>
+                                                                                    <input type="text" placeholder="From Airport" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} style={{ flex: 1 }} />
+                                                                                    {errors[row.id]?.origin && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].origin}</div>}
                                                                                 </div>
-                                                                                <span className="odo-label">End</span>
-                                                                                <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
-                                                                                    <input
-                                                                                        type="number"
-                                                                                        placeholder="0"
-                                                                                        value={row.details.odoEnd || ''}
-                                                                                        onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)}
-                                                                                        className={errors[row.id]?.odoEnd ? 'error' : ''}
-                                                                                        style={{ paddingRight: '50px', width: '100%' }}
-                                                                                    />
-                                                                                    <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoEnd')}>
-                                                                                        {row.details.odoEndImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
-                                                                                    </button>
+                                                                                <div style={{ flex: 1 }}>
+                                                                                    <input type="text" placeholder="To Airport" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} style={{ flex: 1 }} />
+                                                                                    {errors[row.id]?.destination && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].destination}</div>}
                                                                                 </div>
+                                                                            </div>
+                                                                            <div className="field-group mt-1">
+                                                                                <div style={{ flex: 1.5 }}>
+                                                                                    <input type="text" placeholder="Airline Name" value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} style={{ flex: 1.5 }} />
+                                                                                    {errors[row.id]?.provider && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].provider}</div>}
+                                                                                </div>
+                                                                                <div style={{ flex: 1 }}>
+                                                                                    <input type="text" placeholder="Flight No." value={row.details.travelNo || ''} onChange={e => updateDetails(row.id, 'travelNo', e.target.value)} style={{ flex: 1 }} />
+                                                                                    {errors[row.id]?.travelNo && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].travelNo}</div>}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="field-group mt-1">
+                                                                                <div style={{ flex: 1.5 }}>
+                                                                                    <input type="text" placeholder="Ticket Number" value={row.details.ticketNo || ''} onChange={e => updateDetails(row.id, 'ticketNo', e.target.value)} style={{ flex: 1.5 }} />
+                                                                                    {errors[row.id]?.ticketNo && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].ticketNo}</div>}
+                                                                                </div>
+                                                                                <div style={{ flex: 1 }}>
+                                                                                    <input type="text" placeholder="PNR" value={row.details.pnr || ''} onChange={e => updateDetails(row.id, 'pnr', e.target.value)} style={{ flex: 1 }} />
+                                                                                    {errors[row.id]?.pnr && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].pnr}</div>}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="field-group mt-1">
+                                                                                <select style={{ width: '100%' }} value={row.details.classType || ''} onChange={e => updateDetails(row.id, 'classType', e.target.value)}>
+                                                                                    <option value="">Travel Class</option>
+                                                                                    {flightClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                                                                </select>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : row.details.mode === 'Intercity Cab' ? (
+                                                                        <>
+                                                                            <div className="field-group">
+                                                                                <input type="text" placeholder="From Location" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} style={{ flex: 1 }} />
+                                                                                <input type="text" placeholder="To Location" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} style={{ flex: 1 }} />
+                                                                            </div>
+                                                                            <div className="field-group mt-1">
+                                                                                <input type="text" placeholder="Provider / Vendor" value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} style={{ flex: 1.5 }} />
+
+                                                                            </div>
+                                                                            <div className="field-group mt-1">
+                                                                                <select value={row.details.vehicleType || ''} onChange={e => updateDetails(row.id, 'vehicleType', e.target.value)} style={{ flex: 1.5 }}>
+                                                                                    <option value="">Vehicle Type</option>
+                                                                                    {intercityCabVehicleTypes.map(v => <option key={v} value={v}>{v}</option>)}
+                                                                                </select>
+                                                                                <input type="text" placeholder="Driver Name" value={row.details.driverName || ''} onChange={e => updateDetails(row.id, 'driverName', e.target.value)} style={{ flex: 1 }} />
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            {/* Default (Train, Intercity Bus, Intercity Car etc.) */}
+                                                                            <div className="field-group">
+                                                                                <div style={{ flex: 1 }}>
+                                                                                    <input type="text" placeholder="From" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} style={{ flex: 1 }} />
+                                                                                    {errors[row.id]?.origin && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].origin}</div>}
+                                                                                </div>
+                                                                                <div style={{ flex: 1 }}>
+                                                                                    <input type="text" placeholder="To" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} style={{ flex: 1 }} />
+                                                                                    {errors[row.id]?.destination && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].destination}</div>}
+                                                                                </div>
+                                                                                {row.details.mode === 'Intercity Bus' && (
+                                                                                    <input type="text" placeholder="Boarding Point" value={row.details.boardingPoint || ''} onChange={e => updateDetails(row.id, 'boardingPoint', e.target.value)} style={{ flex: 1 }} className="ml-1" />
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="field-group mt-1">
+                                                                                <input type="text" placeholder={row.details.mode === 'Intercity Bus' ? "Provider / Agent" : "Provider/Agent"} value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} style={{ flex: 1.5 }} />
+
+                                                                            </div>
+                                                                            <div className="field-group mt-1">
+                                                                                <input type="text" placeholder="Ticket No." value={row.details.ticketNo || ''} onChange={e => updateDetails(row.id, 'ticketNo', e.target.value)} style={{ flex: 1.5 }} />
+                                                                                <input type="text" placeholder="PNR / Ref" value={row.details.pnr || ''} onChange={e => updateDetails(row.id, 'pnr', e.target.value)} style={{ flex: 1 }} />
+                                                                            </div>
+                                                                            <div className="field-group mt-1">
+                                                                                <input type="text" placeholder={row.details.mode === 'Train' ? "Train Name" : (row.details.mode === 'Intercity Bus' ? "Bus Operator" : "Carrier Name")} value={row.details.carrier || ''} onChange={e => updateDetails(row.id, 'carrier', e.target.value)} style={{ flex: 1 }} />
+                                                                                {row.details.mode === 'Train' && (
+                                                                                    <input type="text" placeholder="Tr No." style={{ width: '60px' }} value={row.details.travelNo || row.details.trainNo || ''} onChange={e => { updateDetails(row.id, 'travelNo', e.target.value); updateDetails(row.id, 'trainNo', e.target.value); }} />
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="field-group mt-1">
+                                                                                <select value={row.details.classType || ''} onChange={e => updateDetails(row.id, 'classType', e.target.value)}>
+                                                                                    <option value="">{row.details.mode === 'Intercity Bus' ? 'Bus Type' : 'Cls'}</option>
+                                                                                    {row.details.mode === 'Train' && trainClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                                                                    {row.details.mode === 'Intercity Bus' && busSeatTypes.map(c => <option key={c} value={c}>{c}</option>)}
+                                                                                </select>
+                                                                                {row.details.mode === 'Train' && (
+                                                                                    <label className="checkbox-item mini ml-2" style={{ whiteSpace: 'nowrap' }}>
+                                                                                        <input type="checkbox" checked={row.details.isTatkal === true} onChange={e => updateDetails(row.id, 'isTatkal', e.target.checked)} />
+                                                                                        <span>Tatkal?</span>
+                                                                                    </label>
+                                                                                )}
                                                                             </div>
                                                                         </>
                                                                     )}
+                                                                </div>
+                                                            </td>
 
-                                                                    {/* Selfie Capture Section */}
-                                                                    <div className="selfie-capture-section">
-                                                                        <label className="odo-label" style={{ display: 'block', marginBottom: '8px' }}>Selfie Proofs ({(row.details.selfies || []).length})</label>
-                                                                        <div className="selfie-list" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                                                            {(row.details.selfies || []).map((s, idx) => (
-                                                                                <div key={idx} className="selfie-thumb" style={{ position: 'relative', width: '40px', height: '40px', border: '1px solid #e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
-                                                                                    <img src={(s.startsWith('data:') || s.startsWith('http')) ? s : `data:image/jpeg;base64,${s}`} alt="selfie" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onClick={() => previewBill(s)} />
-                                                                                    <button onClick={() => removeSelfie(row.id, idx)} style={{ position: 'absolute', top: 0, right: 0, background: 'rgba(239, 68, 68, 0.8)', color: 'white', border: 'none', borderRadius: '50%', width: '14px', height: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                                                                                        <X size={10} />
-                                                                                    </button>
-                                                                                </div>
-                                                                            ))}
-                                                                            <button className="add-selfie-btn" onClick={() => handleSelfieCapture(row.id)} style={{ width: '40px', height: '40px', border: '1px dashed #cbd5e1', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', color: '#64748b' }}>
-                                                                                <Camera size={16} />
-                                                                            </button>
+                                                            {/* JOURNEY SCHEDULE COLUMN */}
+                                                            <td>
+                                                                <div className="time-fields quad">
+                                                                    {/* add departure/arrival dates here */}
+                                                                    <div className="field-group">
+                                                                        <div className="input-with-label-mini">
+                                                                            <label>DEP. DATE</label>
+                                                                            <input type="date" min={minDate} max={maxDate} value={row.details.depDate || row.date} onChange={e => updateDetails(row.id, 'depDate', e.target.value)} />
+                                                                            {errors[row.id]?.depDate && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].depDate}</div>}
+                                                                        </div>
+                                                                        <div className="input-with-label-mini">
+                                                                            <label>ARR. DATE</label>
+                                                                            <input type="date" min={minDate} max={maxDate} value={row.details.arrDate || row.date} onChange={e => updateDetails(row.id, 'arrDate', e.target.value)} />
+                                                                            {errors[row.id]?.arrDate && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].arrDate}</div>}
                                                                         </div>
                                                                     </div>
-
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                    </>
-                                                )}
-
-                                                {nature === 'Food' && (
-                                                    <>
-                                                        <td>
-                                                            <input type="date" min={minDate} max={maxDate} className="cat-input" value={row.date} onChange={e => updateRow(row.id, 'date', e.target.value)} />
-                                                        </td>
-                                                        <td>
-                                                            <input type="time" className="cat-input" value={row.details.mealTime || ''} onChange={e => updateDetails(row.id, 'mealTime', e.target.value)} />
-                                                        </td>
-                                                        <td>
-                                                            <div className="row-fields">
-                                                                <select className="cat-input" value={row.details.mealCategory || ''} onChange={e => {
-                                                                    const val = e.target.value;
-                                                                    updateDetails(row.id, 'mealCategory', val);
-                                                                    updateDetails(row.id, 'mealType', '');
-                                                                    if (val && val !== 'Self Meal') {
-                                                                        updateRow(row.id, 'amount', 0);
-                                                                        updateDetails(row.id, 'restaurant', '');
-                                                                        updateDetails(row.id, 'purpose', '');
-                                                                        updateDetails(row.id, 'invoiceNo', '');
-                                                                        updateRow(row.id, 'bills', []);
-                                                                    }
-                                                                }}>
-                                                                    <option value="">Meal Category</option>
-                                                                    {mealCategories.map(m => <option key={m} value={m}>{m}</option>)}
-                                                                </select>
-                                                                {row.details.mealCategory && (
-                                                                    <>
-                                                                        <select className="cat-input mt-1" value={row.details.mealType || ''} onChange={e => updateDetails(row.id, 'mealType', e.target.value)} disabled={row.details.mealCategory !== 'Self Meal'}>
-                                                                            <option value="">Meal Type</option>
-                                                                            {row.details.mealCategory === 'Self Meal' && mealTypes.map(m => <option key={m} value={m}>{m}</option>)}
-                                                                            {row.details.mealCategory === 'Working Meal' && mealTypes.map(m => <option key={m} value={m}>{m}</option>)}
-                                                                            {row.details.mealCategory === 'Client Hosted' && mealTypes.map(m => <option key={m} value={m}>{m}</option>)}
-                                                                        </select>
-                                                                        {row.details.mealCategory === 'Self Meal' && (
-                                                                            <div className="input-with-label-mini mt-1">
-                                                                                <label>MEAL TIME</label>
-                                                                                <input type="time" value={row.details.mealTime || ''} onChange={e => updateDetails(row.id, 'mealTime', e.target.value)} />
+                                                                    {['Flight', 'Intercity Bus', 'Intercity Cab'].includes(row.details.mode) ? (
+                                                                        <>
+                                                                            <div className="time-row-pair">
+                                                                                <div className="input-with-label-mini">
+                                                                                    <label>DEP. TIME</label>
+                                                                                    <input type="time" value={row.timeDetails.boardingTime || ''} onChange={e => updateTimeDetails(row.id, 'boardingTime', e.target.value)} />
+                                                                                </div>
+                                                                                <div className="input-with-label-mini">
+                                                                                    <label>ARR. TIME</label>
+                                                                                    <input type="time" value={row.timeDetails.actualTime || ''} onChange={e => updateTimeDetails(row.id, 'actualTime', e.target.value)} />
+                                                                                </div>
                                                                             </div>
-                                                                        )}
-                                                                    </>
-                                                                )}
-                                                                {(row.details.mealCategory === 'Working Meal' || row.details.mealCategory === 'Client Hosted') && (
-                                                                    <div className="input-with-label-mini mt-1">
-                                                                        <label>PERSONS (PAX)</label>
-                                                                        <input type="number" value={row.details.persons || ''} onChange={e => updateDetails(row.id, 'persons', e.target.value)} />
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                        <td>
-                                                            <div className="row-fields">
-                                                                <div className="input-with-label-mini">
-                                                                    <label>RESTAURANT / HOTEL NAME</label>
-                                                                    <input type="text" placeholder="Hotel Name" value={row.details.restaurant || ''} onChange={e => updateDetails(row.id, 'restaurant', e.target.value)} disabled={row.details.mealCategory && row.details.mealCategory !== 'Self Meal'} />
+                                                                            {row.details.mode === 'Flight' && (
+                                                                                <div className="time-row mt-1" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                    <label className="checkbox-item mini">
+                                                                                        <input type="checkbox" checked={row.details.mealIncluded === 'Yes' || row.details.mealIncluded === true} onChange={e => updateDetails(row.id, 'mealIncluded', e.target.checked ? 'Yes' : 'No')} />
+                                                                                        <span>Meal?</span>
+                                                                                    </label>
+                                                                                    <label className="checkbox-item mini">
+                                                                                        <input type="checkbox" checked={row.details.excessBaggage === 'Yes' || row.details.excessBaggage === true} onChange={e => updateDetails(row.id, 'excessBaggage', e.target.checked ? 'Yes' : 'No')} />
+                                                                                        <span>Baggage?</span>
+                                                                                    </label>
+                                                                                </div>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        // Standard Journey / Train
+                                                                        <>
+                                                                            <div className="time-row-pair">
+                                                                                <div className="input-with-label-mini">
+                                                                                    <label>{row.details.mode === 'Train' ? 'DEP. TIME' : 'TIME'}</label>
+                                                                                    <input type="time" value={row.timeDetails.boardingTime || ''} onChange={e => updateTimeDetails(row.id, 'boardingTime', e.target.value)} />
+                                                                                </div>
+                                                                                <div className="input-with-label-mini">
+                                                                                    <label>{row.details.mode === 'Train' ? 'ARR. TIME' : 'SCHEDULED'}</label>
+                                                                                    <input type="time" value={row.timeDetails.actualTime || ''} onChange={e => updateTimeDetails(row.id, 'actualTime', e.target.value)} />
+                                                                                </div>
+                                                                            </div>
+                                                                            {row.details.mode === 'Train' && (
+                                                                                <>
+                                                                                    <div className="time-row">
+                                                                                        <label>Delay (Min)</label>
+                                                                                        <input type="number" readOnly value={row.timeDetails.delay || 0} style={{ width: '60px' }} />
+                                                                                    </div>
+                                                                                    <div className="time-row mt-1" style={{ gridColumn: '1 / -1' }}>
+                                                                                        <label className="checkbox-item mini">
+                                                                                            <input type="checkbox" checked={row.details.mealIncluded === 'Yes' || row.details.mealIncluded === true} onChange={e => updateDetails(row.id, 'mealIncluded', e.target.checked ? 'Yes' : 'No')} />
+                                                                                            <span>Meal Provided?</span>
+                                                                                        </label>
+                                                                                    </div>
+                                                                                </>
+                                                                            )}
+                                                                        </>
+                                                                    )}
                                                                 </div>
-                                                                <div className="field-group mt-1">
-                                                                    <div className="input-with-label-mini" style={{ flex: 2 }}>
-                                                                        <label>ADDRESS</label>
-                                                                        <input type="text" placeholder="Location Address" value={row.details.purpose || ''} onChange={e => updateDetails(row.id, 'purpose', e.target.value)} disabled={row.details.mealCategory && row.details.mealCategory !== 'Self Meal'} />
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                    </>
-                                                )}
+                                                            </td>
+                                                        </>
+                                                    )}
 
-                                                {nature === 'Accommodation' && (
-                                                    <>
-                                                        <td>
-                                                            <div className="row-fields">
-                                                                <select
-                                                                    className={`cat-input mb-1 ${isSameDayTrip() ? "opacity-50" : ""}`}
-                                                                    value={row.details.accomType || ''}
-                                                                    onChange={e => updateDetails(row.id, 'accomType', e.target.value)}
-                                                                    disabled={isSameDayTrip()}
-                                                                >
-                                                                    <option value="">Stay Type</option>
-                                                                    {stayTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                                                                </select>
-                                                                <input
-                                                                    type="text"
-                                                                    className={`cat-input ${isSameDayTrip() ? "opacity-50" : ""}`}
-                                                                    placeholder="Hotel Name"
-                                                                    value={row.details.hotelName || ''}
-                                                                    onChange={e => updateDetails(row.id, 'hotelName', e.target.value)}
-                                                                    disabled={isSameDayTrip()}
-                                                                />
-                                                                <div className="field-group mt-1">
-                                                                    {(!row.details.accomType || !['No Stay', 'Self Stay', 'Client Provided'].includes(row.details.accomType)) && (
-                                                                        <select
-                                                                            value={row.details.roomType || ''}
-                                                                            onChange={e => updateDetails(row.id, 'roomType', e.target.value)}
-                                                                            disabled={isSameDayTrip()}
-                                                                            className={isSameDayTrip() ? "opacity-50" : ""}
-                                                                        >
-                                                                            <option value="">Room</option>
-                                                                            {roomTypes.map(r => <option key={r} value={r}>{r}</option>)}
+                                                    {nature === 'Local Travel' && (
+                                                        <>
+                                                            {/* MODE & SUBTYPE COLUMN */}
+                                                            <td>
+                                                                <div className="row-fields">
+                                                                    <select className="cat-input" value={row.details.mode || ''} onChange={e => { if (!isFixedLocal) { updateDetails(row.id, 'mode', e.target.value); updateDetails(row.id, 'subType', ''); } }} disabled={isFixedLocal}>
+                                                                        <option value="">Select Mode</option>
+                                                                        {localTravelModes.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                    </select>
+
+                                                                    {row.details.mode === 'Car' && (
+                                                                        <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'subType', e.target.value); }} disabled={isFixedLocal}>
+                                                                            <option value="">Select Sub-Type</option>
+                                                                            {localCarSubTypes.map(s => <option key={s} value={s}>{s}</option>)}
                                                                         </select>
                                                                     )}
-                                                                    <div className="nights-badge ml-auto">{row.details.nights || 0}N</div>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td>
-                                                            <div className="row-fields">
-                                                                <input type="text" className="cat-input mb-1" placeholder="City" value={row.details.city || ''} onChange={e => updateDetails(row.id, 'city', e.target.value)} />
-                                                                <div className="field-group mt-1">
-                                                                    <input type="text" className="cat-input" placeholder="Purpose" value={row.details.purpose || ''} onChange={e => updateDetails(row.id, 'purpose', e.target.value)} style={{ flex: 1 }} />
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                    </>
-                                                )}
 
-                                                {nature === 'Incidental' && (
-                                                    <>
-                                                        <td>
-                                                            <div className="row-fields">
-                                                                <div className="input-with-label-mini">
-                                                                    <label>EXPENSE TYPE</label>
-                                                                    <select className="cat-input" value={row.details.incidentalType || ''} onChange={e => updateDetails(row.id, 'incidentalType', e.target.value)}>
-                                                                        <option value="">Select Type</option>
-                                                                        {incidentalTypes.filter(t => t !== 'Porter Charges' || carryingLuggage).map(t => (
-                                                                            <option key={t} value={t}>{t}</option>
-                                                                        ))}
-                                                                    </select>
+
+                                                                    {row.details.mode === 'Bike' && (
+                                                                        <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'subType', e.target.value); }} disabled={isFixedLocal}>
+                                                                            <option value="">Select Sub-Type</option>
+                                                                            {localBikeSubTypes.map(s => <option key={s} value={s}>{s}</option>)}
+                                                                        </select>
+                                                                    )}
+
+                                                                    {row.details.mode === 'Public Transport' && (
+                                                                        <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'subType', e.target.value); }} disabled={isFixedLocal}>
+                                                                            <option value="">Select Sub-Type</option>
+                                                                            {localProviders.map(s => <option key={s} value={s}>{s}</option>)}
+                                                                        </select>
+                                                                    )}
+                                                                    {!['Own Bike', 'Company Bike', 'Own Car', 'Company Car'].includes(row.details.subType) && !['Metro Train', 'Bus'].includes(row.details.mode) && (
+                                                                        <select className="cat-input mt-1" value={row.details.bookedBy || 'Self Booked'} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'bookedBy', e.target.value); }} disabled={isFixedLocal}>
+                                                                            {bookedByOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                                                                        </select>
+                                                                    )}
                                                                 </div>
-                                                                <div className="input-with-label-mini mt-1">
-                                                                    <label>LOCATION</label>
-                                                                    <input type="text" placeholder="Where occurred" value={row.details.location || ''} onChange={e => updateDetails(row.id, 'location', e.target.value)} />
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td>
-                                                            <div className="row-fields">
-                                                                {row.details.incidentalType === 'Others' ? (
-                                                                    <>
-                                                                        <div className="input-with-label-mini">
-                                                                            <label>REASON FOR OTHERS</label>
-                                                                            <input type="text" placeholder="Mandatory reason" value={row.details.otherReason || ''} onChange={e => updateDetails(row.id, 'otherReason', e.target.value)} />
-                                                                        </div>
-                                                                        <div className="input-with-label-mini mt-1">
-                                                                            <label>DESCRIPTION</label>
-                                                                            <textarea className="cat-input" placeholder="Detailed explanation" value={row.details.description || ''} onChange={e => updateDetails(row.id, 'description', e.target.value)} style={{ minHeight: '60px' }} />
-                                                                        </div>
-                                                                    </>
-                                                                ) : (
-                                                                    <div className="input-with-label-mini">
-                                                                        <label>REMARKS / DETAILS</label>
-                                                                        <input type="text" placeholder="Additional info" value={row.details.notes || ''} onChange={e => updateDetails(row.id, 'notes', e.target.value)} />
+                                                            </td>
+                                                            <td>
+                                                                <div className="row-fields">
+                                                                    <div className="field-group">
+                                                                        <input type="text" placeholder="From Location" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} style={{ flex: 1 }} />
+                                                                        <input type="text" placeholder="To Location" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} style={{ flex: 1 }} />
                                                                     </div>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    </>
-                                                )}
-
-                                                {/* COMMON COLUMNS */}
-                                                <td className="cost-col">
-                                                    <div className="amount-input-box">
-                                                        <div className="input-with-label-mini">
-                                                            <div className="amount-with-currency">
-                                                                <span className="currency-symbol">₹</span>
-                                                                <input
-                                                                    type="text"
-                                                                    className={errors[row.id]?.amount ? 'error' : ''}
-                                                                    placeholder={(row.nature === 'Travel' || row.nature === 'Local Travel') && row.details.bookedBy === 'Company Booked' ? "Company Paid" : (row.nature === 'Food' && row.details.mealCategory && row.details.mealCategory !== 'Self Meal' ? "N/A" : "")}
-                                                                    value={(() => {
-                                                                        const rawVal = (row.details.travelStatus === 'Cancelled' || row.details.travelStatus === 'No-Show') ? (row.details.baseFare || row.amount || '') : (row.amount || '');
-                                                                        if (focusedInput?.rowId === row.id) return rawVal;
-                                                                        return rawVal ? formatIndianCurrency(rawVal) : '';
-                                                                    })()}
-                                                                    onFocus={() => setFocusedInput({ rowId: row.id, field: 'amount' })}
-                                                                    onBlur={() => setFocusedInput(null)}
-                                                                    onChange={e => {
-                                                                        const val = e.target.value.replace(/[^0-9.]/g, '');
-                                                                        if (val.split('.').length > 2) return;
-                                                                        updateRow(row.id, 'amount', val);
-                                                                        if (row.details.isAutoCalculated) {
-                                                                            updateDetails(row.id, 'isAutoCalculated', false);
-                                                                        }
-                                                                    }}
-                                                                    disabled={row.details.travelStatus === 'Cancelled' || row.details.travelStatus === 'No-Show' || ((row.nature === 'Travel' || row.nature === 'Local Travel') && row.details.bookedBy === 'Company Booked') || (row.nature === 'Food' && row.details.mealCategory && row.details.mealCategory !== 'Self Meal')}
-                                                                />
-                                                                {row.details.isAutoCalculated && (
-                                                                    <div className="text-success" style={{ fontSize: '0.6rem', fontWeight: 700, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                                        <Info size={10} /> Auto-Calculated
+                                                                </div>
+                                                            </td>
+                                                            {/* TIME & TRACKING COLUMN */}
+                                                            <td>
+                                                                <div className="time-fields quad">
+                                                                    <div className="time-row">
+                                                                        <label>Start Time</label>
+                                                                        <input type="time" value={row.timeDetails.boardingTime || ''} onChange={e => updateTimeDetails(row.id, 'boardingTime', e.target.value)} />
                                                                     </div>
-                                                                )}
-                                                                {errors[row.id]?.amount && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].amount}</div>}
-                                                            </div>
-                                                        </div>
+                                                                    <div className="time-row">
+                                                                        <label>End Time</label>
+                                                                        <input type="time" value={row.timeDetails.actualTime || ''} onChange={e => updateTimeDetails(row.id, 'actualTime', e.target.value)} />
+                                                                    </div>
 
-                                                        {row.nature === 'Accommodation' && (
-                                                            <div className="field-group mt-1">
-                                                                <div className="input-with-label-mini">
-                                                                    <label>Early Chk-In</label>
-                                                                    <input type="number" value={row.details.earlyCheckInCharges || ''} onChange={e => updateDetails(row.id, 'earlyCheckInCharges', e.target.value)} disabled={isSameDayTrip()} />
-                                                                </div>
-                                                                <div className="input-with-label-mini">
-                                                                    <label>Late Chk-Out</label>
-                                                                    <input type="number" value={row.details.lateCheckOutCharges || ''} onChange={e => updateDetails(row.id, 'lateCheckOutCharges', e.target.value)} disabled={isSameDayTrip()} />
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {row.nature === 'Travel' && (row.details.mode === 'Flight' || row.details.mode === 'Intercity Bus' || row.details.mode === 'Train' || row.details.mode === 'Intercity Cab') && null}
-
-                                                        {row.nature === 'Travel' && row.details.mode === 'Intercity Car' && (
-                                                            <div className="car-costs mt-1">
-                                                                {row.details.travelStatus !== 'Cancelled' && row.details.travelStatus !== 'No-Show' ? (
-                                                                    <>
-                                                                        {(['Rental Car (With Driver)', 'Self Drive Rental'].includes(row.details.vehicleType)) && (
-                                                                            <div className="input-with-label-mini mt-1">
-                                                                                <label>Rental Chg</label>
-                                                                                <input type="number" value={row.details.rentalCharge || ''} onChange={e => updateDetails(row.id, 'rentalCharge', e.target.value)} />
-                                                                            </div>
-                                                                        )}
-                                                                        {row.details.vehicleType === 'Company Car' && (
-                                                                            <div className="field-group mt-1 px-1">
-                                                                                <label className="checkbox-item mini">
-                                                                                    <input type="checkbox" checked={row.details.driverProvided || false} onChange={e => updateDetails(row.id, 'driverProvided', e.target.checked)} />
-                                                                                    <span>Driver?</span>
-                                                                                </label>
-                                                                                {row.details.driverProvided && (
-                                                                                    <div className="input-with-label-mini ml-auto">
-                                                                                        <label>Allow.</label>
-                                                                                        <input type="number" value={row.details.driverAllowance || ''} onChange={e => updateDetails(row.id, 'driverAllowance', e.target.value)} />
+                                                                    <div className="odo-tracking mt-2" style={{ gridColumn: '1 / -1' }}>
+                                                                        {['Own Car', 'Company Car', 'Own Bike', 'Self Drive Rental'].includes(row.details.subType) && (
+                                                                            <>
+                                                                                {(() => {
+                                                                                    const is4W = row.details.subType.includes('Car');
+                                                                                    const rate = fuelRates[is4W ? '4 Wheeler' : '2 Wheeler'];
+                                                                                    return (
+                                                                                        <div className="mb-1" style={{ fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.8 }}>
+                                                                                            {rate ? (
+                                                                                                <span className="text-success" style={{ fontWeight: 600 }}>(₹{rate}/km rate active)</span>
+                                                                                            ) : (
+                                                                                                <span className="text-muted italic">(Loading local rates...)</span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    );
+                                                                                })()}
+                                                                                <div className="odo-row mb-2">
+                                                                                    <span className="odo-label">Start</span>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
+                                                                                        <input
+                                                                                            type="number"
+                                                                                            placeholder="0"
+                                                                                            value={row.details.odoStart || ''}
+                                                                                            onChange={e => updateDetails(row.id, 'odoStart', e.target.value)}
+                                                                                            className={errors[row.id]?.odoStart ? 'error' : ''}
+                                                                                            style={{ paddingRight: '50px', width: '100%' }}
+                                                                                        />
+                                                                                        <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoStart')}>
+                                                                                            {row.details.odoStartImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
+                                                                                        </button>
                                                                                     </div>
-                                                                                )}
-                                                                            </div>
+                                                                                    <span className="odo-label">End</span>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
+                                                                                        <input
+                                                                                            type="number"
+                                                                                            placeholder="0"
+                                                                                            value={row.details.odoEnd || ''}
+                                                                                            onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)}
+                                                                                            className={errors[row.id]?.odoEnd ? 'error' : ''}
+                                                                                            style={{ paddingRight: '50px', width: '100%' }}
+                                                                                        />
+                                                                                        <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoEnd')}>
+                                                                                            {row.details.odoEndImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </>
                                                                         )}
-                                                                        {row.details.vehicleType === 'Ride Hailing' && (
-                                                                            <div className="field-group mt-1 px-1">
-                                                                                <label className="checkbox-item mini">
-                                                                                    <input type="checkbox" checked={row.details.includeToll || false} onChange={e => updateDetails(row.id, 'includeToll', e.target.checked)} />
-                                                                                    <span>Incl. Toll?</span>
-                                                                                </label>
-                                                                            </div>
-                                                                        )}
-                                                                        {row.details.nightTravel === 'Yes' && (
-                                                                            <div className="input-with-label-mini mt-1">
-                                                                                <label>Night Halt</label>
-                                                                                <input
-                                                                                    type="number"
-                                                                                    value={row.details.nightHaltCharges || ''}
-                                                                                    onChange={e => updateDetails(row.id, 'nightHaltCharges', e.target.value)}
-                                                                                    disabled={!row.details.haltEligible}
-                                                                                    className={!row.details.haltEligible ? 'btn-disabled' : ''}
-                                                                                    title={!row.details.haltEligible ? "Requires Night Travel = Yes and Duration > 8h" : ""}
-                                                                                />
-                                                                            </div>
-                                                                        )}
-                                                                    </>
-                                                                ) : <div className="cat-notice text-danger" style={{ fontSize: '0.65rem', fontWeight: '700' }}>Cancelled / No-Show Info Hidden</div>}
-                                                            </div>
-                                                        )}
 
-                                                        {row.nature === 'Local Travel' && (
-                                                            <div className="local-costs mt-1">
-                                                                {row.details.mode === 'Walk' ? (
-                                                                    <div className="no-cost-badge">No Cost (Walk)</div>
-                                                                ) : (
-                                                                    row.details.travelStatus !== 'Cancelled' && row.details.travelStatus !== 'No-Show' ? (
+                                                                        {/* Selfie Capture Section */}
+                                                                        <div className="selfie-capture-section">
+                                                                            <label className="odo-label" style={{ display: 'block', marginBottom: '8px' }}>Selfie Proofs ({(row.details.selfies || []).length})</label>
+                                                                            <div className="selfie-list" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                                                {(row.details.selfies || []).map((s, idx) => (
+                                                                                    <div key={idx} className="selfie-thumb" style={{ position: 'relative', width: '40px', height: '40px', border: '1px solid #e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                                                                                        <img src={(s.startsWith('data:') || s.startsWith('http')) ? s : `data:image/jpeg;base64,${s}`} alt="selfie" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onClick={() => previewBill(s)} />
+                                                                                        <button onClick={() => removeSelfie(row.id, idx)} style={{ position: 'absolute', top: 0, right: 0, background: 'rgba(239, 68, 68, 0.8)', color: 'white', border: 'none', borderRadius: '50%', width: '14px', height: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                                                                            <X size={10} />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                ))}
+                                                                                <button className="add-selfie-btn" onClick={() => handleSelfieCapture(row.id)} style={{ width: '40px', height: '40px', border: '1px dashed #cbd5e1', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', color: '#64748b' }}>
+                                                                                    <Camera size={16} />
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        </>
+                                                    )}
+
+                                                    {nature === 'Food' && (
+                                                        <>
+                                                            <td>
+                                                                <input type="date" min={minDate} max={maxDate} className="cat-input" value={row.date} onChange={e => updateRow(row.id, 'date', e.target.value)} />
+                                                            </td>
+                                                            <td>
+                                                                <input type="time" className="cat-input" value={row.details.mealTime || ''} onChange={e => updateDetails(row.id, 'mealTime', e.target.value)} />
+                                                            </td>
+                                                            <td>
+                                                                <div className="row-fields">
+                                                                    <select className="cat-input" value={row.details.mealCategory || ''} onChange={e => {
+                                                                        const val = e.target.value;
+                                                                        updateDetails(row.id, 'mealCategory', val);
+                                                                        updateDetails(row.id, 'mealType', '');
+                                                                        if (val && val !== 'Self Meal') {
+                                                                            updateRow(row.id, 'amount', 0);
+                                                                            updateDetails(row.id, 'restaurant', '');
+                                                                            updateDetails(row.id, 'purpose', '');
+                                                                            updateDetails(row.id, 'invoiceNo', '');
+                                                                            updateRow(row.id, 'bills', []);
+                                                                        }
+                                                                    }}>
+                                                                        <option value="">Meal Category</option>
+                                                                        {mealCategories.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                    </select>
+                                                                    {row.details.mealCategory && (
                                                                         <>
-                                                                            {row.details.subType === 'Company Car' && (
+                                                                            <select className="cat-input mt-1" value={row.details.mealType || ''} onChange={e => updateDetails(row.id, 'mealType', e.target.value)} disabled={row.details.mealCategory !== 'Self Meal'}>
+                                                                                <option value="">Meal Type</option>
+                                                                                {row.details.mealCategory === 'Self Meal' && mealTypes.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                                {row.details.mealCategory === 'Working Meal' && mealTypes.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                                {row.details.mealCategory === 'Client Hosted' && mealTypes.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                            </select>
+                                                                            {row.details.mealCategory === 'Self Meal' && (
+                                                                                <div className="input-with-label-mini mt-1">
+                                                                                    <label>MEAL TIME</label>
+                                                                                    <input type="time" value={row.details.mealTime || ''} onChange={e => updateDetails(row.id, 'mealTime', e.target.value)} />
+                                                                                </div>
+                                                                            )}
+                                                                        </>
+                                                                    )}
+                                                                    {(row.details.mealCategory === 'Working Meal' || row.details.mealCategory === 'Client Hosted') && (
+                                                                        <div className="input-with-label-mini mt-1">
+                                                                            <label>PERSONS (PAX)</label>
+                                                                            <input type="number" value={row.details.persons || ''} onChange={e => updateDetails(row.id, 'persons', e.target.value)} />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div className="row-fields">
+                                                                    <div className="input-with-label-mini">
+                                                                        <label>RESTAURANT / HOTEL NAME</label>
+                                                                        <input type="text" placeholder="Hotel Name" value={row.details.restaurant || ''} onChange={e => updateDetails(row.id, 'restaurant', e.target.value)} disabled={row.details.mealCategory && row.details.mealCategory !== 'Self Meal'} />
+                                                                    </div>
+                                                                    <div className="field-group mt-1">
+                                                                        <div className="input-with-label-mini" style={{ flex: 2 }}>
+                                                                            <label>ADDRESS</label>
+                                                                            <input type="text" placeholder="Location Address" value={row.details.purpose || ''} onChange={e => updateDetails(row.id, 'purpose', e.target.value)} disabled={row.details.mealCategory && row.details.mealCategory !== 'Self Meal'} />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        </>
+                                                    )}
+
+                                                    {nature === 'Incidental' && (
+                                                        <>
+                                                            <td>
+                                                                <div className="row-fields">
+                                                                    <div className="input-with-label-mini">
+                                                                        <label>EXPENSE TYPE</label>
+                                                                        <select className="cat-input" value={row.details.incidentalType || ''} onChange={e => updateDetails(row.id, 'incidentalType', e.target.value)}>
+                                                                            <option value="">Select Type</option>
+                                                                            {incidentalTypes.filter(t => t !== 'Porter Charges' || hasAdditionalLuggage).map(t => (
+                                                                                <option key={t} value={t}>{t}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </div>
+                                                                    <div className="input-with-label-mini mt-1">
+                                                                        <label>LOCATION</label>
+                                                                        <input type="text" placeholder="Where occurred" value={row.details.location || ''} onChange={e => updateDetails(row.id, 'location', e.target.value)} />
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div className="row-fields">
+                                                                    {row.details.incidentalType === 'Others' ? (
+                                                                        <>
+                                                                            <div className="input-with-label-mini">
+                                                                                <label>REASON FOR OTHERS</label>
+                                                                                <input type="text" placeholder="Mandatory reason" value={row.details.otherReason || ''} onChange={e => updateDetails(row.id, 'otherReason', e.target.value)} />
+                                                                            </div>
+                                                                            <div className="input-with-label-mini mt-1">
+                                                                                <label>DESCRIPTION</label>
+                                                                                <textarea className="cat-input" placeholder="Detailed explanation" value={row.details.description || ''} onChange={e => updateDetails(row.id, 'description', e.target.value)} style={{ minHeight: '60px' }} />
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <div className="input-with-label-mini">
+                                                                            <label>REMARKS / DETAILS</label>
+                                                                            <input type="text" placeholder="Additional info" value={row.details.notes || ''} onChange={e => updateDetails(row.id, 'notes', e.target.value)} />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </>
+                                                    )}
+
+                                                    {/* COMMON COLUMNS */}
+                                                    <td className="cost-col">
+                                                        <div className="amount-input-box">
+                                                            <div className="input-with-label-mini">
+                                                                <div className="amount-with-currency">
+                                                                    <span className="currency-symbol">₹</span>
+                                                                    <input
+                                                                        type="text"
+                                                                        className={errors[row.id]?.amount ? 'error' : ''}
+                                                                        placeholder={(row.nature === 'Travel' || row.nature === 'Local Travel') && row.details.bookedBy === 'Company Booked' ? "Company Paid" : (row.nature === 'Food' && row.details.mealCategory && row.details.mealCategory !== 'Self Meal' ? "N/A" : "")}
+                                                                        value={(() => {
+                                                                            const rawVal = (row.details.travelStatus === 'Cancelled' || row.details.travelStatus === 'No-Show') ? (row.details.baseFare || row.amount || '') : (row.amount || '');
+                                                                            if (focusedInput?.rowId === row.id) return rawVal;
+                                                                            return rawVal ? formatIndianCurrency(rawVal) : '';
+                                                                        })()}
+                                                                        onFocus={() => setFocusedInput({ rowId: row.id, field: 'amount' })}
+                                                                        onBlur={() => setFocusedInput(null)}
+                                                                        onChange={e => {
+                                                                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                                            if (val.split('.').length > 2) return;
+                                                                            updateRow(row.id, 'amount', val);
+                                                                            if (row.details.isAutoCalculated) {
+                                                                                updateDetails(row.id, 'isAutoCalculated', false);
+                                                                            }
+                                                                        }}
+                                                                        disabled={row.details.travelStatus === 'Cancelled' || row.details.travelStatus === 'No-Show' || ((row.nature === 'Travel' || row.nature === 'Local Travel') && row.details.bookedBy === 'Company Booked') || (row.nature === 'Food' && row.details.mealCategory && row.details.mealCategory !== 'Self Meal')}
+                                                                    />
+                                                                    {row.details.isAutoCalculated && (
+                                                                        <div className="text-success" style={{ fontSize: '0.6rem', fontWeight: 700, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                                            <Info size={10} /> Auto-Calculated
+                                                                        </div>
+                                                                    )}
+                                                                    {errors[row.id]?.amount && <div className="text-danger" style={{ fontSize: '0.65rem' }}>{errors[row.id].amount}</div>}
+                                                                </div>
+                                                            </div>
+
+                                                            {row.nature === 'Travel' && (row.details.mode === 'Flight' || row.details.mode === 'Intercity Bus' || row.details.mode === 'Train' || row.details.mode === 'Intercity Cab') && null}
+
+                                                            {row.nature === 'Travel' && row.details.mode === 'Intercity Car' && (
+                                                                <div className="car-costs mt-1">
+                                                                    {row.details.travelStatus !== 'Cancelled' && row.details.travelStatus !== 'No-Show' ? (
+                                                                        <>
+                                                                            {(['Rental Car (With Driver)', 'Self Drive Rental'].includes(row.details.vehicleType)) && (
+                                                                                <div className="input-with-label-mini mt-1">
+                                                                                    <label>Rental Chg</label>
+                                                                                    <input type="number" value={row.details.rentalCharge || ''} onChange={e => updateDetails(row.id, 'rentalCharge', e.target.value)} />
+                                                                                </div>
+                                                                            )}
+                                                                            {row.details.vehicleType === 'Company Car' && (
                                                                                 <div className="field-group mt-1 px-1">
                                                                                     <label className="checkbox-item mini">
                                                                                         <input type="checkbox" checked={row.details.driverProvided || false} onChange={e => updateDetails(row.id, 'driverProvided', e.target.checked)} />
@@ -2554,13 +4229,7 @@ const TripExpenseGrid = ({
                                                                                     )}
                                                                                 </div>
                                                                             )}
-                                                                            {row.details.mode === 'Public Transport' && (
-                                                                                <div className="input-with-label-mini mt-1">
-                                                                                    <label>Topup?</label>
-                                                                                    <input type="number" value={row.details.smartCardRecharge || ''} onChange={e => updateDetails(row.id, 'smartCardRecharge', e.target.value)} />
-                                                                                </div>
-                                                                            )}
-                                                                            {row.details.subType === 'Ride Hailing' && (
+                                                                            {row.details.vehicleType === 'Ride Hailing' && (
                                                                                 <div className="field-group mt-1 px-1">
                                                                                     <label className="checkbox-item mini">
                                                                                         <input type="checkbox" checked={row.details.includeToll || false} onChange={e => updateDetails(row.id, 'includeToll', e.target.checked)} />
@@ -2568,61 +4237,115 @@ const TripExpenseGrid = ({
                                                                                     </label>
                                                                                 </div>
                                                                             )}
+                                                                            {row.details.nightTravel === 'Yes' && (
+                                                                                <div className="input-with-label-mini mt-1">
+                                                                                    <label>Night Halt</label>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        value={row.details.nightHaltCharges || ''}
+                                                                                        onChange={e => updateDetails(row.id, 'nightHaltCharges', e.target.value)}
+                                                                                        disabled={!row.details.haltEligible}
+                                                                                        className={!row.details.haltEligible ? 'btn-disabled' : ''}
+                                                                                        title={!row.details.haltEligible ? "Requires Night Travel = Yes and Duration > 8h" : ""}
+                                                                                    />
+                                                                                </div>
+                                                                            )}
                                                                         </>
-                                                                    ) : <div className="cat-notice text-danger" style={{ fontSize: '0.65rem', fontWeight: '700' }}>Cancelled / No-Show Info Hidden</div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div className="bills-collection-zone custom-upload">
-                                                        {row.nature === 'Travel' && ['Flight', 'Train', 'Intercity Bus', 'Intercity Cab'].includes(row.details.mode) && row.details.bookedBy === 'Company Booked' && (
-                                                            <div className="company-paid-notice">
-                                                                <CheckCircle2 size={12} className="text-secondary" />
-                                                                <span>Booked & paid by company. No reimbursement.</span>
-                                                            </div>
-                                                        )}
-                                                        {(row.bills || []).map((b, idx) => (
-                                                            <div key={idx} className="bill-thumbnail-mini">
-                                                                <div className="thumb-preview" onClick={() => previewBill(b)}>
-                                                                    <FileText size={14} />
+                                                                    ) : <div className="cat-notice text-danger" style={{ fontSize: '0.65rem', fontWeight: '700' }}>Cancelled / No-Show Info Hidden</div>}
                                                                 </div>
-                                                                {!isLocked && (
-                                                                    <button className="remove-bill-dot" onClick={() => removeBill(row.id, idx)}>
-                                                                        <X size={10} />
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                        <div className="upload-controls-mini">
-                                                            {!isLocked && !(row.nature === 'Food' && row.details.mealCategory && row.details.mealCategory !== 'Self Meal') && (
-                                                                <button className="add-bill-btn-mini" onClick={() => document.getElementById(`f-${row.id}`).click()} title="Add Bill">
-                                                                    <Plus size={14} />
-                                                                    <input type="file" id={`f-${row.id}`} hidden onChange={e => handleFileUpload(row.id, e.target.files[0])} accept="image/*,.pdf" />
-                                                                </button>
                                                             )}
-                                                            {(row.bills || []).length === 0 && (
-                                                                row.nature === 'Travel' && (row.details.mode === 'Intercity Bus' || row.details.mode === 'Intercity Cab' || row.details.mode === 'Flight') ? (
-                                                                    <div className="travel-upload-hint">
-                                                                        {['Flight', 'Intercity Bus'].includes(row.details.mode) && <span className="upload-req-label">Upload Ticket</span>}
-                                                                        <span className="upload-req-label">Upload Invoice</span>
-                                                                    </div>
-                                                                ) : <span className="no-bill-hint">No Bills</span>
+
+                                                            {row.nature === 'Local Travel' && (
+                                                                <div className="local-costs mt-1">
+                                                                    {row.details.mode === 'Walk' ? (
+                                                                        <div className="no-cost-badge">No Cost (Walk)</div>
+                                                                    ) : (
+                                                                        row.details.travelStatus !== 'Cancelled' && row.details.travelStatus !== 'No-Show' ? (
+                                                                            <>
+                                                                                {row.details.subType === 'Company Car' && (
+                                                                                    <div className="field-group mt-1 px-1">
+                                                                                        <label className="checkbox-item mini">
+                                                                                            <input type="checkbox" checked={row.details.driverProvided || false} onChange={e => updateDetails(row.id, 'driverProvided', e.target.checked)} />
+                                                                                            <span>Driver?</span>
+                                                                                        </label>
+                                                                                        {row.details.driverProvided && (
+                                                                                            <div className="input-with-label-mini ml-auto">
+                                                                                                <label>Allow.</label>
+                                                                                                <input type="number" value={row.details.driverAllowance || ''} onChange={e => updateDetails(row.id, 'driverAllowance', e.target.value)} />
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                )}
+                                                                                {row.details.mode === 'Public Transport' && (
+                                                                                    <div className="input-with-label-mini mt-1">
+                                                                                        <label>Topup?</label>
+                                                                                        <input type="number" value={row.details.smartCardRecharge || ''} onChange={e => updateDetails(row.id, 'smartCardRecharge', e.target.value)} />
+                                                                                    </div>
+                                                                                )}
+                                                                                {row.details.subType === 'Ride Hailing' && (
+                                                                                    <div className="field-group mt-1 px-1">
+                                                                                        <label className="checkbox-item mini">
+                                                                                            <input type="checkbox" checked={row.details.includeToll || false} onChange={e => updateDetails(row.id, 'includeToll', e.target.checked)} />
+                                                                                            <span>Incl. Toll?</span>
+                                                                                        </label>
+                                                                                    </div>
+                                                                                )}
+                                                                            </>
+                                                                        ) : <div className="cat-notice text-danger" style={{ fontSize: '0.65rem', fontWeight: '700' }}>Cancelled / No-Show Info Hidden</div>
+                                                                    )}
+                                                                </div>
                                                             )}
                                                         </div>
-                                                    </div>
-                                                </td>
-                                                <td className="actions-col">
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
-                                                        {!isLocked && (
-                                                            <button className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
-                                                                <Trash2 size={14} />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
+                                                    </td>
+                                                    <td>
+                                                        <div className="bills-collection-zone custom-upload">
+                                                            {row.nature === 'Travel' && ['Flight', 'Train', 'Intercity Bus', 'Intercity Cab'].includes(row.details.mode) && row.details.bookedBy === 'Company Booked' && (
+                                                                <div className="company-paid-notice">
+                                                                    <CheckCircle2 size={12} className="text-secondary" />
+                                                                    <span>Booked & paid by company. No reimbursement.</span>
+                                                                </div>
+                                                            )}
+                                                            {(row.bills || []).map((b, idx) => (
+                                                                <div key={idx} className="bill-thumbnail-mini">
+                                                                    <div className="thumb-preview" onClick={() => previewBill(b)}>
+                                                                        <FileText size={14} />
+                                                                    </div>
+                                                                    {!isLocked && (
+                                                                        <button className="remove-bill-dot" onClick={() => removeBill(row.id, idx)}>
+                                                                            <X size={10} />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                            <div className="upload-controls-mini">
+                                                                {!isLocked && !(row.nature === 'Food' && row.details.mealCategory && row.details.mealCategory !== 'Self Meal') && (
+                                                                    <button className="add-bill-btn-mini" onClick={() => document.getElementById(`f-${row.id}`).click()} title="Add Bill">
+                                                                        <Plus size={14} />
+                                                                        <input type="file" id={`f-${row.id}`} hidden onChange={e => { handleFileUpload(row.id, e.target.files); e.target.value = ''; }} accept="image/*,.pdf" />
+                                                                    </button>
+                                                                )}
+                                                                {(row.bills || []).length === 0 && (
+                                                                    row.nature === 'Travel' && (row.details.mode === 'Intercity Bus' || row.details.mode === 'Intercity Cab' || row.details.mode === 'Flight') ? (
+                                                                        <div className="travel-upload-hint">
+                                                                            {['Flight', 'Intercity Bus'].includes(row.details.mode) && <span className="upload-req-label">Upload Ticket</span>}
+                                                                            <span className="upload-req-label">Upload Invoice</span>
+                                                                        </div>
+                                                                    ) : <span className="no-bill-hint">No Bills</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="actions-col">
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
+                                                            {!isLocked && (
+                                                                <button className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
                                         </React.Fragment>
                                     ))
                                 )
@@ -2721,13 +4444,13 @@ const TripExpenseGrid = ({
                                                             {r.nature === 'Food' && (
                                                                 <>
                                                                     <strong>{r.details.mealType || 'Meal'}</strong>
-                                                                    <span>{r.details.restaurant || 'Refreshments'}</span>
+                                                                    <span>{r.details.mealCategory || 'Category'} · {r.details.mealSource || 'Source'} · {r.details.hotelName || r.details.restaurant || r.details.provider || 'Provider'}</span>
                                                                 </>
                                                             )}
                                                             {r.nature === 'Accommodation' && (
                                                                 <>
-                                                                    <strong>{r.details.hotelName || 'Stay'}</strong>
-                                                                    <span>{r.details.city} ({r.details.nights} Nights)</span>
+                                                                    <strong>{r.details.hotelName || r.details.accomType || 'Stay'}</strong>
+                                                                    <span>{r.details.bookingType || 'Booking'} · {r.details.bookingSource || 'Source'} · {r.details.nights || 0} Nights</span>
                                                                 </>
                                                             )}
                                                             {r.nature === 'Incidental' && (
@@ -2933,32 +4656,6 @@ const TripExpenseGrid = ({
                 <div className="m-left">
                     <div className="registry-title-row">
                         <h3>{isLocked ? 'Finalized Journey Ledger' : 'Dynamic Journey Ledger'}</h3>
-                        {!isLocked && (
-                            <div className="luggage-toggle-zone">
-                                <label className="luggage-checkbox">
-                                    <input
-                                        type="checkbox"
-                                        checked={carryingLuggage}
-                                        onChange={(e) => {
-                                            setCarryingLuggage(e.target.checked);
-                                            if (!e.target.checked) setLuggageWeight('');
-                                        }}
-                                    />
-                                    <span>Carrying Luggage?</span>
-                                </label>
-                                {carryingLuggage && (
-                                    <div className="weight-input-mini animate-pop-in">
-                                        <label>Weight (Kg)</label>
-                                        <input
-                                            type="number"
-                                            value={luggageWeight}
-                                            onChange={(e) => setLuggageWeight(e.target.value)}
-                                            placeholder="00"
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </div>
                     {!isLocalOnly && (
                         <>
@@ -3040,23 +4737,40 @@ const TripExpenseGrid = ({
                     </div>
                 </div>
             )}
-            <div className="grid-master-footer">
-                <div className="legend">
-                    <div className="l-item"><div className="grid-dot t"></div> Travel</div>
-                    <div className="l-item"><div className="grid-dot l"></div> Local</div>
-                    <div className="l-item"><div className="grid-dot f"></div> Food</div>
-                    <div className="l-item"><div className="grid-dot a"></div> Stay</div>
+            <div className="grid-master-footer" style={{ 
+                width: '100%', 
+                padding: '1rem', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '20px', 
+                boxSizing: 'border-box' 
+            }}>
+                <div className="legend" style={{ 
+                    display: 'flex', 
+                    flexWrap: 'wrap', 
+                    gap: '12px', 
+                    justifyContent: 'center',
+                    padding: '10px',
+                    background: '#f8fafc',
+                    borderRadius: '8px'
+                }}>
+                    <div className="l-item" style={{ fontSize: '0.75rem', fontWeight: 700 }}><div className="grid-dot t"></div> Travel</div>
+                    <div className="l-item" style={{ fontSize: '0.75rem', fontWeight: 700 }}><div className="grid-dot l"></div> Local</div>
+                    <div className="l-item" style={{ fontSize: '0.75rem', fontWeight: 700 }}><div className="grid-dot f"></div> Food</div>
+                    <div className="l-item" style={{ fontSize: '0.75rem', fontWeight: 700 }}><div className="grid-dot a"></div> Stay</div>
                 </div>
+
                 {!isLocked && (
                     <div className="review-action-footer">
                         {/* Always show Commit/Save button on every tab to allow incremental saving */}
                         <button
-                            className={`master-save-btn ${(isSaving || (rows.length > 0 && rows.every(r => r.isSaved))) ? 'loading btn-disabled' : ''}`}
-                            onClick={saveRegistry}
-                            disabled={isSaving || isSubmitting || (rows.length > 0 && rows.every(r => r.isSaved))}
+                            className={`master-save-btn ${(isSaving || (displayRows.length > 0 && displayRows.every(r => r.isSaved))) ? 'loading btn-disabled' : ''}`}
+                            onClick={() => saveRegistry(activeCategory === 'Review')}
+                            disabled={isSaving || isSubmitting || (displayRows.length > 0 && displayRows.every(r => r.isSaved))}
+                            style={{ minHeight: '52px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                         >
                             {isSaving ? <Clock className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
-                            <span>{isSaving ? 'Saving Progress...' : (rows.length > 0 && rows.every(r => r.isSaved) ? 'Saved' : 'Commit Registry')}</span>
+                            <span style={{ fontWeight: 800 }}>{isSaving ? 'Saving Progress...' : ((displayRows.length > 0 && displayRows.every(r => r.isSaved)) ? 'Saved' : (activeCategory === 'Review' ? 'Commit All Data' : 'Save ' + activeCategory + ' Data'))}</span>
                         </button>
 
                         {activeCategory === 'Review' ? (
@@ -3066,12 +4780,13 @@ const TripExpenseGrid = ({
                                     onClick={handleClaim}
                                     disabled={isSaving || isSubmitting || !rows.every(r => r.isSaved) || rows.length === 0 || !isTripApproved}
                                     title={!isTripApproved ? "Wait for Trip Approval to submit claim" : (!rows.every(r => r.isSaved) ? "Please Commit Registry first" : "")}
+                                    style={{ minHeight: '52px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                                 >
                                     {isSubmitting ? <Clock className="animate-spin" size={18} /> : <IndianRupee size={18} />}
-                                    <span>{isSubmitting ? 'Finalizing...' : 'Submit Full Claim'}</span>
+                                    <span style={{ fontWeight: 800 }}>{isSubmitting ? 'Finalizing...' : 'Submit Full Claim'}</span>
                                 </button>
                                 {!isTripApproved && (
-                                    <div className="status-lock-hint">
+                                    <div className="status-lock-hint" style={{ fontSize: '0.75rem', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
                                         <AlertTriangle size={14} />
                                         <span>Submission locked until Trip is Approved</span>
                                     </div>
@@ -3081,17 +4796,19 @@ const TripExpenseGrid = ({
                             <button
                                 className="master-claim-btn secondary"
                                 onClick={() => setActiveCategory('Review')}
+                                style={{ minHeight: '52px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                             >
                                 <Navigation size={18} />
-                                <span>Go to Final Review</span>
+                                <span style={{ fontWeight: 800 }}>Go to Final Review</span>
                             </button>
                         )}
                     </div>
                 )}
+
                 {isLocked && (
-                    <div className="lock-status-notice">
-                        <CheckCircle2 size={16} />
-                        <span>Claim Reference: {tripId} Submitted for Review</span>
+                    <div className="lock-status-notice" style={{ textAlign: 'center', padding: '1.5rem', background: '#f0fdf4', borderRadius: '12px' }}>
+                        <CheckCircle2 size={24} className="text-secondary mb-2" style={{ display: 'block', margin: '0 auto' }} />
+                        <span style={{ fontWeight: 800, color: '#166534' }}>Claim Reference: {tripId} Submitted for Review</span>
                     </div>
                 )}
             </div>
@@ -3162,6 +4879,122 @@ const TripExpenseGrid = ({
                     </div>
                 </div>
             )}
+
+            {/* Image Preview Modal */}
+            {previewImage && (
+                <div 
+                    className="image-preview-modal-overlay" 
+                    onClick={() => setPreviewImage(null)}
+                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}
+                >
+                    <div className="image-preview-modal-content" style={{ position: 'relative', width: '80vw', height: '80vh', backgroundColor: 'transparent', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
+                        <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+                            <button 
+                                className="image-preview-modal-close" 
+                                onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }}
+                                style={{ background: '#ef4444', color: 'white', borderRadius: '50%', width: '36px', height: '36px', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div style={{ width: '100%', flex: 1, backgroundColor: 'white', borderRadius: '8px', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+                            {(previewImage.includes('application/pdf') || previewImage.endsWith('.pdf')) ? (
+                                 <iframe 
+                                     src={previewImage} 
+                                     title="PDF Preview"
+                                     style={{ width: '100%', height: '100%', border: 'none' }} 
+                                 />
+                            ) : (
+                                 <img 
+                                     src={previewImage} 
+                                     alt="Bill Preview" 
+                                     style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                                 />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <style>{`
+                .incidental-invoice-stack {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+                    gap: 12px;
+                    margin-top: 12px;
+                }
+                
+                @media (max-width: 768px) {
+                    .incidental-invoice-stack {
+                        grid-template-columns: 1fr;
+                        gap: 8px;
+                    }
+                }
+
+                .trip-local-card-grid {
+                    display: grid !important;
+                    grid-template-columns: repeat(3, 1fr) !important;
+                    gap: 20px !important;
+                    align-items: stretch !important;
+                }
+                .trip-local-card-grid > :nth-child(1) { grid-column: 1 !important; grid-row: 1 !important; } /* Mode & Booking */
+                .trip-local-card-grid > :nth-child(2) { grid-column: 2 !important; grid-row: 1 !important; } /* Location */
+                .trip-local-card-grid > :nth-child(3) { grid-column: 3 !important; grid-row: 1 !important; } /* Expense */
+                .trip-local-card-grid > :nth-child(4) { grid-column: 1 !important; grid-row: 2 !important; } /* Date & Time */
+                .trip-local-card-grid > :nth-child(5) { grid-column: 2 !important; grid-row: 2 !important; } /* Tracking */
+                .trip-local-card-grid > :nth-child(6) { grid-column: 3 !important; grid-row: 2 !important; } /* Upload */
+                
+                @media (max-width: 900px) {
+                    .trip-local-card-grid {
+                        grid-template-columns: 1fr !important;
+                    }
+                    .trip-local-card-grid > * {
+                        grid-column: auto !important;
+                        grid-row: auto !important;
+                    }
+                }
+                .trip-accommodation-card-grid {
+                    display: grid !important;
+                    grid-template-columns: repeat(3, 1fr) !important;
+                    gap: 20px !important;
+                    align-items: stretch !important;
+                }
+                .trip-accommodation-card-grid > :nth-child(1) { grid-column: 1 !important; grid-row: 1 / span 2 !important; } /* Stay Schedule */
+                .trip-accommodation-card-grid > :nth-child(2) { grid-column: 2 !important; grid-row: 1 !important; } /* Booking Details */
+                .trip-accommodation-card-grid > :nth-child(3) { grid-column: 3 !important; grid-row: 1 !important; } /* Lodging Info */
+                .trip-accommodation-card-grid > :nth-child(4) { grid-column: 2 !important; grid-row: 2 !important; } /* Expense */
+                .trip-accommodation-card-grid > :nth-child(5) { grid-column: 3 !important; grid-row: 2 !important; } /* Upload */
+
+                .trip-food-card-grid, .trip-incidental-card-grid {
+                    display: grid !important;
+                    grid-template-columns: repeat(4, 1fr) !important;
+                    gap: 16px !important;
+                    align-items: stretch !important;
+                }
+
+                .trip-travel-card-grid {
+                    display: grid !important;
+                    grid-template-columns: repeat(4, 1fr) !important;
+                    gap: 16px !important;
+                    align-items: stretch !important;
+                }
+
+                @media (max-width: 1100px) {
+                    .trip-travel-card-grid {
+                        grid-template-columns: repeat(2, 1fr) !important;
+                    }
+                }
+
+                @media (max-width: 768px) {
+                    .trip-accommodation-card-grid, .trip-travel-card-grid, .trip-food-card-grid, .trip-incidental-card-grid {
+                        grid-template-columns: 1fr !important;
+                    }
+                    .trip-accommodation-card-grid > *, .trip-travel-card-grid > *, .trip-food-card-grid > *, .trip-incidental-card-grid > * {
+                        grid-column: auto !important;
+                        grid-row: auto !important;
+                    }
+                }
+            `}</style>
         </div>
     );
 };

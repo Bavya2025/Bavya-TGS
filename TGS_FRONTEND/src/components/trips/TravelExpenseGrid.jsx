@@ -209,25 +209,25 @@ const TravelExpenseGrid = ({
                 ] = await Promise.all([
                     api.get('/api/travel-mode-masters/'),
                     api.get('/api/booking-type-masters/'),
-                    api.get('/api/flight-class-masters/'),
-                    api.get('/api/train-class-masters/'),
-                    api.get('/api/bus-type-masters/'),
-                    api.get('/api/intercity-cab-vehicle-masters/'),
-                    api.get('/api/airline-masters/'),
-                    api.get('/api/bus-operator-masters/'),
+                    api.get('/api/travel-class-masters/?is_flight=true'),
+                    api.get('/api/travel-class-masters/?is_train=true'),
+                    api.get('/api/travel-class-masters/?is_bus=true'),
+                    api.get('/api/travel-vehicle-masters/?is_intercity_cab=true'),
+                    api.get('/api/travel-operator-masters/?is_flight=true'),
+                    api.get('/api/travel-operator-masters/?is_bus=true'),
                     api.get('/api/travel-provider-masters/'),
                     api.get('/api/local-travel-mode-masters/'),
-                    api.get('/api/local-car-subtype-masters/'),
-                    api.get('/api/local-bike-subtype-masters/'),
+                    api.get('/api/local-subtype-masters/?is_car=true'),
+                    api.get('/api/local-subtype-masters/?is_bike=true'),
                     api.get('/api/local-provider-masters/'),
                     api.get('/api/stay-type-masters/'),
                     api.get('/api/room-type-masters/'),
                     api.get('/api/meal-category-masters/'),
                     api.get('/api/meal-type-masters/'),
                     api.get('/api/incidental-type-masters/'),
-                    api.get('/api/train-provider-masters/'),
-                    api.get('/api/bus-provider-masters/'),
-                    api.get('/api/intercity-cab-provider-masters/')
+                    api.get('/api/travel-provider-masters/?is_train=true'),
+                    api.get('/api/travel-provider-masters/?is_bus=true'),
+                    api.get('/api/travel-provider-masters/?is_intercity_cab=true')
                 ]);
 
                 // Populate Travel
@@ -235,9 +235,9 @@ const TravelExpenseGrid = ({
                 if (bookedByRes.data.length > 0) setBookedByOptions(bookedByRes.data.filter(m => m.status).map(m => m.booking_type));
                 if (fClassesRes.data.length > 0) setFlightClasses(fClassesRes.data.filter(m => m.status).map(m => m.class_name));
                 if (tClassesRes.data.length > 0) setTrainClasses(tClassesRes.data.filter(m => m.status).map(m => m.class_name));
-                if (busTypesRes.data.length > 0) setBusSeatTypes(busTypesRes.data.filter(m => m.status).map(m => m.bus_type));
-                if (cabVehiclesRes.data.length > 0) setIntercityCabVehicleTypes(cabVehiclesRes.data.filter(m => m.status).map(m => m.vehicle_type));
-                if (airlinesRes.data.length > 0) setAirlines(airlinesRes.data.filter(m => m.status).map(m => m.airline_name));
+                if (busTypesRes.data.length > 0) setBusSeatTypes(busTypesRes.data.filter(m => m.status).map(m => m.class_name));
+                if (cabVehiclesRes.data.length > 0) setIntercityCabVehicleTypes(cabVehiclesRes.data.filter(m => m.status).map(m => m.vehicle_name));
+                if (airlinesRes.data.length > 0) setAirlines(airlinesRes.data.filter(m => m.status).map(m => m.operator_name));
                 if (busOpsRes.data.length > 0) setBusOperators(busOpsRes.data.filter(m => m.status).map(m => m.operator_name));
                 if (travProvRes.data.length > 0) setTravelProviders(travProvRes.data.filter(m => m.status).map(m => m.provider_name));
                 if (trainProvRes.data.length > 0) setTrainProviders(trainProvRes.data.filter(m => m.status).map(m => m.provider_name));
@@ -2124,9 +2124,11 @@ const TravelExpenseGrid = ({
                                                                         {localProviders.map(s => <option key={s} value={s}>{s}</option>)}
                                                                     </select>
                                                                 )}
-                                                                <select className="cat-input mt-1" value={row.details.bookedBy || 'Self Booked'} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'bookedBy', e.target.value); }} disabled={isFixedLocal}>
-                                                                    {bookedByOptions.map(b => <option key={b} value={b}>{b}</option>)}
-                                                                </select>
+                                                                {!['Own Bike', 'Company Bike', 'Own Car', 'Company Car'].includes(row.details.subType) && !['Metro Train', 'Bus'].includes(row.details.mode) && (
+                                                                    <select className="cat-input mt-1" value={row.details.bookedBy || 'Self Booked'} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'bookedBy', e.target.value); }} disabled={isFixedLocal}>
+                                                                        {bookedByOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                                                                    </select>
+                                                                )}
                                                             </div>
                                                         </td>
                                                         <td>

@@ -274,19 +274,38 @@ const TripStory = () => {
                 </div>
 
                 <div className="story-hero">
-                    <div className="hero-content">
-                        <div className="hero-branding">
-                            <img src="/bavya.png" alt="Bavya Logo" className="story-bavya-logo" />
-                            <div className="hero-divider-v"></div>
-                            <div className="trip-id-pill">{trip.trip_id}</div>
+                    <div className="hero-content" style={{ width: '100%', padding: '0 1rem' }}>
+                        <div className="hero-branding" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '15px', marginBottom: '1.5rem', width: '100%' }}>
+                            <img src="/bavya.png" alt="Bavya Logo" className="story-bavya-logo" style={{ height: '36px' }} />
+                            <div className="hero-divider-v" style={{ width: '1px', height: '24px', background: '#e2e8f0' }}></div>
+                            <div className="trip-id-pill" style={{ background: '#ecfdf5', color: '#10b981', padding: '6px 14px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 800 }}>
+                                {trip.trip_id}
+                            </div>
                         </div>
-                        <h1>Trip Story</h1>
-                        <p className="hero-subtitle">{trip.purpose}</p>
-                        <div className="hero-badges">
-                            <span className={`status-badge ${trip.status?.toLowerCase() || 'pending'}`}>
-                                {trip.status}
+                        
+                        <div className="hero-status-row" style={{ display: 'flex', justifyContent: 'center', width: '100%', marginBottom: '1.5rem', position: 'relative' }}>
+                            <span className={`status-badge ${trip.status?.toLowerCase() || 'pending'}`} style={{ 
+                                padding: '8px 16px', 
+                                borderRadius: '12px', 
+                                fontSize: '0.8rem', 
+                                fontWeight: 800, 
+                                textTransform: 'uppercase',
+                                background: trip.status?.toLowerCase() === 'approved' ? '#dcfce7' : '#fef9c3',
+                                color: trip.status?.toLowerCase() === 'approved' ? '#15803d' : '#854d0e',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                border: '1px solid currentColor',
+                                position: 'relative',
+                                top: 'auto',
+                                right: 'auto',
+                                margin: '0 auto'
+                            }}>
+                                {trip.status || 'REPORT DRAFT'}
                             </span>
                         </div>
+                        
+                        <h1 style={{ fontSize: '2.4rem', fontWeight: 900, marginBottom: '0.5rem', color: '#000', width: '100%', textAlign: 'center', lineHeight: '1.1' }}>Trip Story</h1>
+                        <p className="hero-subtitle" style={{ textAlign: 'center', width: '100%' }}>{trip.purpose}</p>
                     </div>
                     <div className="hero-stat-main">
                         <div className="hero-stat-item">
@@ -414,22 +433,30 @@ const TripStory = () => {
 
                 {/* SECTION 2: Financial Grid */}
                 <div className="story-section span-3">
-                    <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="section-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <IndianRupee size={20} />
                             <h3>Financial Summary</h3>
                         </div>
-                        {['approved', 'hr approved', 'on-going'].includes(trip.status?.toLowerCase()) && (
-                            <button
-                                className="top-up-btn"
-                                onClick={() => setShowWalletModal(true)}
-                            >
-                                <Plus size={14} /> Request Top-up / Advance
-                            </button>
-                        )}
+                        <div className="header-actions-group">
+                            {['approved', 'hr approved', 'on-going'].includes(trip.status?.toLowerCase()) && (
+                                <button
+                                    className="top-up-btn"
+                                    onClick={() => setShowWalletModal(true)}
+                                >
+                                    <Plus size={14} /> Request Top-up / Advance
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <div className="finance-grid">
-                        <div className="fin-box premium">
+                    <div className="finance-grid" style={{ 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        gap: '15px', 
+                        width: '100%', 
+                        marginTop: '2rem' 
+                    }}>
+                        <div className="fin-box premium" style={{ width: '100%', padding: '1.5rem' }}>
                             <label>Approved Advance</label>
                             <div className="val-row">
                                 <CreditCard size={18} />
@@ -437,7 +464,7 @@ const TripStory = () => {
                             </div>
                             <p className="fin-desc">Funds disbursed by HQ</p>
                         </div>
-                        <div className="fin-box warning">
+                        <div className="fin-box warning" style={{ width: '100%', padding: '1.5rem' }}>
                             <label>Recorded Expenses</label>
                             <div className="val-row">
                                 <TrendingUp size={18} />
@@ -445,7 +472,7 @@ const TripStory = () => {
                             </div>
                             <p className="fin-desc">On-field spending</p>
                         </div>
-                        <div className="fin-box" style={{ background: 'var(--bg-main)' }}>
+                        <div className="fin-box" style={{ width: '100%', padding: '1.5rem', background: 'var(--bg-main)' }}>
                             <label>Wallet Balance</label>
                             <div className="val-row">
                                 <Layers size={18} />
@@ -460,13 +487,13 @@ const TripStory = () => {
 
                 {/* SECTION 4: Dynamic Expense Registry / Audit View */}
                 <div className="story-section span-3">
-                    <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="section-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <StickyNote size={20} />
                             <h3>Detailed Expense Registry</h3>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div className="header-actions-group" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <button
                                 style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600, border: 'none', background: '#db2777', color: 'white', cursor: 'pointer' }}
                                 onClick={() => setShowLuggagePopup(true)}

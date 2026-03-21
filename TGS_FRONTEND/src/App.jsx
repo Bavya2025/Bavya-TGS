@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext.jsx';
 import Layout from './components/Layout';
@@ -281,6 +281,17 @@ const ReminderHandler = () => {
 
 import { ThemeProvider } from './context/ThemeContext';
 
+const SupportBotWrapper = () => {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  
+  if (loading || !user || location.pathname === '/login') {
+    return null;
+  }
+  
+  return <SupportBot />;
+};
+
 function App() {
   return (
     <ToastProvider>
@@ -290,7 +301,7 @@ function App() {
           <NotificationHandler />
           <ReminderHandler />
           <Router>
-            <SupportBot />
+            <SupportBotWrapper />
             <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
