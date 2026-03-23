@@ -116,7 +116,7 @@ const LoginHistory = () => {
             link.remove();
         } catch (error) {
             console.error("Export failed:", error);
-            showToast("Failed to export logs. Please try again.", "error");
+            alert("Failed to export logs. Please try again.");
         } finally {
             setIsExporting(false);
         }

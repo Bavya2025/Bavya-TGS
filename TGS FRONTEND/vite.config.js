@@ -6,14 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    port: 6786, // Standard Vite port
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:4567', // Matches the user's backend port
-        changeOrigin: true,
-        secure: false,
-      }
-    },
+    port: 6785,
     headers: {
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       'Pragma': 'no-cache',

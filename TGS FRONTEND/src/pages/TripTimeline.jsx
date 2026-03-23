@@ -109,7 +109,6 @@ const TripTimeline = () => {
 
                 return {
                     title: step.title,
-                    travelMode: '',
                     status: 'current',
                     date: 'Action Required',
                     description: actionDescription,
@@ -205,7 +204,13 @@ const TripTimeline = () => {
                                     <p>{trip.source} → {trip.destination}</p>
                                 </div>
                             </div>
-                            {/* Travel Mode removed as per user request */}
+                            <div className="s-item">
+                                <Briefcase size={18} />
+                                <div>
+                                    <label>Travel Mode</label>
+                                    <p>{trip.travel_mode}</p>
+                                </div>
+                            </div>
                             <div className="s-item">
                                 <TrendingUp size={18} />
                                 <div>
@@ -217,7 +222,7 @@ const TripTimeline = () => {
                                 <ShieldCheck size={18} />
                                 <div>
                                     <label>Reporting Manager</label>
-                                    <p>{trip.reporting_manager_name || 'Assigned'}</p>
+                                    <p>{trip.reporting_manager?.name || 'Assigned'}</p>
                                 </div>
                             </div>
                         </div>
@@ -248,10 +253,6 @@ const TripTimeline = () => {
                         </div>
                     )}
 
-                    <div className="timeline-help-card">
-                        <h4>Need Help?</h4>
-                        <p>If you're stuck at any stage, please contact your travel desk or reporting manager.</p>
-                    </div>
                 </aside>
 
                 <main className="timeline-content-main">
@@ -262,7 +263,6 @@ const TripTimeline = () => {
                                     <div className="node-icon-wrap">
                                         {step.icon}
                                     </div>
-                                    {index !== lifecycleSteps.length - 1 && <div className="node-connector"></div>}
                                 </div>
                                 <div className="node-body">
                                     <div className="node-header">

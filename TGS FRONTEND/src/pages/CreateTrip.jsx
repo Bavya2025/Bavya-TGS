@@ -26,8 +26,176 @@ import {
     Download
 } from 'lucide-react';
 import { encodeId } from '../utils/idEncoder';
-import SearchableSelect from '../components/SearchableSelect';
 
+const SearchableLocationSelect = ({ placeholder, options, value, onSelect, error, icon: Icon, disabled, showCode, errorMessage }) => {
+    const [search, setSearch] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    // Helper to get the correct display name across all cluster variants (Urban/Rural/Corp etc)
+    const getDisplayName = (l) => {
+        if (!l) return '';
+        // In the flat masters list, 'name' typically holds the full administrative name
+        // falling back to specific fields if 'name' is empty
+        return l.name ||
+            l.cluster_name ||
+            l.panchayat_name ||
+            l.municipality_name ||
+            l.corporation_name ||
+            l.ward_name ||
+            l.village_name ||
+            l.town_name ||
+            '';
+    };
+
+    const filtered = options.filter(l => {
+        const dName = getDisplayName(l).toLowerCase();
+        const sTerm = (search || '').toLowerCase();
+        const codeMatch = (l.code || '').toLowerCase().startsWith(sTerm);
+        const typeMatch = (l.cluster_type || '').toLowerCase().startsWith(sTerm) || (l.type || '').toLowerCase().startsWith(sTerm);
+        return dName.startsWith(sTerm) || codeMatch || typeMatch;
+    });
+
+    // De-duplicate and SORT alphabetically
+    const displayItems = Array.from(new Map(filtered.map(item => {
+        const baseName = getDisplayName(item);
+        const finalLabel = showCode ? `${baseName}${item.code ? ` - ${item.code}` : ''}` : baseName;
+        return [finalLabel, { ...item, _finalLabel: finalLabel }];
+    })).values()).sort((a, b) => a._finalLabel.localeCompare(b._finalLabel));
+
+    return (
+        <div className={`relative w-full ${disabled ? 'opacity-40 cursor-not-allowed grayscale-[0.5]' : ''}`} ref={dropdownRef}>
+            <div
+                className={`input-with-icon select-wrapper group ${error ? 'error-border' : ''} ${isOpen ? 'active shadow-lg' : 'hover:shadow-md'} transition-all duration-300 cursor-pointer overflow-hidden`}
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+                style={{ height: '48px', position: 'relative' }}
+            >
+                {Icon && <Icon size={18} className={`field-icon transition-colors duration-300 ${isOpen ? 'text-primary' : 'text-slate-400 group-hover:text-primary'}`} />}
+                <div className="flex-1 overflow-hidden" style={{ paddingLeft: Icon ? '40px' : '15px', paddingRight: '40px' }}>
+                    <div
+                        className={`text-sm tracking-tight transition-all duration-300 ${value ? 'font-bold text-slate-800' : 'font-medium text-slate-400 opacity-60'}`}
+                        style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}
+                    >
+                        {value || placeholder}
+                    </div>
+                </div>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 group-hover:text-primary transition-all duration-300" style={{ transform: isOpen ? 'translateY(-50%) rotate(180deg)' : 'translateY(-50%) rotate(0deg)' }}>
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 1l4 4 4-4" /></svg>
+                </div>
+                {isOpen && <div className="absolute bottom-0 left-0 h-0.5 bg-primary animate-pulse" style={{ width: '100%', opacity: 0.3 }} />}
+            </div>
+
+            {isOpen && (
+                <div
+                    className="absolute top-[108%] left-0 right-0 z-[2000] glass rounded-2xl shadow-premium border border-white/40 overflow-hidden animate-fade-in"
+                    style={{ transformOrigin: 'top center', minWidth: '260px', background: 'white' }}
+                >
+                    <div className="p-3 border-b border-slate-100 bg-white sticky top-0 z-[30]">
+                        <div style={{ position: 'relative', width: '100%' }}>
+                            <Search
+                                size={16}
+                                style={{
+                                    position: 'absolute',
+                                    left: '12px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    pointerEvents: 'none',
+                                    zIndex: 10,
+                                    color: search ? 'var(--primary)' : '#94a3b8'
+                                }}
+                                className={search ? 'animate-pulse' : ''}
+                            />
+                            <input
+                                autoFocus
+                                className="w-full"
+                                style={{
+                                    height: '40px',
+                                    paddingLeft: '40px',
+                                    paddingRight: '12px',
+                                    fontSize: '13px',
+                                    borderRadius: '10px',
+                                    border: '1px solid #e2e8f0',
+                                    backgroundColor: '#f8fafc',
+                                    fontWeight: '600',
+                                    outline: 'none',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                                placeholder="Type to filter..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                            />
+                            {search && (
+                                <button
+                                    style={{
+                                        position: 'absolute',
+                                        right: '8px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        padding: '4px',
+                                        color: '#cbd5e1'
+                                    }}
+                                    onClick={(e) => { e.stopPropagation(); setSearch(''); }}
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="dropdown-scroll-area custom-scrollbar">
+                        {errorMessage ? (
+                            <div className="p-8 text-center flex flex-col items-center gap-3">
+                                <AlertTriangle size={24} className="text-burgundy animate-bounce" />
+                                <p className="text-sm text-burgundy font-bold">{errorMessage}</p>
+                            </div>
+                        ) : displayItems.length > 0 ? (
+                            <div className="py-1">
+                                {displayItems.map(l => (
+                                    <div key={l.id} className="dropdown-item-premium" onClick={() => {
+                                        onSelect(l._finalLabel);
+                                        setIsOpen(false);
+                                        setSearch('');
+                                    }}>
+                                        <div className="flex items-center justify-between w-full">
+                                            <span className="item-name">{l._finalLabel}</span>
+                                            {l.cluster_type && (
+                                                <span className="text-[9px] tracking-widest uppercase px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-400 font-black border border-slate-200/50">
+                                                    {l.cluster_type}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="p-10 text-center flex flex-col items-center gap-3">
+                                <div className="w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center text-slate-100">
+                                    <Search size={28} />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-slate-500 font-bold">No matches found</p>
+                                    <p className="text-xs text-slate-400 mt-1">Try searching for a different name</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const CreateTrip = () => {
     const navigate = useNavigate();
@@ -87,53 +255,67 @@ const CreateTrip = () => {
     const longDistanceCities = React.useMemo(() => {
         if (!fullHierarchy || !fullHierarchy.length) return [];
         const result = [];
-        const TARGET_TYPES = ['METRO', 'CITY', 'TOWN', 'VILLAGE', 'CLUSTER'];
+        const CITY_TYPES = ['city', 'metropolitan city', 'metro city', 'metro_city', 'metropolyten city'];
 
-        const getSpecificType = (t) => {
-            const typeValue = (t || '').toLowerCase().trim();
-            if (typeValue.includes('metro')) return 'METRO';
-            if (typeValue.includes('city')) return 'CITY';
-            if (typeValue.includes('town')) return 'TOWN';
-            if (typeValue.includes('village')) return 'VILLAGE';
-            if (typeValue.includes('cluster')) return 'CLUSTER';
-            return null;
-        };
+        const isCityType = (t) => CITY_TYPES.includes((t || '').toLowerCase().trim());
 
         const walk = (node) => {
             if (!node || typeof node !== 'object') return;
 
-            const specificType = getSpecificType(node.type || node.cluster_type);
-            if (node.name && specificType) {
-                result.push({
-                    id: node.id,
-                    name: node.name,
-                    code: node.code || '',
-                    cluster_type: specificType
-                });
-            }
+            // Pattern 1: node itself is a cluster/city — check its `type` field
+            // (applied when walking children arrays)
 
-            const childKeys = [
-                'continents', 'countries', 'states', 'districts', 'mandals', 
-                'clusters', 'cluster', 'children', 'cities', 'metro_polyten_cities', 
-                'towns', 'villages', 'locations', 'visiting_locations'
-            ];
-            
-            childKeys.forEach(key => {
+            // Pattern 2: direct `cities` or `metro_polyten_cities` child lists
+            ['cities', 'metro_polyten_cities'].forEach(key => {
                 const arr = node[key];
-                if (Array.isArray(arr)) arr.forEach(walk);
+                if (Array.isArray(arr)) {
+                    arr.forEach(c => {
+                        if (c && c.name) {
+                            result.push({
+                                id: c.id,
+                                name: c.name,
+                                code: c.code || '',
+                                cluster_type: key === 'metro_polyten_cities' ? 'Metro City' : 'City'
+                            });
+                        }
+                        walk(c);
+                    });
+                }
             });
+
+            // Pattern 3: `clusters` / `cluster` / `children` arrays — filter by type field
+            ['clusters', 'cluster', 'children'].forEach(key => {
+                const arr = node[key];
+                if (Array.isArray(arr)) {
+                    arr.forEach(c => {
+                        if (c && c.name && isCityType(c.type || c.cluster_type)) {
+                            result.push({
+                                id: c.id,
+                                name: c.name,
+                                code: c.code || '',
+                                cluster_type: (c.type || c.cluster_type || '').toLowerCase().includes('metro')
+                                    ? 'Metro City' : 'City'
+                            });
+                        }
+                        walk(c);
+                    });
+                }
+            });
+
+            // Recurse into standard hierarchy levels
+            ['continents', 'countries', 'states', 'districts', 'mandals',
+                'towns', 'villages', 'locations', 'visiting_locations', 'landmarks'].forEach(key => {
+                    const arr = node[key];
+                    if (Array.isArray(arr)) arr.forEach(walk);
+                });
         };
 
         fullHierarchy.forEach(walk);
 
+        // De-duplicate by name, sort
         const seen = new Set();
         return result
-            .filter(loc => {
-                const uniqKey = `${loc.id}-${loc.name}`;
-                if (seen.has(uniqKey)) return false;
-                seen.add(uniqKey);
-                return true;
-            })
+            .filter(loc => { if (seen.has(loc.name)) return false; seen.add(loc.name); return true; })
             .sort((a, b) => a.name.localeCompare(b.name));
     }, [fullHierarchy]);
 
@@ -196,20 +378,13 @@ const CreateTrip = () => {
         return states;
     }, [fullHierarchy]);
 
-    // Generic robust string/object matcher
-    const safeMatch = (name, target) => {
-        const n = typeof name === 'object' ? (name?.name || name?.label || '') : (name || '');
-        const t = typeof target === 'object' ? (target?.name || target?.label || '') : (target || '');
-        return String(n).trim().toLowerCase() === String(t).trim().toLowerCase();
-    };
-
     // Helper: getChildren from hierarchy
     const getChildren = (type, filters) => {
         if (!fullHierarchy || !fullHierarchy.length) return [];
 
         if (type === 'state') return allStates;
 
-
+        const safeMatch = (name, target) => name?.trim().toLowerCase() === target?.trim().toLowerCase();
 
         if (type === 'district' && filters.state) {
             const stateObj = allStates.find(s => safeMatch(s.name, filters.state));
@@ -229,28 +404,7 @@ const CreateTrip = () => {
             const districtObj = districts.find(d => safeMatch(d.name, filters.district));
             const mandals = districtObj?.mandals || districtObj?.mandal || districtObj?.children || [];
             const mandalObj = mandals.find(m => safeMatch(m.name, filters.mandal));
-            const clusters = mandalObj?.clusters || mandalObj?.cluster || mandalObj?.children || [];
-            
-            const getSpecificType = (t) => {
-                const typeValue = (t || '').toLowerCase().trim();
-                if (typeValue.includes('metro')) return 'METRO';
-                if (typeValue.includes('city')) return 'CITY';
-                if (typeValue.includes('town')) return 'TOWN';
-                if (typeValue.includes('village')) return 'VILLAGE';
-                return null;
-            };
-
-            return clusters
-                .map(c => {
-                    const type = getSpecificType(c.type || c.cluster_type);
-                    if (!type) return null;
-                    return {
-                        ...c,
-                        label: `${c.name}${c.code ? `(${c.code})` : ''} ${type}`,
-                        value: c.name
-                    };
-                })
-                .filter(Boolean);
+            return mandalObj?.clusters || mandalObj?.cluster || mandalObj?.children || [];
         }
 
         return [];
@@ -260,6 +414,7 @@ const CreateTrip = () => {
     const getFinalPoints = (filters, mode) => {
         if (!fullHierarchy || !fullHierarchy.length) return [];
 
+        const safeMatch = (name, target) => name?.trim().toLowerCase() === target?.trim().toLowerCase();
 
         const stateObj = allStates.find(s => safeMatch(s.name, filters.state));
         const districts = stateObj?.districts || stateObj?.district || stateObj?.children || [];
@@ -721,7 +876,7 @@ const CreateTrip = () => {
                 <div className="form-grid">
 
                     {/* JOURNEY LOGISTICS */}
-                    <div className="form-section premium-card overflow-visible">
+                    <div className="form-section premium-card">
                         <div className="section-title">
                             <Navigation size={20} className="title-icon" />
                             <h3>Journey Logistics</h3>
@@ -740,84 +895,58 @@ const CreateTrip = () => {
                             {formData.logisticsType === 'local' ? (
                                 <div className="drilldown-group bg-slate-50 p-4 rounded-xl border border-slate-200">
                                     <div className="grid grid-cols-1 gap-2">
-                                        <SearchableSelect
+                                        <SearchableLocationSelect
                                             placeholder="Select State"
                                             options={getChildren('state', sourceFilter)}
                                             value={sourceFilter.state}
-                                            onChange={(val) => {
-                                                const label = typeof val === 'object' ? (val.name || val.label) : val;
-                                                setSourceFilter({ ...sourceFilter, state: label, district: '', mandal: '', cluster: '' });
-                                            }}
-                                            error={geoError}
+                                            onSelect={(val) => setSourceFilter({ ...sourceFilter, state: val, district: '', mandal: '', cluster: '' })}
+                                            errorMessage={geoError}
                                         />
-                                        <SearchableSelect
+                                        <SearchableLocationSelect
                                             placeholder="Select District"
                                             options={getChildren('district', sourceFilter)}
                                             value={sourceFilter.district}
-                                            onChange={(val) => {
-                                                const label = typeof val === 'object' ? (val.name || val.label) : val;
-                                                setSourceFilter({ ...sourceFilter, district: label, mandal: '', cluster: '' });
-                                            }}
+                                            onSelect={(val) => setSourceFilter({ ...sourceFilter, district: val, mandal: '', cluster: '' })}
                                             disabled={!sourceFilter.state}
-                                            error={geoError}
+                                            errorMessage={geoError}
                                         />
-                                        <SearchableSelect
+                                        <SearchableLocationSelect
                                             placeholder="Select Mandal"
                                             options={getChildren('mandal', sourceFilter)}
                                             value={sourceFilter.mandal}
-                                            onChange={(val) => {
-                                                const label = typeof val === 'object' ? (val.name || val.label) : val;
-                                                setSourceFilter({ ...sourceFilter, mandal: label, cluster: '' });
-                                            }}
+                                            onSelect={(val) => setSourceFilter({ ...sourceFilter, mandal: val, cluster: '' })}
                                             disabled={!sourceFilter.district}
-                                            error={geoError}
+                                            errorMessage={geoError}
                                         />
-                                        <SearchableSelect
-                                            placeholder="Select Cluster"
+                                        <SearchableLocationSelect
+                                            placeholder="Select Cluster (Optional)"
                                             options={getChildren('cluster', sourceFilter)}
                                             value={sourceFilter.cluster}
-                                            onChange={(val) => {
-                                                const label = typeof val === 'object' ? (val.name || val.label) : val;
-                                                setSourceFilter({ ...sourceFilter, cluster: label });
-                                            }}
+                                            onSelect={(val) => setSourceFilter({ ...sourceFilter, cluster: val })}
                                             disabled={!sourceFilter.mandal}
-                                            error={geoError}
+                                            errorMessage={geoError}
                                         />
-                                        <SearchableSelect
+                                        <SearchableLocationSelect
                                             placeholder="Pick Starting Location"
-                                            options={sourcePool.filter(opt => opt.name !== formData.to).map(opt => ({
-                                                ...opt,
-                                                label: opt.name,
-                                                value: opt.name,
-                                                code: opt.code,
-                                                cluster_type: opt.type || opt.cluster_type || 'SITE'
-                                            }))}
+                                            options={sourcePool.filter(opt => opt.name !== formData.to)}
                                             value={formData.from}
-                                            onChange={(val) => {
-                                                const finalVal = typeof val === 'object' ? (val.value || val.label) : val;
-                                                handleChange({ target: { name: 'from', value: finalVal } });
-                                            }}
+                                            onSelect={(val) => handleChange({ target: { name: 'from', value: val } })}
                                             disabled={!sourceFilter.mandal}
-                                            error={errors.from || geoError}
+                                            error={errors.from}
+                                            errorMessage={geoError}
                                         />
                                     </div>
                                 </div>
                             ) : (
-                                <SearchableSelect
+                                <SearchableLocationSelect
                                     placeholder="Select Starting Location..."
-                                    options={locationsPool.filter(opt => opt.name !== formData.to).map(opt => ({
-                                        ...opt,
-                                        label: opt.name,
-                                        value: opt.name,
-                                        code: opt.code,
-                                        cluster_type: opt.type || opt.cluster_type || 'SITE'
-                                    }))}
+                                    options={locationsPool.filter(opt => opt.name !== formData.to)}
                                     value={formData.from}
-                                    onChange={(val) => {
-                                        const finalVal = typeof val === 'object' ? (val.value || val.label) : val;
-                                        handleChange({ target: { name: 'from', value: finalVal } });
-                                    }}
-                                    error={errors.from || geoError}
+                                    onSelect={(val) => handleChange({ target: { name: 'from', value: val } })}
+                                    icon={MapPin}
+                                    error={errors.from}
+                                    showCode={formData.logisticsType === 'long'}
+                                    errorMessage={geoError}
                                 />
                             )}
                             {errors.from && <span className="error-text">{errors.from}</span>}
@@ -828,84 +957,58 @@ const CreateTrip = () => {
                             {formData.logisticsType === 'local' ? (
                                 <div className="drilldown-group bg-slate-50 p-4 rounded-xl border border-slate-200">
                                     <div className="grid grid-cols-1 gap-2">
-                                        <SearchableSelect
+                                        <SearchableLocationSelect
                                             placeholder="Select State"
                                             options={getChildren('state', destFilter)}
                                             value={destFilter.state}
-                                            onChange={(val) => {
-                                                const label = typeof val === 'object' ? (val.name || val.label) : val;
-                                                setDestFilter({ ...destFilter, state: label, district: '', mandal: '', cluster: '' });
-                                            }}
-                                            error={geoError}
+                                            onSelect={(val) => setDestFilter({ ...destFilter, state: val, district: '', mandal: '', cluster: '' })}
+                                            errorMessage={geoError}
                                         />
-                                        <SearchableSelect
+                                        <SearchableLocationSelect
                                             placeholder="Select District"
                                             options={getChildren('district', destFilter)}
                                             value={destFilter.district}
-                                            onChange={(val) => {
-                                                const label = typeof val === 'object' ? (val.name || val.label) : val;
-                                                setDestFilter({ ...destFilter, district: label, mandal: '', cluster: '' });
-                                            }}
+                                            onSelect={(val) => setDestFilter({ ...destFilter, district: val, mandal: '', cluster: '' })}
                                             disabled={!destFilter.state}
-                                            error={geoError}
+                                            errorMessage={geoError}
                                         />
-                                        <SearchableSelect
+                                        <SearchableLocationSelect
                                             placeholder="Select Mandal"
                                             options={getChildren('mandal', destFilter)}
                                             value={destFilter.mandal}
-                                            onChange={(val) => {
-                                                const label = typeof val === 'object' ? (val.name || val.label) : val;
-                                                setDestFilter({ ...destFilter, mandal: label, cluster: '' });
-                                            }}
+                                            onSelect={(val) => setDestFilter({ ...destFilter, mandal: val, cluster: '' })}
                                             disabled={!destFilter.district}
-                                            error={geoError}
+                                            errorMessage={geoError}
                                         />
-                                        <SearchableSelect
+                                        <SearchableLocationSelect
                                             placeholder="Select Cluster (Optional)"
                                             options={getChildren('cluster', destFilter)}
                                             value={destFilter.cluster}
-                                            onChange={(val) => {
-                                                const label = typeof val === 'object' ? (val.name || val.label) : val;
-                                                setDestFilter({ ...destFilter, cluster: label });
-                                            }}
+                                            onSelect={(val) => setDestFilter({ ...destFilter, cluster: val })}
                                             disabled={!destFilter.mandal}
-                                            error={geoError}
+                                            errorMessage={geoError}
                                         />
-                                        <SearchableSelect
+                                        <SearchableLocationSelect
                                             placeholder="Pick Final Destination"
-                                            options={destPool.filter(opt => opt.name !== formData.from).map(opt => ({
-                                                ...opt,
-                                                label: opt.name,
-                                                value: opt.name,
-                                                code: opt.code,
-                                                cluster_type: opt.type || opt.cluster_type || 'SITE'
-                                            }))}
+                                            options={destPool.filter(opt => opt.name !== formData.from)}
                                             value={formData.to}
-                                            onChange={(val) => {
-                                                const finalVal = typeof val === 'object' ? (val.value || val.label) : val;
-                                                handleChange({ target: { name: 'to', value: finalVal } });
-                                            }}
+                                            onSelect={(val) => handleChange({ target: { name: 'to', value: val } })}
                                             disabled={!destFilter.mandal}
-                                            error={errors.to || geoError}
+                                            error={errors.to}
+                                            errorMessage={geoError}
                                         />
                                     </div>
                                 </div>
                             ) : (
-                                <SearchableSelect
+                                <SearchableLocationSelect
                                     placeholder="Select Final Destination..."
-                                    options={locationsPool.filter(opt => opt.name !== formData.from).map(opt => ({
-                                        ...opt,
-                                        label: opt.name,
-                                        value: opt.name,
-                                        code: opt.code,
-                                        cluster_type: opt.type || opt.cluster_type || 'SITE'
-                                    }))}
+                                    options={locationsPool.filter(opt => opt.name !== formData.from)}
                                     value={formData.to}
-                                    onChange={(val) => {
-                                        const finalVal = typeof val === 'object' ? (val.value || val.label) : val;
-                                        handleChange({ target: { name: 'to', value: finalVal } });
-                                    }}
-                                    error={errors.to || geoError}
+                                    onSelect={(val) => handleChange({ target: { name: 'to', value: val } })}
+                                    icon={MapPin}
+                                    error={errors.to}
+                                    showCode={formData.logisticsType === 'long'}
+                                    errorMessage={geoError}
                                 />
                             )}
                             {errors.to && <span className="error-text">{errors.to}</span>}
@@ -916,19 +1019,16 @@ const CreateTrip = () => {
                             <div className="flex gap-4 items-center">
                                 <div className="flex-1">
                                     {availablePaths.length > 0 ? (
-                                        <SearchableSelect
-                                            placeholder="Select Route Path..."
-                                            options={availablePaths.map(p => ({
-                                                ...p,
-                                                label: `${p.path_name} (${(p.via_location_names || []).join(', ') || 'Direct'})`,
-                                                value: p.id
-                                            }))}
+                                        <select
+                                            name="routePathId"
                                             value={formData.routePathId}
-                                            onChange={(selected) => {
+                                            onChange={(e) => {
+                                                const pathId = e.target.value;
+                                                const selected = availablePaths.find(p => String(p.id) === String(pathId));
                                                 if (selected) {
                                                     setFormData(prev => ({
                                                         ...prev,
-                                                        routePathId: selected.id,
+                                                        routePathId: pathId,
                                                         enRoute: (selected.via_location_names || []).join(', '),
                                                         distance: selected.distance_km || ''
                                                     }));
@@ -937,7 +1037,14 @@ const CreateTrip = () => {
                                                 }
                                             }}
                                             className="professional-input"
-                                        />
+                                        >
+                                            <option value="">Select Route Path...</option>
+                                            {availablePaths.map(p => (
+                                                <option key={p.id} value={p.id}>
+                                                    {p.path_name} ({(p.via_location_names || []).join(', ') || 'Direct'})
+                                                </option>
+                                            ))}
+                                        </select>
                                     ) : (
                                         <input
                                             name="enRoute"
@@ -1019,7 +1126,7 @@ const CreateTrip = () => {
                     </div>
 
                     {/* COMPOSITION & PURPOSE */}
-                    <div className="form-section premium-card overflow-visible">
+                    <div className="form-section premium-card">
                         <div className="section-title">
                             <Users size={20} className="title-icon" />
                             <h3>Composition & Purpose</h3>

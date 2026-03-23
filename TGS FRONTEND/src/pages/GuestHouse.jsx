@@ -37,8 +37,7 @@ const GuestHouse = () => {
     const { user } = useAuth();
 
     const userRole = (user?.role || 'employee').toLowerCase();
-    const isAdmin = userRole === 'admin' || user?.is_superuser;
-    const isManager = isAdmin || userRole === 'guesthousemanager';
+    const isAdmin = userRole === 'admin' || user?.is_superuser || userRole === 'guesthousemanager';
 
     const [guestHouses, setGuestHouses] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -164,8 +163,10 @@ const GuestHouse = () => {
     };
 
     useEffect(() => {
-        fetchGuestHouses();
-    }, []);
+        if (isAdmin) {
+            fetchGuestHouses();
+        }
+    }, [isAdmin]);
 
     const [selectedGuestHouse, setSelectedGuestHouse] = useState(null);
     const [activeBookingRequest, setActiveBookingRequest] = useState(null);
@@ -220,9 +221,8 @@ const GuestHouse = () => {
     const handleStartBookingFromRequest = (req, gh) => {
         setActiveBookingRequest(req);
         setSelectedGuestHouse(gh);
-        setTopLevelView('guesthouses');   // ensure we're in GH detail mode, not request list
-        setActiveTab('calendar');          // go straight to the calendar where cells open the booking form
-        showToast(`Opened calendar for ${gh.name} — click a room cell to book for ${req.trip_id}.`, 'info');
+        setActiveTab('rooms');
+        showToast(`Selected ${gh.name} for ${req.trip_id}. Select a room to book.`, 'info');
     };
 
     const handleRejectRequest = async (trip) => {
@@ -939,56 +939,33 @@ const GuestHouse = () => {
             .catch(err => showToast(getApiErrorMessage(err), 'error'));
     };
 
-    // Unified role-based UI access
-    const canManageGH = isAdmin || userRole === 'guesthousemanager';
+    if (!isAdmin) {
+        return (
+            <div className="gh-page">
+                <div className="premium-card gh-access-denied-card">
+                    <Lock size={48} color="var(--primary)" className="mb-1" />
+                    <h2>Access Denied</h2>
+                    <p>Only Administrators or Guest House Managers can access this system.</p>
+                </div>
+            </div>
+        );
+    }
 
     const renderTabContent = () => {
         if (activeTab === 'requests') {
-            // GH-detail view: show only requests matching this GH's location.
-            // Global view (topLevelView==='requests'): show all requests.
-            const isInsideGH = !!selectedGuestHouse && topLevelView !== 'requests';
-
-            const destMatchesGH = (req) => {
-                if (!selectedGuestHouse) return true;
-                const dest = (req.destination || '').toLowerCase();
-                const loc  = (selectedGuestHouse.location || '').toLowerCase();
-                const addr = (selectedGuestHouse.address  || '').toLowerCase();
-                const name = (selectedGuestHouse.name     || '').toLowerCase();
-                return (
-                    (loc  && (loc.includes(dest)  || dest.includes(loc)))  ||
-                    (addr && (addr.includes(dest)  || dest.includes(addr))) ||
-                    (name && (name.includes(dest)  || dest.includes(name)))
-                );
-            };
-
-            const displayedRequests = isInsideGH
-                ? roomRequests.filter(destMatchesGH)
-                : roomRequests;
-
             return (
                 <div className="gh-list-section">
                     <div className="gh-sub-header">
-                        <h3>
-                            Employee Room Requests
-                            {isInsideGH && (
-                                <span style={{ fontWeight: 400, fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '0.6rem' }}>
-                                    — destination matches <strong>{selectedGuestHouse.location || selectedGuestHouse.address}</strong>
-                                </span>
-                            )}
-                        </h3>
+                        <h3>Employee Room Requests</h3>
                         <button className="btn-text-only" onClick={fetchRoomRequests}>Refresh</button>
                     </div>
                     <div className="gh-item-list">
-                        {displayedRequests.length > 0 ? displayedRequests.map(req => {
-                            // In GH-detail view, the matching GH is always the current one.
-                            // In global view, find any GH matching the destination.
-                            const matchingGH = isInsideGH
-                                ? selectedGuestHouse
-                                : (guestHouses || []).find(gh =>
-                                    gh.location?.toLowerCase().includes(req.destination?.toLowerCase()) ||
-                                    gh.address?.toLowerCase().includes(req.destination?.toLowerCase()) ||
-                                    req.destination?.toLowerCase().includes(gh.location?.toLowerCase())
-                                  );
+                        {roomRequests.length > 0 ? roomRequests.map(req => {
+                            const matchingGH = (guestHouses || []).find(gh =>
+                                gh.location?.toLowerCase().includes(req.destination?.toLowerCase()) ||
+                                gh.address?.toLowerCase().includes(req.destination?.toLowerCase()) ||
+                                req.destination?.toLowerCase().includes(gh.location?.toLowerCase())
+                            );
 
                             return (
                                 <div key={req.trip_id} className="gh-list-item request-card-premium">
@@ -1014,71 +991,24 @@ const GuestHouse = () => {
                                     <div className="actions-cell-vertical">
                                         {matchingGH ? (
                                             <>
-                                                <button
-                                                    className="btn-primary-mini"
-                                                    onClick={() => handleStartBookingFromRequest(req, matchingGH)}
-                                                    title="Open the calendar for this guest house and book a room"
-                                                >
-                                                    📅 Book Room @ {matchingGH.name}
+                                                <button className="btn-primary-mini" onClick={() => handleStartBookingFromRequest(req, matchingGH)}>
+                                                    Book Room @ {matchingGH.name}
                                                 </button>
                                                 <button className="btn-secondary-mini" onClick={() => handleAssignRoom(req)}>
                                                     Quick Notify
                                                 </button>
                                             </>
-                                        ) : isInsideGH ? (
-                                            // Inside a GH but no location match — shouldn't normally show, but handle gracefully
+                                        ) : (
                                             <button className="btn-danger-mini" onClick={() => handleRejectRequest(req)}>
                                                 Inform: No GH at Location
                                             </button>
-                                        ) : (
-                                            // Global view, no auto-matched GH — let admin pick any GH manually
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', minWidth: '180px' }}>
-                                                <div className="select-wrapper" style={{ fontSize: '0.8rem' }}>
-                                                    <select
-                                                        className="input-field"
-                                                        style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem', height: 'auto' }}
-                                                        defaultValue=""
-                                                        id={`gh-select-${req.trip_id}`}
-                                                    >
-                                                        <option value="" disabled>Select a Guest House…</option>
-                                                        {guestHouses.map(gh => (
-                                                            <option key={gh.id} value={gh.id}>{gh.name} — {gh.location || gh.address}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                <button
-                                                    className="btn-primary-mini"
-                                                    onClick={() => {
-                                                        const select = document.getElementById(`gh-select-${req.trip_id}`);
-                                                        const ghId = select?.value;
-                                                        if (!ghId) { showToast('Please select a guest house first', 'warning'); return; }
-                                                        const chosen = guestHouses.find(g => String(g.id) === String(ghId));
-                                                        if (chosen) handleStartBookingFromRequest(req, chosen);
-                                                    }}
-                                                >
-                                                    📅 Book at Selected GH
-                                                </button>
-                                                <button className="btn-danger-mini" onClick={() => handleRejectRequest(req)}>
-                                                    Inform: No GH at Location
-                                                </button>
-                                            </div>
                                         )}
                                     </div>
                                 </div>
                             );
                         }) : (
-                            <div className="empty-state-vsmall mt-4" style={{ textAlign: 'center', padding: '2rem' }}>
-                                {isInsideGH ? (
-                                    <>
-                                        <MapPin size={28} style={{ opacity: 0.35, marginBottom: '0.5rem' }} />
-                                        <p style={{ fontWeight: 600, color: 'var(--text-main)' }}>No Matching Requests</p>
-                                        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                                            There are no pending room requests whose destination matches this guest house location.
-                                        </p>
-                                    </>
-                                ) : (
-                                    <p style={{ color: 'var(--text-muted)' }}>No active room requests at the moment.</p>
-                                )}
+                            <div className="empty-state-vsmall mt-4">
+                                <p>No active room requests at the moment.</p>
                             </div>
                         )}
                     </div>
@@ -1121,37 +1051,18 @@ const GuestHouse = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {selectedGuestHouse.rooms.length === 0 ? (
-                                        <tr>
-                                            <td
-                                                colSpan={days.length + 1}
-                                                style={{
-                                                    textAlign: 'center',
-                                                    padding: '3rem 1rem',
-                                                    color: 'var(--text-muted)',
-                                                }}
-                                            >
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}><path d="M3 7v13h18V7"/><rect x="8" y="3" width="3" height="4" rx="1"/><rect x="13" y="3" width="3" height="4" rx="1"/><path d="M3 11h18"/></svg>
-                                                    <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>No Rooms Configured</span>
-                                                    <span style={{ fontSize: '0.82rem' }}>Add rooms to this guest house to see availability on the calendar.</span>
-                                                </div>
+                                    {selectedGuestHouse.rooms.map(room => (
+                                        <tr key={room.id}>
+                                            <td className="room-cell">
+                                                <div className="room-name">{room.name}</div>
+                                                <span className="room-type">{room.type}</span>
                                             </td>
+                                            {days.map(d => {
+                                                const { status, color } = getStatusForDate(room.id, d);
+                                                return <td key={d} className={`status-cell ${color}`} onClick={() => handleCalendarCellClick(room, d)}></td>;
+                                            })}
                                         </tr>
-                                    ) : (
-                                        selectedGuestHouse.rooms.map(room => (
-                                            <tr key={room.id}>
-                                                <td className="room-cell">
-                                                    <div className="room-name">{room.name}</div>
-                                                    <span className="room-type">{room.type}</span>
-                                                </td>
-                                                {days.map(d => {
-                                                    const { status, color } = getStatusForDate(room.id, d);
-                                                    return <td key={d} className={`status-cell ${color}`} onClick={() => handleCalendarCellClick(room, d)}></td>;
-                                                })}
-                                            </tr>
-                                        ))
-                                    )}
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
@@ -1162,25 +1073,13 @@ const GuestHouse = () => {
                                     <tr><th>ROOM</th><th>TYPE</th><th>GUEST</th><th>CHECK-IN</th><th>CHECK-OUT</th><th>STATUS</th></tr>
                                 </thead>
                                 <tbody>
-                                    {monthlyEvents.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-muted)' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35 }}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8" y2="14" strokeWidth="2"/><line x1="12" y1="14" x2="12" y2="14" strokeWidth="2"/><line x1="16" y1="14" x2="16" y2="14" strokeWidth="2"/></svg>
-                                                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>No Bookings This Month</span>
-                                                    <span style={{ fontSize: '0.8rem' }}>Click any available date on the calendar above to create a booking.</span>
-                                                </div>
-                                            </td>
+                                    {monthlyEvents.map(e => (
+                                        <tr key={e.id}>
+                                            <td>{e.roomNumber}</td>
+                                            <td><span className={`status-pill ${e.status.toLowerCase()}`}>{e.status}</span></td>
+                                            <td>{e.details}</td><td>{e.checkIn}</td><td>{e.checkOut}</td><td>Confirmed</td>
                                         </tr>
-                                    ) : (
-                                        monthlyEvents.map(e => (
-                                            <tr key={e.id}>
-                                                <td>{e.roomNumber}</td>
-                                                <td><span className={`status-pill ${e.status.toLowerCase()}`}>{e.status}</span></td>
-                                                <td>{e.details}</td><td>{e.checkIn}</td><td>{e.checkOut}</td><td><span className="status-confirmed"><span className="dot-small"></span>Confirmed</span></td>
-                                            </tr>
-                                        ))
-                                    )}
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
@@ -1194,7 +1093,7 @@ const GuestHouse = () => {
             <div className="gh-list-section">
                 <div className="gh-sub-header">
                     <h3>{toTitleCase(activeTab)} List</h3>
-                    {canManageGH && <button className="btn-add-item" onClick={handleAddItem}><Plus size={16} /> Add Item</button>}
+                    <button className="btn-add-item" onClick={handleAddItem}><Plus size={16} /> Add Item</button>
                 </div>
                 <div className="gh-item-list">
                     {list.map(item => (
@@ -1218,12 +1117,10 @@ const GuestHouse = () => {
                                     </div>
                                 )}
                             </div>
-                            {canManageGH && (
-                                <div className="actions-cell">
-                                    <button className="icon-btn-small" onClick={() => handleEditItem(item)}><Edit size={16} /></button>
-                                    <button className="icon-btn-small delete" onClick={() => handleDeleteItem(item.id)}><Trash2 size={16} /></button>
-                                </div>
-                            )}
+                            <div className="actions-cell">
+                                <button className="icon-btn-small" onClick={() => handleEditItem(item)}><Edit size={16} /></button>
+                                <button className="icon-btn-small delete" onClick={() => handleDeleteItem(item.id)}><Trash2 size={16} /></button>
+                            </div>
                         </div>
                     ))}
                     {list.length === 0 && <p className="text-muted">No items found.</p>}
@@ -1275,12 +1172,10 @@ const GuestHouse = () => {
                     <div className="gh-header-section">
                         <div className="gh-title-group"><h1>Guest Houses</h1><p>Manage corporate accommodations</p></div>
                         <div className="header-actions">
-                            {canManageGH && (
-                                <button className="btn-secondary mr-2" onClick={() => { setTopLevelView('requests'); setActiveTab('requests'); }}>
-                                    <Mail size={18} /> View Requests ({roomRequests.length})
-                                </button>
-                            )}
-                            {canManageGH && <button className="btn-primary" onClick={handleAddNewGh}><Plus size={18} /> Add Guest House</button>}
+                            <button className="btn-secondary mr-2" onClick={() => { setTopLevelView('requests'); setActiveTab('requests'); }}>
+                                <Mail size={18} /> View Requests ({roomRequests.length})
+                            </button>
+                            <button className="btn-primary" onClick={handleAddNewGh}><Plus size={18} /> Add Guest House</button>
                         </div>
                     </div>
                     <div className="gh-search-bar premium-card">
@@ -1295,8 +1190,8 @@ const GuestHouse = () => {
                                         <span className={`status-badge ${gh.isActive ? 'active' : 'inactive'}`}><span className="status-dot-inline"></span> {gh.isActive ? 'Operational' : 'Standby'}</span>
                                         <div className="card-actions">
                                             <button className="action-icon-btn map" onClick={(e) => { e.stopPropagation(); openGuestHouseInMaps(gh); }}><MapPin size={16} /></button>
-                                            {canManageGH && <button className="action-icon-btn edit" onClick={(e) => { e.stopPropagation(); handleEditGh(gh); }}><Edit size={16} /></button>}
-                                            {canManageGH && <button className="action-icon-btn delete" onClick={(e) => { e.stopPropagation(); handleDeleteGh(gh.id); }}><Trash2 size={16} /></button>}
+                                            <button className="action-icon-btn edit" onClick={(e) => { e.stopPropagation(); handleEditGh(gh); }}><Edit size={16} /></button>
+                                            <button className="action-icon-btn delete" onClick={(e) => { e.stopPropagation(); handleDeleteGh(gh.id); }}><Trash2 size={16} /></button>
                                         </div>
                                     </div>
                                     <div className="gh-card-details">

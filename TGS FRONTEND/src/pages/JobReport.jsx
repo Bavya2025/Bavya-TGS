@@ -23,7 +23,7 @@ import api from '../api/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { formatIndianCurrency } from '../utils/formatters';
-
+import './JobReport.css';
 
 const JobReport = () => {
     const { showToast } = useToast();
@@ -99,9 +99,7 @@ const JobReport = () => {
         setLoading(true);
         try {
             const response = await api.get('/api/expenses/');
-            let data = response.data.results || response.data || [];
-            
-            if (!Array.isArray(data)) data = [];
+            let data = response.data || [];
 
             const filtered = data.filter(exp => {
                 const matchesEmployee = filters.employee
@@ -215,9 +213,29 @@ const JobReport = () => {
                     <p>Consolidated view of all local travel and site tasks</p>
                 </div>
                 <div className="d-flex gap-2">
-                    <button className="jr-export-btn" onClick={() => window.print()}>
-                        <Download size={18} className="text-primary" />
-                        <span>Download PDF Report</span>
+                    <button 
+                        className="jr-export-btn" 
+                        style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '12px', 
+                            padding: '8px 20px', 
+                            background: 'white', 
+                            border: '1.5px solid #e2e8f0', 
+                            borderRadius: '12px', 
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                            transition: 'all 0.3s ease'
+                        }}
+                        onClick={() => window.print()}
+                    >
+                        <div style={{ padding: '8px', background: '#fff1f2', borderRadius: '8px' }}>
+                            <FileText size={18} style={{ color: '#bb0633' }} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                            <span style={{ fontSize: '0.875rem', fontWeight: 800, color: '#1e293b', lineHeight: 1.2 }}>Generate Summary</span>
+                            <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#64748b' }}>Download Daily PDF</span>
+                        </div>
+                        <Download size={14} style={{ color: '#94a3b8', marginLeft: '4px' }} />
                     </button>
                 </div>
             </header>
@@ -402,8 +420,8 @@ const JobReport = () => {
             </div>
 
             {/* High-End Report Table */}
-            <div className="jr-report-container" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-                <table className="jr-table" style={{ minWidth: '1000px' }}>
+            <div className="jr-report-container">
+                <table className="jr-table">
                     <thead>
                         <tr>
                             <th>Activity Date</th>

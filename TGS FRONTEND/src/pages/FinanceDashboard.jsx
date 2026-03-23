@@ -17,17 +17,14 @@ import {
     FileDown,
     Zap,
     XCircle,
-    Send,
-    RotateCcw
+    Send
 } from 'lucide-react';
-import '../finance_styles.css';
 
 const FinanceDashboard = () => {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('');
     const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'processing', 'completed'
     const [stats, setStats] = useState([
         { title: 'Pending Audit', value: '0', icon: <Clock color="#f59e0b" />, trend: '0%', isUp: true },
         { title: 'Settled Today', value: '₹0', icon: <CheckCircle color="#22c55e" />, trend: '0%', isUp: true },
@@ -53,7 +50,8 @@ const FinanceDashboard = () => {
     const fetchFinanceData = async () => {
         try {
             setLoading(true);
-            const resp = await api.get(`/api/approvals/?tab=${activeTab}`);
+            const resp = await api.get('/api/approvals/?tab=pending');
+            // Finance sees everything that is Approved by managers or already being processed by finance
             const data = resp.data.map(item => ({
                 id: item.id,
                 trip: item.details?.trip_id || 'N/A',
@@ -66,13 +64,11 @@ const FinanceDashboard = () => {
             }));
             setRecords(data);
 
-            if (activeTab === 'pending') {
-                setStats(prev => {
-                    const updated = [...prev];
-                    updated[0].value = data.length.toString();
-                    return updated;
-                });
-            }
+            setStats(prev => {
+                const updated = [...prev];
+                updated[0].value = data.length.toString();
+                return updated;
+            });
         } catch (e) {
             console.error("Failed to fetch finance records:", e);
             showToast("Failed to load records", "error");
@@ -83,7 +79,7 @@ const FinanceDashboard = () => {
 
     useEffect(() => {
         fetchFinanceData();
-    }, [activeTab]);
+    }, []);
 
     const filteredRecords = records.filter(rec =>
         rec.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -140,16 +136,6 @@ const FinanceDashboard = () => {
         }
     };
 
-    const handleUnreject = async (id) => {
-        try {
-            await api.post('/api/approvals/', { id, action: 'Unreject' });
-            showToast("Request unrejected and returned to queue", "success");
-            fetchFinanceData();
-        } catch (e) {
-            showToast("Action failed", "error");
-        }
-    };
-
     const openTransfer = (rec) => {
         setSelectedRecord(rec);
         setIsTransferModalOpen(true);
@@ -186,7 +172,7 @@ const FinanceDashboard = () => {
                         <div className="stat-data">
                             <span>{stat.title}</span>
                             <h3>{stat.value}</h3>
-                            <div className={`stat-trend ${stat.isUp ? 'pos' : 'neg'}`}>
+                            <div className={`stat - trend ${stat.isUp ? 'pos' : 'neg'} `}>
                                 {stat.isUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                                 {stat.trend} vs last week
                             </div>
@@ -199,7 +185,7 @@ const FinanceDashboard = () => {
                 <div className="section-header">
                     <div className="title-area">
                         <BarChart3 size={20} />
-                        <h3>Master Financial Audit Log</h3>
+                        <h3>Master Financial Audit Log (Action Required)</h3>
                     </div>
                     <div className="filter-group">
                         <div className="search-fims-wrapper">
@@ -213,38 +199,6 @@ const FinanceDashboard = () => {
                             />
                         </div>
                     </div>
-                </div>
-
-                {/* Status Tabs */}
-                <div className="fims-tabs">
-                    <button 
-                        className={`fims-tab ${activeTab === 'pending' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('pending')}
-                    >
-                        <Clock size={16} />
-                        Action Required
-                    </button>
-                    <button 
-                        className={`fims-tab ${activeTab === 'processing' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('processing')}
-                    >
-                        <Zap size={16} />
-                        Under Process
-                    </button>
-                    <button 
-                        className={`fims-tab ${activeTab === 'completed' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('completed')}
-                    >
-                        <CheckCircle size={16} />
-                        Transfer Completed
-                    </button>
-                    <button 
-                        className={`fims-tab ${activeTab === 'rejected' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('rejected')}
-                    >
-                        <AlertCircle size={16} />
-                        Flagged / Rejected
-                    </button>
                 </div>
 
                 <div className="records-table-wrapper">
@@ -274,55 +228,27 @@ const FinanceDashboard = () => {
                                         <td>{rec.type}</td>
                                         <td className="amt-cell">{rec.amount}</td>
                                         <td>
-                                            <div className={`status-pill ${rec.status.toLowerCase().replace(/ /g, '-')}`}>
+                                            <div className={`status - pill ${rec.status.toLowerCase().replace(/ /g, '-')} `}>
                                                 {rec.status}
                                             </div>
                                         </td>
                                         <td>
                                             <div className="finance-actions">
-                                                {activeTab === 'pending' && (
-                                                    <button className="f-icon-btn process" onClick={() => handleUnderProcess(rec.id)} title="Mark as Processing">
-                                                        <Clock size={16} />
-                                                    </button>
-                                                )}
-                                                {activeTab === 'rejected' && (
-                                                    <button className="f-icon-btn process" onClick={() => handleUnreject(rec.id)} title="Mark Unreject">
-                                                        <RotateCcw size={16} />
-                                                    </button>
-                                                )}
-                                                {(activeTab !== 'completed' && activeTab !== 'rejected') && (
-                                                    <button className="f-icon-btn transfer" onClick={() => openTransfer(rec)} title="Record Transfer">
-                                                        <IndianRupee size={16} />
-                                                    </button>
-                                                )}
-                                                {(activeTab !== 'completed' && activeTab !== 'rejected') && (
-                                                    <button className="f-icon-btn reject" onClick={() => openReject(rec)} title="Reject">
-                                                        <XCircle size={16} />
-                                                    </button>
-                                                )}
-                                                {activeTab === 'completed' && (
-                                                    <button className="f-icon-btn process" onClick={() => openTransfer(rec)} title="View Details">
-                                                        <Search size={16} />
-                                                    </button>
-                                                )}
+                                                <button className="f-icon-btn process" onClick={() => handleUnderProcess(rec.id)} title="Process">
+                                                    <Clock size={16} />
+                                                </button>
+                                                <button className="f-icon-btn transfer" onClick={() => openTransfer(rec)} title="Transfer">
+                                                    <IndianRupee size={16} />
+                                                </button>
+                                                <button className="f-icon-btn reject" onClick={() => openReject(rec)} title="Reject">
+                                                    <XCircle size={16} />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
                                 ))
                             ) : (
-                                <tr>
-                                    <td colSpan="8" className="fd-empty-cell">
-                                        <div className="empty-state-fims">
-                                            <AlertCircle size={32} opacity={0.3} style={{ marginBottom: '10px' }} />
-                                            <p>
-                                                {activeTab === 'pending' ? 'No pending financial actions found in queue.' : 
-                                                 activeTab === 'processing' ? 'No transactions are currently under audit process.' :
-                                                 activeTab === 'completed' ? 'No completed fund transfers found.' :
-                                                 'No flagged or rejected requests found at this time.'}
-                                            </p>
-                                        </div>
-                                    </td>
-                                </tr>
+                                <tr><td colSpan="8" className="fd-empty-cell">No pending financial actions.</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -333,18 +259,14 @@ const FinanceDashboard = () => {
             <Modal
                 isOpen={isTransferModalOpen}
                 onClose={() => setIsTransferModalOpen(false)}
-                title={activeTab === 'completed' ? "Transfer Details" : "Fund Transfer Details"}
+                title="Fund Transfer Details"
                 type="success"
                 actions={
                     <div className="modal-actions-grid">
-                        <button className="btn-secondary" onClick={() => setIsTransferModalOpen(false)}>
-                            {activeTab === 'completed' ? "Close" : "Cancel"}
+                        <button className="btn-secondary" onClick={() => setIsTransferModalOpen(false)}>Cancel</button>
+                        <button className="btn-primary" onClick={handleTransfer}>
+                            <Send size={18} /> Confirm Transfer
                         </button>
-                        {activeTab !== 'completed' && (
-                            <button className="btn-primary" onClick={handleTransfer}>
-                                <Send size={18} /> Confirm Transfer
-                            </button>
-                        )}
                     </div>
                 }
             >
@@ -365,9 +287,8 @@ const FinanceDashboard = () => {
                             <label className="form-label">Mode of Payment</label>
                             <select
                                 className="form-input"
-                                value={activeTab === 'completed' ? selectedRecord?.raw.payment_mode : transferData.payment_mode}
+                                value={transferData.payment_mode}
                                 onChange={(e) => setTransferData({ ...transferData, payment_mode: e.target.value })}
-                                disabled={activeTab === 'completed'}
                             >
                                 <option value="NEFT">NEFT</option>
                                 <option value="Bank Transfer">Bank Transfer</option>
@@ -380,9 +301,8 @@ const FinanceDashboard = () => {
                             <input
                                 type="date"
                                 className="form-input"
-                                value={activeTab === 'completed' ? (selectedRecord?.raw.details?.payment_date?.split('T')[0] || '') : transferData.payment_date}
+                                value={transferData.payment_date}
                                 onChange={(e) => setTransferData({ ...transferData, payment_date: e.target.value })}
-                                disabled={activeTab === 'completed'}
                             />
                         </div>
                     </div>
@@ -393,9 +313,8 @@ const FinanceDashboard = () => {
                             type="text"
                             className="form-input"
                             placeholder="Enter NEFT Ref or UPI ID"
-                            value={activeTab === 'completed' ? selectedRecord?.raw.transaction_id : transferData.transaction_id}
+                            value={transferData.transaction_id}
                             onChange={(e) => setTransferData({ ...transferData, transaction_id: e.target.value })}
-                            disabled={activeTab === 'completed'}
                         />
                     </div>
 
@@ -404,9 +323,8 @@ const FinanceDashboard = () => {
                         <textarea
                             className="form-input"
                             placeholder="Add payment notes..."
-                            value={activeTab === 'completed' ? selectedRecord?.raw.finance_remarks : transferData.remarks}
+                            value={transferData.remarks}
                             onChange={(e) => setTransferData({ ...transferData, remarks: e.target.value })}
-                            disabled={activeTab === 'completed'}
                         />
                     </div>
                 </div>

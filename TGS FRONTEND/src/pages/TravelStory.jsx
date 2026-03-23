@@ -107,7 +107,7 @@ const TravelStory = () => {
         p = p.replace(/'\]$/, '').replace(/'$/, '');
 
         if (p.startsWith('http') || p.startsWith('data:')) return p;
-        const backendBase = import.meta.env.VITE_API_URL || window.location.origin;
+        const backendBase = 'http://192.168.1.138:4567';
         return `${backendBase}${p.startsWith('/') ? '' : '/'}${p}`;
     };
 
@@ -347,7 +347,7 @@ const TravelStory = () => {
                             <div className="detail-info">
                                 <label>Route</label>
                                 <p>
-                                    {travel.consider_as_local 
+                                    {travel.consider_as_local
                                         ? (travel.user_base_location || travel.source || 'Local')
                                         : `${travel.source} → ${travel.destination}`
                                     }
@@ -586,9 +586,9 @@ const TravelStory = () => {
                                                                             bills = exp.receipt_image.split(',').filter(b => b.trim());
                                                                         }
                                                                     }
-                                                                } catch (e) { 
+                                                                } catch (e) {
                                                                     console.error("Error parsing receipts:", e);
-                                                                    bills = [exp.receipt_image]; 
+                                                                    bills = [exp.receipt_image];
                                                                 }
 
                                                                 return (bills || []).filter(b => b).map((b, idx) => {
@@ -716,7 +716,7 @@ const TravelStory = () => {
                             claimStatus={travel.claim?.status}
                             allowedNatures={['Local Travel']}
                             // only show bulk button for full travel requests (TRP-)
-                            showBulkUpload={false}
+                            showBulkUpload={true}
                             onJobReportClick={() => setShowJobReportModal(true)}
                         />
                     )}

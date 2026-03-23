@@ -49,7 +49,7 @@ const MyRequests = ({ enforceView = null }) => {
             const rawTrips = [...(tripsRes.data || []), ...(travelsRes.data || [])];
 
             // Map Trips
-            const mappedTrips = rawTrips.map(trip => ({
+            const mappedTrips = (tripsRes.data || []).map(trip => ({
                 id: trip.trip_id,
                 title: trip.purpose || 'Travel Request',
                 date: `${trip.start_date || 'N/A'} - ${trip.end_date || 'N/A'}`,
@@ -58,6 +58,19 @@ const MyRequests = ({ enforceView = null }) => {
                 type: 'trip',
                 raw: trip
             }));
+
+            // Map Travels
+            const mappedTravels = (travelsRes.data || []).map(trip => ({
+                id: trip.trip_id,
+                title: trip.purpose || 'Travel Request',
+                date: `${trip.start_date || 'N/A'} - ${trip.end_date || 'N/A'}`,
+                amount: parseFloat((trip.cost_estimate || '0').replace(/[^0-9.]/g, '')),
+                status: trip.status || 'Pending',
+                type: 'travel',
+                raw: trip
+            }));
+
+            const combinedTrips = [...mappedTrips, ...mappedTravels];
 
             // Fetch Advances
             const advancesRes = await api.get('/api/advances/').catch(() => ({ data: [] }));
@@ -90,7 +103,7 @@ const MyRequests = ({ enforceView = null }) => {
                 }
             });
 
-            setTrips(mappedTrips);
+            setTrips(combinedTrips);
             setAdvances(mappedAdvances);
             setClaims(claimsList);
 
@@ -122,7 +135,10 @@ const MyRequests = ({ enforceView = null }) => {
     };
 
     const renderCard = (item, icon) => (
-        <div key={item.id} className="req-card" onClick={() => item.type === 'trip' ? navigate(`/trip-timeline/${encodeId(item.id)}`) : null}>
+        <div key={item.id} className="req-card" onClick={() => {
+            if (item.type === 'trip') navigate(`/trip-timeline/${encodeId(item.id)}`);
+            if (item.type === 'travel') navigate(`/travel-timeline/${encodeId(item.id)}`);
+        }}>
             <div className="card-top-row">
                 <span className="req-id">{item.id}</span>
                 <span className={`req-status ${item.status.toLowerCase().replace(' ', '-')}`}>{item.status}</span>

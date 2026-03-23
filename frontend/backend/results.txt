@@ -1,7 +1,0 @@
-Code: HR-EMP-00015 | ReportsTo (Raw): [{"id": 4403, "position_name": "OE Position", "role_name": "OE", "level_name": "Level 4", "level_rank": 4, "employee_name": "Demo OE", "employee_id": 4407, "employee_status": "Active"}]
-Code: HR-EMP-00014 | ReportsTo (Raw): [{"id": 4403, "position_name": "OE Position", "role_name": "OE", "level_name": "Level 4", "level_rank": 4, "employee_name": "Demo OE", "employee_id": 4407, "employee_status": "Active"}]
-Code: HR-EMP-00013 | ReportsTo (Raw): [{"id": 4403, "position_name": "OE Position", "role_name": "OE", "level_name": "Level 4", "level_rank": 4, "employee_name": "Demo OE", "employee_id": 4407, "employee_status": "Active"}]
-Code: HR-EMP-00012 | ReportsTo (Raw): [{"id": 4403, "position_name": "OE Position", "role_name": "OE", "level_name": "Level 4", "level_rank": 4, "employee_name": "Demo OE", "employee_id": 4407, "employee_status": "Active"}]
-Code: HR-EMP-00011 | ReportsTo (Raw): [{"id": 4403, "position_name": "OE Position", "role_name": "OE", "level_name": "Level 4", "level_rank": 4, "employee_name": "Demo OE", "employee_id": 4407, "employee_status": "Active"}]
-Code: HR-EMP-00010 | ReportsTo (Raw): [{"id": 4403, "position_name": "OE Position", "role_name": "OE", "level_name": "Level 4", "level_rank": 4, "employee_name": "Demo OE", "employee_id": 4407, "employee_status": "Active"}]
-Code: HR-EMP-00009 | ReportsTo (Raw): [{"id": 4402, "position_name": "DM Position", "role_name": "DM", "level_name": "Level 3", "level_rank": 3, "employee_name": "Demo DM", "employee_id": 4406, "employee_status": "Active"}]

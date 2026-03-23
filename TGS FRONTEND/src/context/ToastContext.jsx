@@ -46,32 +46,11 @@ export const ToastProvider = ({ children }) => {
         setToasts(prev => prev.filter(toast => toast.id !== id));
     }, []);
 
-    const regularToasts = toasts.filter(t => !['confirm', 'reminder'].includes(t.type));
-    const confirmToasts = toasts.filter(t => ['confirm', 'reminder'].includes(t.type));
-
-    const showReminder = useCallback((message, { onStop, onSnooze }) => {
-        const id = Math.random().toString(36).substr(2, 9);
-        const handleStop = () => {
-            removeToast(id);
-            if (onStop) onStop();
-        };
-        const handleSnooze = () => {
-            removeToast(id);
-            if (onSnooze) onSnooze();
-        };
-        setToasts(prev => [...prev, { 
-            id, 
-            message, 
-            type: 'reminder', 
-            onConfirm: handleStop, // Reuse onConfirm/onCancel props for simplicity
-            onCancel: handleSnooze,
-            autoClose: false 
-        }]);
-        return id;
-    }, [removeToast]);
+    const regularToasts = toasts.filter(t => t.type !== 'confirm');
+    const confirmToasts = toasts.filter(t => t.type === 'confirm');
 
     return (
-        <ToastContext.Provider value={{ showToast, confirm, showReminder }}>
+        <ToastContext.Provider value={{ showToast, confirm }}>
             {children}
             {/* Confirm dialogs rendered as full-screen overlays outside corner container */}
             {confirmToasts.map(toast => (
@@ -79,7 +58,7 @@ export const ToastProvider = ({ children }) => {
                     key={toast.id}
                     id={toast.id}
                     message={toast.message}
-                    type={toast.type}
+                    type="confirm"
                     onClose={removeToast}
                     onConfirm={toast.onConfirm}
                     onCancel={toast.onCancel}

@@ -20,7 +20,7 @@ const ClaimReview = () => {
     ]);
 
     const handleAction = (id, action) => {
-        showToast(`Claim ${id}: ${action}`, "info");
+        alert(`Claim ${id}: ${action}`);
     };
 
     return (

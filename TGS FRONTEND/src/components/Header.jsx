@@ -24,28 +24,47 @@ import {
     ClipboardList,
     Fuel,
     Inbox as InboxIcon,
-    Archive,
-    Menu,
-    X
+    Archive
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Header = () => {
-    const { user, logout, heartbeatData, fetchHeartbeat } = useAuth();
+    const { user, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const [showManagement, setShowManagement] = useState(false);
     const [showProfileDropdown, setShowProfileDropdown] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const notifications = heartbeatData?.notifications || [];
-    const unreadCount = heartbeatData?.unread_notification_count || 0;
+    const [notifications, setNotifications] = useState([]);
+    const [isLoadingNotifs, setIsLoadingNotifs] = useState(false);
+    const fetchInProgress = React.useRef(false);
+
+    const fetchNotifications = async (signal) => {
+        if (!user || fetchInProgress.current) return;
+        fetchInProgress.current = true;
+        setIsLoadingNotifs(true);
+        try {
+            const response = await api.get('/api/notifications/', { signal });
+            setNotifications(response.data);
+        } catch (error) {
+            if (error.name !== 'CanceledError') console.error("Failed to fetch notifications:", error);
+        } finally {
+            setIsLoadingNotifs(false);
+            fetchInProgress.current = false;
+        }
+    };
 
     useEffect(() => {
-        if (user && showNotifications) {
-            fetchHeartbeat();
+        const controller = new AbortController();
+        if (user) {
+            fetchNotifications(controller.signal);
+            const interval = setInterval(() => fetchNotifications(controller.signal), 60000);
+            return () => {
+                clearInterval(interval);
+                controller.abort();
+            };
         }
-    }, [user, showNotifications, fetchHeartbeat]);
+    }, [user]);
 
     const rawRole = user?.role?.toLowerCase() || 'employee';
     const dept = user?.department?.toLowerCase() || '';
@@ -54,17 +73,17 @@ const Header = () => {
     // Comprehensive role detection matching backend logic
     let userRole = rawRole;
     if (rawRole === 'admin') userRole = 'admin';
-    else if (dept.includes('finance') || desig.includes('finance') || rawRole.includes('finance')) userRole = 'finance';
+    else if (dept.includes('finance') || desig.includes('finance') || rawRole === 'finance') userRole = 'finance';
     else if (dept.includes('hr') || desig.includes('hr') || rawRole === 'hr') userRole = 'hr';
     else if (dept.includes('cfo') || desig.includes('cfo') || rawRole === 'cfo') userRole = 'cfo';
     else if (rawRole.includes('guesthouse') || rawRole === 'guesthousemanager') userRole = 'guesthousemanager';
 
+    const unreadCount = notifications.filter(n => n.unread).length;
 
     useEffect(() => {
         setShowManagement(false);
         setShowProfileDropdown(false);
         setShowNotifications(false);
-        setIsMobileMenuOpen(false);
     }, [location]);
 
     useEffect(() => {
@@ -85,7 +104,7 @@ const Header = () => {
     const markAllRead = async () => {
         try {
             await api.post('/api/notifications/mark-all-read/');
-            fetchHeartbeat();
+            setNotifications(notifications.map(n => ({ ...n, unread: false })));
         } catch (error) {
             console.error("Failed to mark notifications as read:", error);
         }
@@ -106,7 +125,7 @@ const Header = () => {
         { title: 'System Policy', icon: <BookOpen size={18} />, path: '/policy', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo'] },
         { title: 'CFO Room', icon: <BarChart3 size={18} />, path: '/cfo-war-room', roles: ['cfo', 'admin'] },
         { title: 'User Management', icon: <Users size={18} />, path: '/employees', roles: ['admin'] },
-        { title: 'Guest Houses', icon: <Building2 size={18} />, path: '/guesthouse', roles: ['admin', 'cfo', 'guesthousemanager'] },
+        { title: 'Guest Houses', icon: <Building2 size={18} />, path: '/guesthouse', roles: ['admin', 'guesthousemanager'] },
         { title: 'Fleet Management', icon: <Car size={18} />, path: '/fleet', roles: ['admin', 'guesthousemanager'] },
         { title: 'API Management', icon: <Settings size={18} />, path: '/api-management', roles: ['admin'] },
         { title: 'Route Masters', icon: <MapPin size={18} />, path: '/route-management', roles: ['admin'] },
@@ -125,15 +144,8 @@ const Header = () => {
         <header className="header">
             <div className="header-container">
                 <div className="header-left">
-                    <button 
-                        type="button"
-                        className="mobile-menu-toggle"
-                        onClick={() => setIsMobileMenuOpen(true)}
-                    >
-                        <Menu size={24} />
-                    </button>
                     <div className="logo-section">
-                        <div className="logo-box" onClick={() => navigate('/')}>
+                        <div className="logo-box">
                             <img src="/logo.png" alt="TGS Logo" className="logo-img" />
                         </div>
                     </div>
@@ -143,7 +155,7 @@ const Header = () => {
                 </div>
 
                 <div className="header-right">
-                    <nav className="top-nav desktop-only">
+                    <nav className="top-nav">
                         {filteredMain.map((item) => (
                             <NavLink
                                 key={item.path}
@@ -187,6 +199,7 @@ const Header = () => {
 
                     <div className="header-actions">
                         <div className="notification-wrapper">
+
                             <button className="icon-btn" onClick={() => setShowNotifications(!showNotifications)} title="Notifications">
                                 <Bell size={24} />
                                 {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
@@ -201,10 +214,18 @@ const Header = () => {
                                     <div className="notifications-list">
                                         {notifications.length > 0 ? (
                                             notifications.map(n => (
-                                                 <div
+                                                <div
                                                     key={n.id}
                                                     className={`notification-item ${n.unread ? 'unread' : ''}`}
-                                                    onClick={() => setShowNotifications(false)}
+                                                    onClick={() => {
+                                                        if (n.title.toLowerCase().includes('room') || n.message.toLowerCase().includes('room')) {
+                                                            navigate('/guesthouse?tab=requests');
+                                                        } else if (n.title.toLowerCase().includes('trip') || n.message.toLowerCase().includes('payout') || n.message.toLowerCase().includes('advance') || n.message.toLowerCase().includes('claim')) {
+                                                            navigate('/approvals');
+                                                        }
+                                                        setShowNotifications(false);
+                                                    }}
+                                                    style={{ cursor: 'pointer' }}
                                                 >
                                                     <div className="notif-content">
                                                         <div className="notif-header">
@@ -212,24 +233,6 @@ const Header = () => {
                                                             <span className="notif-time">{n.time_ago}</span>
                                                         </div>
                                                         <p>{n.message}</p>
-                                                        {n.link && !n.title.toLowerCase().includes('reminder') && !n.message.toLowerCase().includes('reminder') && (
-                                                            <button 
-                                                                className="click-to-view-link"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    if (n.link) {
-                                                                        navigate(n.link);
-                                                                    } else if (n.title.toLowerCase().includes('room') || n.message.toLowerCase().includes('room')) {
-                                                                        navigate('/guesthouse?tab=requests');
-                                                                    } else {
-                                                                        navigate('/approvals');
-                                                                    }
-                                                                    setShowNotifications(false);
-                                                                }}
-                                                            >
-                                                                Click to view
-                                                            </button>
-                                                        )}
                                                     </div>
                                                     {n.unread && <div className="unread-dot"></div>}
                                                 </div>
@@ -242,10 +245,7 @@ const Header = () => {
                                         )}
                                     </div>
                                     <div className="notifications-footer">
-                                        <button className="view-all-notif" onClick={() => {
-                                            navigate('/notifications');
-                                            setShowNotifications(false);
-                                        }}>View All Notifications</button>
+                                        <button className="view-all-notif">View All Notifications</button>
                                     </div>
                                 </div>
                             )}
@@ -276,10 +276,6 @@ const Header = () => {
                                         <Users size={18} />
                                         <span>My Profile</span>
                                     </NavLink>
-                                    <NavLink to="/settings" className="dropdown-item" onClick={() => setShowProfileDropdown(false)}>
-                                        <Settings size={18} />
-                                        <span>System Settings</span>
-                                    </NavLink>
                                     <button className="dropdown-item logout-item" onClick={logout}>
                                         <LogOut size={18} />
                                         <span>Logout</span>
@@ -288,52 +284,6 @@ const Header = () => {
                             )}
                         </div>
                     </div>
-                </div>
-            </div>
-
-            {/* Mobile Menu Overlay */}
-            <div className={`mobile-menu-overlay ${isMobileMenuOpen ? 'open' : ''}`}>
-                <div className="mobile-menu-header">
-                    <img src="/logo.png" alt="TGS Logo" className="mobile-logo" />
-                    <button className="close-menu" onClick={() => setIsMobileMenuOpen(false)}>
-                        <X size={24} />
-                    </button>
-                </div>
-                <div className="mobile-menu-content">
-                    <div className="mobile-nav-section">
-                        <h4>Main Navigation</h4>
-                        <div className="mobile-nav-list">
-                            {filteredMain.map((item) => (
-                                <NavLink
-                                    key={item.path}
-                                    to={item.path}
-                                    className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                >
-                                    {item.icon}
-                                    <span>{item.title}</span>
-                                </NavLink>
-                            ))}
-                        </div>
-                    </div>
-                    {filteredManagement.length > 0 && (
-                        <div className="mobile-nav-section">
-                            <h4>Management</h4>
-                            <div className="mobile-nav-list">
-                                {filteredManagement.map((item) => (
-                                    <NavLink
-                                        key={item.path}
-                                        to={item.path}
-                                        className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
-                                        onClick={() => setIsMobileMenuOpen(false)}
-                                    >
-                                        {item.icon}
-                                        <span>{item.title}</span>
-                                    </NavLink>
-                                ))}
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
         </header>

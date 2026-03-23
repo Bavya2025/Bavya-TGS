@@ -35,7 +35,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, loading, erro
     };
 
     return (
-        <div className={`searchable-select-container ${isOpen ? 'is-open' : ''}`} ref={dropdownRef} style={style}>
+        <div className="searchable-select-container" ref={dropdownRef} style={style}>
             <button
                 type="button"
                 disabled={disabled}
@@ -44,40 +44,26 @@ const SearchableSelect = ({ options, value, onChange, placeholder, loading, erro
             >
                 <div className="select-trigger-inner">
                     {loading && <RefreshCw size={12} className="animate-spin text-primary" />}
-                    <div className="select-trigger-content">
-                        {typeof value === 'object' && value !== null ? (
-                            <div className="select-trigger-value-group">
-                                {value.label || value.name || value.id}
-                                {value.cluster_type && (
-                                    <span className={`select-type-badge ${value.cluster_type.toLowerCase()}`}>
-                                        {value.cluster_type}
-                                    </span>
-                                )}
-                                {(value.code || value.location_code || value.external_id) && (
-                                    <span className="select-code-badge">
-                                        {value.code || value.location_code || value.external_id}
-                                    </span>
-                                )}
-                            </div>
-                        ) : (
-                            (() => {
-                                if (!value) return <span className="select-placeholder">{placeholder}</span>;
-                                const selectedOpt = options?.find(o => 
-                                    (typeof o === 'object' ? (o.id || o.value || (o.name === value)) : o) == value
-                                );
-                                const displayValue = selectedOpt 
-                                    ? (typeof selectedOpt === 'object' ? (selectedOpt.label || selectedOpt.name || selectedOpt.id) : selectedOpt)
-                                    : value;
-                                return <span className="select-value">{displayValue}</span>;
-                            })()
-                        )}
-                    </div>
+                    <span className="select-trigger-selected">
+                        {typeof value === 'object' && value !== null
+                            ? (
+                                <div className="select-trigger-selected">
+                                    {(value.code || value.location_code || value.external_id) && (
+                                        <span className="select-code-badge select-trigger-badge">
+                                            {value.code || value.location_code || value.external_id}
+                                        </span>
+                                    )}
+                                    <span>{value.name || value.id}</span>
+                                </div>
+                            )
+                            : (value || placeholder)}
+                    </span>
                 </div>
                 <ChevronDown size={14} className={`select-arrow ${isOpen ? 'rotated' : ''}`} />
             </button>
 
             {isOpen && (
-                <div className="searchable-select-dropdown glass">
+                <div className="searchable-select-dropdown">
                     <div className="searchable-select-search-container">
                         <Search size={14} className="professional-input-icon select-search-icon" />
                         <input
@@ -101,7 +87,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, loading, erro
 
                         {loading ? (
                             <div className="searchable-select-status">
-                                <RefreshCw size={14} className="animate-spin text-primary" />
+                                <RefreshCw size={14} className="animate-spin" />
                                 <span>Loading data...</span>
                             </div>
                         ) : error ? (
@@ -111,36 +97,25 @@ const SearchableSelect = ({ options, value, onChange, placeholder, loading, erro
                             </div>
                         ) : filteredOptions.length > 0 ? (
                             filteredOptions.map((opt, idx) => {
-                                const optName = typeof opt === 'string' ? opt : (opt.label || opt.name || opt.id || '');
-                                const optType = typeof opt === 'object' ? (opt.cluster_type || opt.type || '') : '';
-                                const optCode = typeof opt === 'object' ? (opt.code || opt.location_code || opt.external_id || '') : '';
-                                const isSelected = (typeof value === 'object' && value !== null) 
-                                    ? (value.id === opt.id || value.name === optName)
-                                    : (value === (opt.id || opt.value || optName));
-
+                                const optName = typeof opt === 'string' ? opt : (opt.name || opt.id || '');
                                 return (
                                     <button
                                         key={opt.id || idx}
                                         type="button"
                                         onClick={() => handleSelect(opt)}
-                                        className={`searchable-select-item ${isSelected ? 'selected' : ''}`}
+                                        className={`searchable-select-item ${value === optName ? 'selected' : ''}`}
                                     >
                                         <div className="select-item-inner">
-                                            <div className="select-item-main">
-                                                <span className="select-name-text">
-                                                    {optName}
-                                                </span>
-                                                {optType && (
-                                                    <span className={`select-type-badge ${optType.toLowerCase()}`}>
-                                                        {optType}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            {optCode && (
+                                            {(opt.code || opt.location_code || opt.external_id) && (
                                                 <span className="select-code-badge">
-                                                    {optCode}
+                                                    {opt.code || opt.location_code || opt.external_id}
                                                 </span>
                                             )}
+                                            <span className="select-name-text">
+                                                {optName.startsWith(opt.code || opt.location_code || opt.external_id || 'NEVER_MATCH')
+                                                    ? optName.replace(opt.code || opt.location_code || opt.external_id, '').trim()
+                                                    : optName}
+                                            </span>
                                         </div>
                                     </button>
                                 );

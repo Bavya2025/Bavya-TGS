@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import SearchableSelect from '../components/SearchableSelect';
 import { useToast } from '../context/ToastContext';
-
+import '../styles/AdminMasterManagement.css'; // Reuse existing styles
 
 // Fallback list of Indian states in case the Location API/DB is empty
 const INDIA_STATES_FALLBACK = [

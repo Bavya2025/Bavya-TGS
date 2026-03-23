@@ -8,7 +8,6 @@ import {
     Search,
     Trash2,
     Edit,
-    Edit2,
     Save,
     X,
     ChevronRight,
@@ -35,7 +34,136 @@ import { useToast } from '../context/ToastContext';
 import { formatIndianCurrency } from '../utils/formatters';
 import IndianCurrencyInput from '../components/IndianCurrencyInput';
 
-import SearchableSelect from '../components/SearchableSelect';
+const SearchableSelect = ({ options, value, onChange, placeholder, loading, error, disabled, style, searchByCodeOnly, emptyMessage }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const dropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const filteredOptions = (options || []).filter(opt => {
+        const optName = typeof opt === 'string' ? opt : (opt.name || opt.id || '');
+        const optCode = typeof opt === 'object' && opt !== null ? (opt.code || opt.location_code || opt.external_id || '') : '';
+        const searchStr = search.toLowerCase();
+        
+        if (searchByCodeOnly) {
+            return String(optCode).toLowerCase().includes(searchStr);
+        }
+        
+        return String(optName).toLowerCase().includes(searchStr) || String(optCode).toLowerCase().includes(searchStr);
+    });
+
+    const handleSelect = (selectedOpt) => {
+        onChange(selectedOpt);
+        setIsOpen(false);
+        setSearch('');
+    };
+
+    return (
+        <div className="searchable-select-container" ref={dropdownRef}>
+            <button
+                type="button"
+                disabled={disabled}
+                onClick={() => setIsOpen(!isOpen)}
+                className={`searchable-select-trigger ${isOpen ? 'active' : ''} ${error ? 'error' : ''}`}
+            >
+                <div className="select-trigger-inner">
+                    {loading && <RefreshCw size={12} className="animate-spin text-primary" />}
+                    <span className="select-trigger-selected">
+                        {typeof value === 'object' && value !== null 
+                            ? (
+                                <div className="select-trigger-selected">
+                                    {(value.code || value.location_code || value.external_id) && (
+                                        <span className="select-code-badge select-trigger-badge">
+                                            {value.code || value.location_code || value.external_id}
+                                        </span>
+                                    )}
+                                    <span>{value.name || value.id}</span>
+                                </div>
+                            ) 
+                            : (value || placeholder)}
+                    </span>
+                </div>
+                <ChevronDown size={14} className={`select-arrow ${isOpen ? 'rotated' : ''}`} />
+            </button>
+
+            {isOpen && (
+                <div className="searchable-select-dropdown">
+                    <div className="searchable-select-search-container">
+                        <Search size={14} className="professional-input-icon select-search-icon" />
+                        <input
+                            autoFocus
+                            type="text"
+                            placeholder={`Search ${placeholder}...`}
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="searchable-select-input"
+                        />
+                    </div>
+                    
+                    <div className="searchable-select-list no-scrollbar">
+                        <button
+                            type="button"
+                            onClick={() => handleSelect('')}
+                            className={`searchable-select-item ${!value ? 'all-option' : ''}`}
+                        >
+                            {placeholder === 'Continent' ? 'Select Continent' : `All ${placeholder}s`}
+                        </button>
+
+                        {loading ? (
+                            <div className="searchable-select-status">
+                                <RefreshCw size={14} className="animate-spin" />
+                                <span>Loading data...</span>
+                            </div>
+                        ) : error ? (
+                            <div className="searchable-select-status text-red-500">
+                                <AlertCircle size={14} />
+                                <span>{error}</span>
+                            </div>
+                        ) : filteredOptions.length > 0 ? (
+                            filteredOptions.map((opt, idx) => {
+                                const optName = typeof opt === 'string' ? opt : (opt.name || opt.id || '');
+                                return (
+                                    <button
+                                        key={opt.id || idx}
+                                        type="button"
+                                        onClick={() => handleSelect(opt)}
+                                        className={`searchable-select-item ${value === optName ? 'selected' : ''}`}
+                                    >
+                                        <div className="select-item-inner">
+                                            {(opt.code || opt.location_code || opt.external_id) && (
+                                                <span className="select-code-badge">
+                                                    {opt.code || opt.location_code || opt.external_id}
+                                                </span>
+                                            )}
+                                            <span className="select-name-text">
+                                                {optName.startsWith(opt.code || opt.location_code || opt.external_id || 'NEVER_MATCH') 
+                                                    ? optName.replace(opt.code || opt.location_code || opt.external_id, '').trim() 
+                                                    : optName}
+                                            </span>
+                                        </div>
+                                    </button>
+                                );
+                            })
+                        ) : (
+                            <div className="searchable-select-empty">
+                                {emptyMessage || `No ${placeholder.toLowerCase()}s found`}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const findHierarchyPath = (data, targetId) => {
     if (!data || !targetId) return null;
@@ -125,7 +253,6 @@ const RouteManagement = () => {
     const [tollSearch, setTollSearch] = useState('');
     const [geoSearch, setGeoSearch] = useState('');
     const [editingId, setEditingId] = useState(null);
-    const [editingPathId, setEditingPathId] = useState(null);
     const [routePage, setRoutePage] = useState(1);
     const [tollPage, setTollPage] = useState(1);
     const [routeMetadata, setRouteMetadata] = useState({ count: 0, totalPages: 1 });
@@ -779,17 +906,16 @@ const RouteManagement = () => {
 
     // Replaced by the unified fetchDashboardData effect above
 
-    const handleManagePaths = async (route, pathToEdit = null) => {
+    const handleManagePaths = async (route) => {
         setSelectedRoute(route);
         setLoading(true);
         try {
             const res = await api.get(`/api/masters/route-paths/?route=${route.id}`);
-            const paths = res.data.results || res.data;
-            setRoutePaths(paths);
+            setRoutePaths(res.data.results || res.data);
             
-            // Build via details map from all paths and the route itself
+            // Build via details map
             const details = {};
-            paths.forEach(p => {
+            (res.data.results || res.data).forEach(p => {
                 if (p.via_locations_data) {
                     p.via_locations_data.forEach(v => {
                         details[v.id] = v;
@@ -798,48 +924,24 @@ const RouteManagement = () => {
             });
             setViaDetails(prev => ({ ...prev, ...details }));
             
+            // AUTOMATIC: Based on route logistics_type
             setLogisticsType(route.logistics_type || 'normal');
-            setSelectionMode('code');
+            setSelectionMode('code'); // Default to global list for enroute points
 
-            if (pathToEdit) {
-                setEditingPathId(pathToEdit.id);
-                setNewPath({
-                    path_name: pathToEdit.path_name,
-                    distance_km: pathToEdit.distance_km,
-                    route: route.id,
-                    via_id: '',
-                    via_locations: pathToEdit.via_locations || [],
-                    segment_distances: pathToEdit.segment_data || {}
-                });
-            } else {
-                setEditingPathId(null);
-                setNewPath({
-                    path_name: '',
-                    distance_km: '',
-                    route: route.id,
-                    via_id: '',
-                    via_locations: [],
-                    segment_distances: {}
-                });
-            }
+            setNewPath({
+                path_name: '',
+                distance_km: '',
+                route: route.id,
+                via_id: '',
+                via_locations: [],
+                segment_distances: {}
+            });
             setIsPathModalOpen(true);
         } catch (error) {
             showToast("Error fetching paths", "error");
         } finally {
             setLoading(false);
         }
-    };
-
-    const handleEditPath = (path) => {
-        setEditingPathId(path.id);
-        setNewPath({
-            path_name: path.path_name,
-            distance_km: path.distance_km,
-            route: path.route,
-            via_id: '',
-            via_locations: path.via_locations || [],
-            segment_distances: path.segment_data || {}
-        });
     };
 
     const handleSyncLocations = async () => {
@@ -1094,16 +1196,8 @@ const RouteManagement = () => {
                 segment_data: newPath.segment_distances
             };
 
-            if (editingPathId) {
-                await api.put(`/api/masters/route-paths/${editingPathId}/`, data);
-                showToast("Enroute path updated successfully!", "success");
-            } else {
-                await api.post('/api/masters/route-paths/', data);
-                showToast("Enroute path created successfully!", "success");
-            }
-            
-            // Refresh main routes to update variant count
-            fetchRoutes();
+            await api.post('/api/masters/route-paths/', data);
+            showToast("Enroute path created successfully!", "success");
 
             // Reset state after success
             setNewPath({
@@ -1113,13 +1207,12 @@ const RouteManagement = () => {
                 via_locations: [],
                 segment_distances: {}
             });
-            setEditingPathId(null);
 
             handleManagePaths(selectedRoute);
         } catch (error) {
-            console.error("Error saving path:", error.response?.data || error.message);
+            console.error("Error adding path:", error.response?.data || error.message);
             const errData = error.response?.data;
-            let errMsg = `Failed to ${editingPathId ? 'update' : 'create'} enroute path`;
+            let errMsg = "Failed to create enroute path";
             
             if (errData) {
                 if (typeof errData === 'string') {
@@ -1157,16 +1250,8 @@ const RouteManagement = () => {
                 </div>
             </div>
 
-            <div className="table-wrapper !bg-white/50 backdrop-blur-md rounded-[3rem] border border-slate-200/60 overflow-x-auto shadow-2xl shadow-slate-200/50 transition-all">
-                <table className="admin-table" style={{ minWidth: '1400px', tableLayout: 'fixed', width: '1400px' }}>
-                    <colgroup>
-                        <col style={{ width: '320px' }} />
-                        <col style={{ width: '200px' }} />
-                        <col style={{ width: '200px' }} />
-                        <col style={{ width: '140px' }} />
-                        <col style={{ width: '140px' }} />
-                        <col style={{ width: '400px' }} />
-                    </colgroup>
+            <div className="table-wrapper !bg-white/50 backdrop-blur-md rounded-[2.5rem] border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl transition-all">
+                <table className="admin-table">
                     <thead>
                         <tr>
                             <th className="!pl-10">Route Identity</th>
@@ -1183,55 +1268,44 @@ const RouteManagement = () => {
                                 <tr className="group hover:bg-slate-50/80 transition-all border-b border-slate-50 last:border-none">
                                     <td className="py-6 !pl-10">
                                         <div className="flex items-center gap-4">
-                                            <div className="card-icon-wrapper !w-10 !h-10 !mb-0 !bg-slate-100 transition-all shrink-0">
-                                                <RouteIcon size={18} className="text-slate-500" />
+                                            <div className="card-icon-wrapper !w-12 !h-12 !mb-0 !bg-slate-100 group-hover:!bg-primary/10 group-hover:!text-primary transition-all">
+                                                <RouteIcon size={20} />
                                             </div>
-                                            <div className="flex flex-col">
-                                                <span className="font-black text-slate-900 text-base">{route.route_code}</span>
-                                                {route.name && (
-                                                    <span className="text-[11px] font-bold text-slate-500 uppercase">{route.name}</span>
-                                                )}
+                                            <div>
+                                                <span className="text-[11px] font-black text-slate-400 font-mono tracking-tighter uppercase mb-1 block">ROUTE {route.route_code || `ID-${route.id}`}</span>
+                                                <span className="font-black text-slate-900 text-lg block leading-none">{route.name}</span>
                                             </div>
                                         </div>
                                     </td>
                                     <td>
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500"></div>
-                                            <span className="text-sm font-black text-slate-700">{route.source_name}</span>
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1">FROM</span>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500"></div>
+                                                <span className="text-sm font-black text-slate-700">{route.source_name}</span>
+                                            </div>
                                         </div>
                                     </td>
                                     <td>
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2.5 h-2.5 rounded-full border-2 border-primary"></div>
-                                            <span className="text-sm font-black text-slate-700">{route.destination_name}</span>
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1">TO</span>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2.5 h-2.5 rounded-full border-2 border-primary"></div>
+                                                <span className="text-sm font-black text-slate-700">{route.destination_name}</span>
+                                            </div>
                                         </div>
                                     </td>
-                                    <td className="text-center py-6">
-                                        <div className="flex items-center justify-center">
-                                            <button 
-                                                onClick={() => {
-                                                    setViewingRoute(route);
-                                                    setActivePathIndex(0);
-                                                    setIsPathViewerOpen(true);
-                                                }}
-                                                className="inline-flex items-center justify-center rounded-xl shadow-lg transition-all hover:scale-110 active:scale-95"
-                                                style={{ 
-                                                    flex: 'none', 
-                                                    width: '36px', 
-                                                    height: '36px',
-                                                    minWidth: '36px',
-                                                    minHeight: '36px',
-                                                    backgroundColor: '#0f172a',
-                                                    color: '#ffffff',
-                                                    fontSize: '11px',
-                                                    fontWeight: '900',
-                                                    border: 'none',
-                                                    padding: 0
-                                                }}
-                                            >
-                                                {route.variant_count || 0}
-                                            </button>
-                                        </div>
+                                    <td className="text-center">
+                                        <button 
+                                            onClick={() => {
+                                                setViewingRoute(route);
+                                                setActivePathIndex(0);
+                                                setIsPathViewerOpen(true);
+                                            }}
+                                            className="inline-flex items-center justify-center transition-all hover:scale-110 active:scale-95 cursor-pointer bg-slate-900 text-white text-[10px] font-black min-w-[34px] h-8 rounded-xl shadow-lg shadow-slate-200"
+                                        >
+                                            {route.paths?.length || 0}
+                                        </button>
                                     </td>
                                     <td className="text-center">
                                         <div className="badge-pill badge-live !inline-flex !py-1.5 !px-3 font-black text-[9px] mx-auto border border-red-100">
@@ -1747,7 +1821,7 @@ const RouteManagement = () => {
             <Modal
                 isOpen={isPathModalOpen}
                 onClose={() => setIsPathModalOpen(false)}
-                title={editingPathId ? `Update Enroute: ${selectedRoute?.name}` : `Enroute Creation: ${selectedRoute?.name}`}
+                title={`Enroute Creation: ${selectedRoute?.name}`}
                 size="xl"
                 actions={
                     <button className="btn-premium-action btn-premium-secondary" onClick={() => setIsPathModalOpen(false)}>Close Config</button>
@@ -1759,11 +1833,11 @@ const RouteManagement = () => {
                         <div className="premium-card-section">
                             <div className="premium-card-header">
                                 <div className="premium-icon-box accent">
-                                    {editingPathId ? <Edit size={24} /> : <RouteIcon size={24} />}
+                                    <RouteIcon size={24} />
                                 </div>
                                 <div>
-                                    <h4 className="premium-card-title">{editingPathId ? 'Modify Enroute Point' : 'Add Enroute Point'}</h4>
-                                    <p className="premium-card-subtitle">{editingPathId ? 'Update sequence or distances' : 'Define sequence and segment distances'}</p>
+                                    <h4 className="premium-card-title">Add Enroute Point</h4>
+                                    <p className="premium-card-subtitle">Define sequence and segment distances</p>
                                 </div>
                             </div>
 
@@ -1787,15 +1861,8 @@ const RouteManagement = () => {
                                         <div style={{ flex: 1 }}>
                                             <SearchableSelect
                                                 placeholder="Enroute Point"
-                                                options={locations.map(l => ({ 
-                                                    id: l.id, 
-                                                    label: l.name,
-                                                    name: l.name, 
-                                                    value: l.id,
-                                                    code: l.code || 'HUB', 
-                                                    cluster_type: l.cluster_type || 'POINT' 
-                                                }))}
-                                                value={newPath.via_id}
+                                                options={locations.map(l => ({ id: l.id, name: `[${l.code || 'HUB'}] ${l.name}` }))}
+                                                value={locations.find(l => String(l.id) === String(newPath.via_id)) ? `[${locations.find(l => String(l.id) === String(newPath.via_id))?.code || 'HUB'}] ${locations.find(l => String(l.id) === String(newPath.via_id))?.name}` : ''}
                                                 onChange={(opt) => {
                                                     const val = typeof opt === 'object' ? opt.id : opt;
                                                     setNewPath({ ...newPath, via_id: val });
@@ -1866,27 +1933,8 @@ const RouteManagement = () => {
                                 style={{ width: '100%', marginTop: '2rem', height: '56px', fontSize: '14px' }}
                                 onClick={handleAddPath}
                             >
-                                {editingPathId ? 'Update Enroute Path' : 'Create Enroute Path'}
+                                Create Enroute Path
                             </button>
-                            {editingPathId && (
-                                <button
-                                    className="btn-premium-action btn-premium-secondary"
-                                    style={{ width: '100%', marginTop: '0.75rem', height: '48px', fontSize: '13px' }}
-                                    onClick={() => {
-                                        setEditingPathId(null);
-                                        setNewPath({
-                                            path_name: '',
-                                            distance_km: '',
-                                            route: selectedRoute.id,
-                                            via_id: '',
-                                            via_locations: [],
-                                            segment_distances: {}
-                                        });
-                                    }}
-                                >
-                                    Cancel Edit
-                                </button>
-                            )}
                         </div>
                     </div>
 
@@ -1896,21 +1944,9 @@ const RouteManagement = () => {
                             <div className="premium-icon-box" style={{ background: 'var(--primary)', color: 'white' }}>
                                 <Layers size={24} />
                             </div>
-                            <div style={{ flex: 1 }}>
+                            <div>
                                 <h4 className="premium-card-title">Active Registry</h4>
                                 <p className="premium-card-subtitle">{newPath.via_locations.length} STOPS IDENTIFIED</p>
-                            </div>
-                            <div className="flex gap-2">
-                                {(routePaths || []).map((path, pidx) => (
-                                    <button
-                                        key={path.id}
-                                        onClick={() => handleEditPath(path)}
-                                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black transition-all ${editingPathId === path.id ? 'bg-primary text-white scale-110 shadow-lg' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'}`}
-                                        title={`Edit Variant ${String.fromCharCode(65 + pidx)}`}
-                                    >
-                                        {String.fromCharCode(65 + pidx)}
-                                    </button>
-                                ))}
                             </div>
                         </div>
 
@@ -2712,9 +2748,10 @@ const RouteManagement = () => {
                             </h4>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
                                 {(viewingRoute.paths || []).map((path, idx) => (
-                                    <motion.div
+                                    <motion.button
                                         key={path.id || idx}
                                         whileHover={{ y: -4 }}
+                                        whileTap={{ scale: 0.98 }}
                                         onClick={() => setActivePathIndex(idx)}
                                         style={{ 
                                             position: 'relative', padding: '24px', borderRadius: '28px', border: '2px solid', 
@@ -2733,17 +2770,9 @@ const RouteManagement = () => {
                                             }}>
                                                 {String.fromCharCode(65 + idx)}
                                             </div>
-                                            <button 
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setIsPathViewerOpen(false);
-                                                    handleManagePaths(viewingRoute, path);
-                                                }}
-                                                style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#f1f5f9', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}
-                                                className="hover:bg-slate-200"
-                                            >
-                                                <Edit size={14} />
-                                            </button>
+                                            {activePathIndex === idx && (
+                                                <div className="animate-pulse" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6' }} />
+                                            )}
                                         </div>
                                         <div>
                                             <div style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: activePathIndex === idx ? '#3b82f6' : '#94a3b8' }}>Variant</div>
@@ -2759,7 +2788,7 @@ const RouteManagement = () => {
                                                 <GitCommit size={10} /> {(path.via_locations || []).length} STOPS
                                             </span>
                                         </div>
-                                    </motion.div>
+                                    </motion.button>
                                 ))}
                             </div>
                         </div>
@@ -2796,10 +2825,9 @@ const RouteManagement = () => {
 
                                                 {(() => {
                                                     const pathCenterY = 220;
-                                                    const viaData = viewingRoute.paths[activePathIndex].via_locations_data || [];
                                                     const nodes = [
                                                         { x: 80, y: pathCenterY },
-                                                        ...viaData.map((_, i, arr) => ({
+                                                        ...(viewingRoute.paths[activePathIndex].via_locations_data || []).map((_, i, arr) => ({
                                                             x: 80 + (840 / (arr.length + 1)) * (i + 1),
                                                             y: diagramStyle === 'curved' ? (i % 2 === 0 ? pathCenterY - 40 : pathCenterY + 40) : pathCenterY
                                                         })),
@@ -2813,31 +2841,7 @@ const RouteManagement = () => {
                                                             const next = nodes[i + 1];
                                                             const cp1x = curr.x + (next.x - curr.x) / 3;
                                                             const cp2x = curr.x + (2 * (next.x - curr.x)) / 3;
-                                                            
-                                                            // Calculate a bow height. If it's a direct route (no vias), add a standard bow.
-                                                            // If there are vias, we already have Y-offset for them, but let's ensure segments curve.
-                                                            let cp1y = curr.y;
-                                                            let cp2y = next.y;
-
-                                                            if (viaData.length === 0) {
-                                                                // Single segment (Origin -> Dest): Bow it upwards
-                                                                cp1y = pathCenterY - 60;
-                                                                cp2y = pathCenterY - 60;
-                                                            } else {
-                                                                // Multiple segments: Curve relative to node Y offsets
-                                                                const dy = next.y - curr.y;
-                                                                if (dy === 0) {
-                                                                    // Segment between two points at same level: Bow it
-                                                                    cp1y = curr.y - 30;
-                                                                    cp2y = next.y - 30;
-                                                                } else {
-                                                                    // S-curve between different levels
-                                                                    cp1y = curr.y;
-                                                                    cp2y = next.y;
-                                                                }
-                                                            }
-
-                                                            pathD += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`;
+                                                            pathD += ` C ${cp1x} ${curr.y}, ${cp2x} ${next.y}, ${next.x} ${next.y}`;
                                                         }
                                                     } else {
                                                         nodes.forEach((n, i) => { if (i > 0) pathD += ` L ${n.x} ${n.y}`; });
@@ -2960,18 +2964,9 @@ const RouteManagement = () => {
                                                 <Activity size={64} />
                                             </div>
                                             <h5 style={{ fontSize: '10px', fontWeight: 900, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '16px' }}>Stream Metrics</h5>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
-                                                    <div style={{ fontSize: '40px', fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>{viewingRoute.paths[activePathIndex].distance_km}</div>
-                                                    <div style={{ fontSize: '14px', fontWeight: 900, opacity: 0.4, paddingBottom: '8px' }}>TOTAL KM</div>
-                                                </div>
-                                                <button 
-                                                    onClick={() => handleManagePaths(viewingRoute, viewingRoute.paths[activePathIndex])}
-                                                    className="w-10 h-10 rounded-2xl bg-primary/20 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-all shadow-lg hover:shadow-primary/40 active:scale-95"
-                                                    title="Edit this path"
-                                                >
-                                                    <Edit2 size={20} />
-                                                </button>
+                                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', marginBottom: '8px' }}>
+                                                <div style={{ fontSize: '40px', fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>{viewingRoute.paths[activePathIndex].distance_km}</div>
+                                                <div style={{ fontSize: '14px', fontWeight: 900, opacity: 0.4, paddingBottom: '8px' }}>TOTAL KM</div>
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 700, color: '#94a3b8' }}>
                                                 <Zap size={14} style={{ color: '#eab308' }} />
@@ -2991,18 +2986,16 @@ const RouteManagement = () => {
                     >
                         Dismiss
                     </button>
-                    {viewingRoute && !(viewingRoute.paths && viewingRoute.paths.length > 0) && (
-                        <button 
-                            className="btn-primary"
-                            style={{ height: '56px', padding: '0 40px', borderRadius: '16px', fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer', boxShadow: '0 20px 25px -5px rgba(59, 130, 246, 0.2)' }}
-                            onClick={() => {
-                                setIsPathViewerOpen(false);
-                                handleManagePaths(viewingRoute);
-                            }}
-                        >
-                            Create Sequence Registry
-                        </button>
-                    )}
+                    <button 
+                        className="btn-primary"
+                        style={{ height: '56px', padding: '0 40px', borderRadius: '16px', fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer', boxShadow: '0 20px 25px -5px rgba(59, 130, 246, 0.2)' }}
+                        onClick={() => {
+                            setIsPathViewerOpen(false);
+                            handleManagePaths(viewingRoute);
+                        }}
+                    >
+                        Modify Sequence Registry
+                    </button>
                 </div>
             </Modal>
         </div>
