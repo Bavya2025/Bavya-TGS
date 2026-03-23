@@ -1,0 +1,2121 @@
+import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:google_fonts/google_fonts.dart';
+import '../services/trip_service.dart';
+import '../services/api_service.dart';
+
+class ApprovalsInboxScreen extends StatefulWidget {
+  final bool hideHeader;
+  final int? enforceTab;
+
+  const ApprovalsInboxScreen({
+    super.key,
+    this.hideHeader = false,
+    this.enforceTab,
+  });
+
+  @override
+  State<ApprovalsInboxScreen> createState() => _ApprovalsInboxScreenState();
+}
+
+class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
+    with SingleTickerProviderStateMixin {
+  final TripService _tripService = TripService();
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _tasks = [];
+  Map<String, dynamic> _counts = {
+    'total': 0,
+    'advances': 0,
+    'trips': 0,
+    'claims': 0,
+  };
+  String _activeTab = 'pending';
+  String _filterType = 'all';
+  String _viewType = 'special'; // 'special' or 'monthly'
+  final Set<String> _selectedIds = {}; // for batch actions parity with web
+  final TextEditingController _searchController = TextEditingController();
+
+  final List<Map<String, dynamic>> _filterOptions = [
+    {'value': 'all', 'label': 'All'},
+    {'value': 'trip', 'label': 'Trip'},
+    {'value': 'expense', 'label': 'Expense'},
+    {'value': 'advance', 'label': 'Advance'},
+    {'value': 'mileage', 'label': 'Mileage'},
+    {'value': 'dispute', 'label': 'Dispute'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.enforceTab != null) {
+      _activeTab = widget.enforceTab == 0 ? 'pending' : 'history';
+    }
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    setState(() => _isLoading = true);
+    try {
+      final counts = await _tripService.fetchApprovalCounts();
+      final tasks = await _tripService.fetchApprovals(
+        tab: _activeTab,
+        type: _filterType,
+        viewType: _viewType,
+        search: _searchController.text,
+      );
+      if (mounted) {
+        setState(() {
+          _counts = counts;
+          _tasks = tasks;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load tasks: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+
+  void _handleFilterChange(String type) {
+    setState(() => _filterType = type);
+    _fetchData();
+  }
+
+  Future<void> _handleAction(
+    String id,
+    String action, {
+    Map<String, dynamic>? extra,
+  }) async {
+    try {
+      await _tripService.performApproval(id, action, extraData: extra);
+      // mirror web toast wording EXACTLY: "Request Approved successfully"
+      String verb;
+      switch (action.toLowerCase()) {
+        case 'approve':
+          verb = 'Approved';
+          break;
+        case 'reject':
+        case 'rejectbyfinance':
+          verb = 'Rejected';
+          break;
+        case 'pay':
+          verb = 'Paid';
+          break;
+        default:
+          verb = '${action}ed';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Request $verb successfully'),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      setState(() => _selectedIds.clear());
+      _fetchData();
+    } catch (e) {
+      String message = e.toString();
+      if (e.toString().contains('Unauthorized')) {
+        message = 'Your session has expired. Please login again.';
+      } else if (e.toString().contains('authorized')) {
+        message = 'You are not authorized to perform this action.';
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: Stack(
+        children: [
+          // Executive Mesh Blobs
+          Positioned(
+            top: 250,
+            right: -100,
+            child: Container(
+              width: 350,
+              height: 350,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFFA9052E).withOpacity(0.02),
+                    Colors.transparent,
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Column(
+            children: [
+              if (!widget.hideHeader) _buildCustomHeader(),
+              if (widget.enforceTab == null) _buildFilterToggleSection(),
+              _buildTypeFilterSection(),
+              Expanded(
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFBB0633),
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _fetchData,
+                        color: const Color(0xFFBB0633),
+                        child: _tasks.isEmpty
+                            ? _buildEmptyState()
+                            : ListView.builder(
+                                padding: const EdgeInsets.all(20),
+                                itemCount: _tasks.length,
+                                itemBuilder: (context, index) =>
+                                    _buildTaskCard(_tasks[index]),
+                              ),
+                      ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomHeader() {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: Color(0xFFA9052E),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(36),
+          bottomRight: Radius.circular(36),
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -20,
+            top: -20,
+            child: Container(
+              width: 130,
+              height: 130,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 15, 25, 30),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.verified_user_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'EXECUTIVE CONTROL',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white.withOpacity(0.7),
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        Text(
+                          'Approval Inbox',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterToggleSection() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _buildToggleBtn(
+                  'pending',
+                  Icons.access_time_filled_rounded,
+                  'Active Queue',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildToggleBtn(
+                  'history',
+                  Icons.check_circle_rounded,
+                  'History',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // CATEGORY SELECTOR (Special vs Monthly) - Mirrors Web Workflow
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _categoryBtn('special', 'Special Requests'),
+                ),
+                Expanded(
+                  child: _categoryBtn('monthly', 'Monthly Tour Plan'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _categoryBtn(String type, String label) {
+    bool isSelected = _viewType == type;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _viewType = type);
+        _fetchData();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0F1E2A) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            color: isSelected ? Colors.white : const Color(0xFF64748B),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleBtn(String mode, IconData icon, String label) {
+    final isActive = _activeTab == mode;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _activeTab = mode;
+        });
+        _fetchData();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFF0F1E2A) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isActive ? const Color(0xFF0F1E2A) : const Color(0xFFF1F5F9),
+          ),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF0F1E2A).withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : [],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isActive ? Colors.white : const Color(0xFF64748B),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              label.toUpperCase(),
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: isActive ? Colors.white : const Color(0xFF64748B),
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeFilterSection() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '$_activeTab Approvals'.toUpperCase(),
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF64748B),
+              letterSpacing: 1.0,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _filterType,
+                icon: const Icon(Icons.filter_list_rounded, color: Color(0xFFBB0633), size: 18),
+                style: GoogleFonts.plusJakartaSans(
+                  color: const Color(0xFF0F172A),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
+                dropdownColor: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                items: _filterOptions.map((filter) {
+                  return DropdownMenuItem<String>(
+                    value: filter['value'],
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: Text(filter['label']),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    _handleFilterChange(newValue);
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskCard(Map<String, dynamic> task) {
+    final bool isHistory = _activeTab == 'history';
+    final statusColor = task['status'] == 'Approved'
+        ? Colors.green
+        : (task['status'] == 'Rejected' ? Colors.red : const Color(0xFFF59E0B));
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          onTap: () => _showTaskDetails(task),
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      task['id'] ?? 'N/A',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF94A3B8),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    if (isHistory)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          task['status']?.toString().toUpperCase() ?? '',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            color: statusColor,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: const Color(0xFFF1F5F9),
+                      child: Text(
+                        (task['requester']?.toString() ?? '?')[0].toUpperCase(),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            task['requester'] ?? 'User',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: const Color(0xFF0F172A),
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          Text(
+                            task['type']?.toString().toUpperCase() ?? 'REQUEST',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 9,
+                              color: const Color(0xFF94A3B8),
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  task['purpose'] ?? '',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    color: const Color(0xFF475569),
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Divider(height: 1, color: Color(0xFFF1F5F9)),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_today_rounded,
+                          size: 12,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          task['date'] ?? '',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            color: const Color(0xFF94A3B8),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      task['cost'] ?? '₹0',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFFBB0633),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.verified_user_rounded,
+              size: 40,
+              color: Color(0xFF94A3B8),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'All caught up!',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'No pending approvals found for your review.',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 13,
+              color: const Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTaskDetails(Map<String, dynamic> task) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        maxChildSize: 0.9,
+        minChildSize: 0.5,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(32),
+              topRight: Radius.circular(32),
+            ),
+          ),
+          child: _TaskDetailsContent(
+            task: task,
+            isHistory: _activeTab == 'history',
+            onAction: (action, {Map<String, dynamic>? extra}) {
+              Navigator.pop(context);
+              _handleAction(task['id'], action, extra: extra);
+            },
+            onRefresh: _fetchData, // Pass refresh callback
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskDetailsContent extends StatefulWidget {
+  final Map<String, dynamic> task;
+  final bool isHistory;
+  final Function(String action, {Map<String, dynamic>? extra}) onAction;
+  final VoidCallback onRefresh; // New property
+
+  const _TaskDetailsContent({
+    required this.task,
+    required this.isHistory,
+    required this.onAction,
+    required this.onRefresh,
+  });
+
+  @override
+  State<_TaskDetailsContent> createState() => _TaskDetailsContentState();
+}
+
+class _TaskDetailsContentState extends State<_TaskDetailsContent> {
+  final TripService _tripService = TripService();
+  Map<String, String> itemRemarks = {};
+  bool _isActionLoading = false;
+
+  // cached user + roles (mirrors web logic)
+  Map<String, dynamic>? _currentUser;
+  bool isFinanceHead = false;
+  bool isFinanceExec = false;
+
+  // finance-related state for approvals
+  String execAmount = '';
+  String paymentMode = '';
+  String transactionId = '';
+  String? receiptFile;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUser = ApiService().getUser();
+    _computeRoles();
+    // prefill amount exactly like web did
+    execAmount =
+        widget.task['details']?['executive_approved_amount']?.toString() ??
+        (widget.task['cost']?.toString().replaceAll('₹', '') ?? '');
+  }
+
+  void _computeRoles() {
+    final role = _currentUser?['role']?.toString().toLowerCase() ?? '';
+    final dept = _currentUser?['department']?.toString().toLowerCase() ?? '';
+    final desig = _currentUser?['designation']?.toString().toLowerCase() ?? '';
+    isFinanceHead =
+        (dept.contains('finance') && dept.contains('head')) ||
+        (desig.contains('finance') && desig.contains('head')) ||
+        role == 'cfo';
+    final isFinance =
+        dept.contains('finance') ||
+        desig.contains('finance') ||
+        role == 'finance' ||
+        isFinanceHead;
+    isFinanceExec = isFinance && !isFinanceHead;
+  }
+
+  Future<String?> _showRemarksDialog() async {
+    String remark = '';
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            'Rejection Reason',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Please enter the reason for rejection:',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                autofocus: true,
+                onChanged: (v) => remark = v,
+                decoration: InputDecoration(
+                  hintText: 'Required for rejection...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.plusJakartaSans(
+                  color: const Color(0xFF64748B),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, remark.trim()),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFBB0633),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: Text(
+                'Confirm Rejection',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _handleItemAction(dynamic itemId, String status) async {
+    String finalRemark = itemRemarks[itemId.toString()] ?? '';
+
+    if (status == 'Rejected') {
+      final remark = await _showRemarksDialog();
+      if (remark == null || remark.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Rejection reason is mandatory'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+        return;
+      }
+      finalRemark = remark;
+      // Sync the local state as well
+      itemRemarks[itemId.toString()] = finalRemark;
+    }
+
+    setState(() => _isActionLoading = true);
+    try {
+      await _tripService.performApproval(
+        widget.task['id'],
+        'UpdateItem',
+        extraData: {
+          'item_id': itemId,
+          'item_status': status,
+          'remarks': finalRemark,
+        },
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Item ${status.toLowerCase()}ed with feedback'),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      widget.onRefresh(); // Trigger main screen refresh
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update item: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final task = widget.task;
+    final String type = task['type'] ?? '';
+    final details = task['details'] ?? {};
+
+    return Column(
+      children: [
+        Container(
+          width: 40,
+          height: 4,
+          margin: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE2E8F0),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: const Color(0xFFF1F5F9),
+                child: Text(
+                  (task['requester']?.toString() ?? '?')[0].toUpperCase(),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task['requester'] ?? 'Requester',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF0F172A),
+                      ),
+                    ),
+                    Text(
+                      '$type Request',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 32),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildInfoGrid(task),
+                // finance executives should be able to adjust recommendation similar to web
+                if (isFinanceExec &&
+                    [
+                      'PENDING_EXECUTIVE',
+                      'HR Approved',
+                      'REJECTED_BY_HEAD',
+                    ].contains(widget.task['status'])) ...[
+                  const SizedBox(height: 32),
+                  Text(
+                    'Executive Recommendation',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text(
+                        '₹',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: TextField(
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: '0.00',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                          ),
+                          controller: TextEditingController(text: execAmount)
+                            ..selection = TextSelection.collapsed(
+                              offset: execAmount.length,
+                            ),
+                          onChanged: (v) => execAmount = v,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else if (isFinanceHead &&
+                    widget.task['details']?['executive_approved_amount'] !=
+                        null) ...[
+                  const SizedBox(height: 32),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Executive Recommendation',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                        Text(
+                          '₹${widget.task['details']['executive_approved_amount']}',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFFBB0633),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 32),
+                Text(
+                  'Request Objective',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  task['purpose'] ?? '',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    color: const Color(0xFF475569),
+                    height: 1.6,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+
+                if (type == 'Trip' && details.isNotEmpty) ...[
+                  const SizedBox(height: 32),
+                  Text(
+                    'Trip Itinerary',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildItinerary(details),
+                  const SizedBox(height: 32),
+                  Text(
+                    'Travel Details',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTravelDetails(details),
+                ],
+
+                if (type == 'Money Top-up / Advance' && details.isNotEmpty) ...[
+                  const SizedBox(height: 32),
+                  Text(
+                    'Advance Request',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildAdvanceDetails(details),
+                ],
+
+                if (type == 'Dispute' && details.isNotEmpty) ...[
+                  const SizedBox(height: 32),
+                  Text(
+                    'Dispute Details',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDisputeDetails(details),
+                ],
+
+                if (details['expenses'] != null &&
+                    (details['expenses'] as List).isNotEmpty) ...[
+                  const SizedBox(height: 32),
+                  Text(
+                    'Expense Breakdown',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildExpenseBreakdown(details['expenses']),
+                ],
+
+                if (details['odometer'] != null) ...[
+                  const SizedBox(height: 32),
+                  Text(
+                    'Mileage Log',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildMileageLog(details['odometer']),
+                ],
+
+                const SizedBox(height: 32),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFDCFCE7)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.verified_user_rounded,
+                        color: Color(0xFF16A34A),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Validated against corporate travel policy & grade limits.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF166534),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+        ),
+        if (!widget.isHistory) _buildBottomActions(),
+      ],
+    );
+  }
+
+  Widget _buildInfoGrid(Map<String, dynamic> task) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 2,
+        childAspectRatio: 2.5,
+        children: [
+          _infoBlock('Request Type', task['type'] ?? 'N/A'),
+          _infoBlock('Estimated Cost', task['cost'] ?? '0'),
+          _infoBlock('Submitted Date', task['date'] ?? 'N/A'),
+          _infoBlock('Risk Score', task['risk'] ?? 'Low'),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoBlock(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            color: const Color(0xFF94A3B8),
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _triggerAction(String action) async {
+    Map<String, dynamic> extra = {};
+    if (action.toLowerCase().startsWith('reject')) {
+      final remarks = await _showRemarksDialog();
+      if (remarks == null || remarks.isEmpty) return;
+      extra['remarks'] = remarks;
+    }
+    // include exec/payout data when relevant
+    if (action == 'Pay') {
+      extra['payment_mode'] = paymentMode;
+      extra['transaction_id'] = transactionId;
+      if (receiptFile != null) extra['receipt_file'] = receiptFile;
+    }
+    if (execAmount.isNotEmpty) extra['executive_approved_amount'] = execAmount;
+
+    widget.onAction(action, extra: extra.isEmpty ? null : extra);
+  }
+
+  Widget _buildBottomActions() {
+    final status = widget.task['status']?.toString() ?? '';
+    if (isFinanceExec && status == 'PENDING_FINAL_RELEASE') {
+      return _buildPayoutController();
+    }
+
+    String rejectLabel = isFinanceExec ? 'Return to HR' : 'Reject';
+    String approveLabel;
+    if (isFinanceExec &&
+        [
+          'PENDING_EXECUTIVE',
+          'HR Approved',
+          'REJECTED_BY_HEAD',
+        ].contains(status)) {
+      approveLabel = 'Verify & Send to Head (₹$execAmount)';
+    } else if (isFinanceHead) {
+      approveLabel = 'Authorize Payment (₹$execAmount)';
+    } else {
+      approveLabel = 'Approve';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+          ),
+        ],
+        border: const Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _triggerAction('Reject'),
+              icon: const Icon(Icons.cancel_outlined, size: 20),
+              label: Text(
+                rejectLabel,
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Color(0xFFFFE4E6)),
+                backgroundColor: const Color(0xFFFFF1F2),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () => _triggerAction('Approve'),
+              icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
+              label: Text(
+                approveLabel,
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F1E2A),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                elevation: 8,
+                shadowColor: const Color(0xFF0F1E2A).withOpacity(0.4),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPayoutController() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+          ),
+        ],
+        border: const Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Payment Release',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            value: paymentMode.isEmpty ? null : paymentMode,
+            items: [
+              const DropdownMenuItem(
+                value: 'BANK_TRANSFER',
+                child: Text('Bank Transfer'),
+              ),
+              if (double.tryParse(execAmount) != null &&
+                  double.parse(execAmount) < 10000)
+                const DropdownMenuItem(
+                  value: 'CASH',
+                  child: Text('Cash Payment'),
+                ),
+            ],
+            decoration: const InputDecoration(
+              labelText: 'Payment Mode',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (v) {
+              setState(() => paymentMode = v ?? '');
+            },
+          ),
+          if (paymentMode == 'BANK_TRANSFER') ...[
+            const SizedBox(height: 12),
+            TextField(
+              decoration: const InputDecoration(
+                labelText: 'Transaction/Reference',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (v) => setState(() => transactionId = v),
+            ),
+          ],
+          if (paymentMode == 'CASH') ...[
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () async {
+                // simple file picker: using showModalBottomSheet with file input is complex on mobile; skipping details for now
+                // once file picked remember to `setState(() => receiptFile = <data>)` so button state updates
+              },
+              child: Text(
+                receiptFile == null ? 'Upload Receipt' : 'Receipt Attached',
+              ),
+            ),
+          ],
+          const SizedBox(height: 20),
+          Center(
+            child: ElevatedButton.icon(
+              onPressed:
+                  (paymentMode.isEmpty ||
+                      (paymentMode == 'BANK_TRANSFER' && transactionId.isEmpty))
+                  ? null
+                  : () => _triggerAction('Pay'),
+              icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
+              label: Text(
+                'Release Payment (₹$execAmount)',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF16A34A),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 24,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItinerary(Map<String, dynamic> details) {
+    return Row(
+      children: [
+        _itineraryPoint('From', details['source'] ?? 'N/A'),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20),
+          child: Icon(Icons.arrow_forward_rounded, color: Color(0xFFBB0633)),
+        ),
+        _itineraryPoint('To', details['destination'] ?? 'N/A'),
+      ],
+    );
+  }
+
+  Widget _itineraryPoint(String label, String value) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              color: const Color(0xFF94A3B8),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF0F172A),
+              letterSpacing: -0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTravelDetails(Map<String, dynamic> details) {
+    return Wrap(
+      spacing: 16,
+      runSpacing: 16,
+      children: [
+        _detailBox('Mode', details['travel_mode']),
+        _detailBox('Vehicle', details['vehicle_type']),
+        _detailBox('Composition', details['composition']),
+        _detailBox('Starts', details['start_date']),
+        _detailBox('Ends', details['end_date']),
+      ],
+    );
+  }
+
+  Widget _detailBox(String label, dynamic value) {
+    if (value == null) return const SizedBox.shrink();
+    return Container(
+      width: 140,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 10,
+              color: const Color(0xFF94A3B8),
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+            ),
+          ),
+          Text(
+            value.toString(),
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdvanceDetails(Map<String, dynamic> details) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'Requested Amount',
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white60,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '₹${details['requested_amount']}',
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const Divider(color: Colors.white10, height: 32),
+          Text(
+            'For Trip: ${details['trip_destination']} (${details['trip_id']})',
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white60,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDisputeDetails(Map<String, dynamic> details) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFEE2E2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _infoBlock('Category', details['category'] ?? 'N/A'),
+          const SizedBox(height: 16),
+          Text(
+            'Reason',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 11,
+              color: const Color(0xFF94A3B8),
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+            ),
+          ),
+          Text(
+            details['reason'] ?? 'N/A',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 14,
+              color: const Color(0xFFBB0633),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpenseBreakdown(dynamic expensesData) {
+    final List expenses = expensesData as List;
+    return Column(
+      children: expenses
+          .map(
+            (exp) => Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFF1F5F9)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          exp['category'] ?? exp['nature'] ?? 'Other',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        exp['date'] ?? '',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          color: const Color(0xFF94A3B8),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: () {
+                          String description = exp['description']?.toString() ?? '';
+                          if (description.startsWith('{')) {
+                            try {
+                              final d = jsonDecode(description) as Map<String, dynamic>;
+                              description =
+                                  "${d['origin'] ?? ''}${d['origin'] != null ? ' → ' : ''}${d['destination'] ?? d['location'] ?? d['hotelName'] ?? d['hotel_name'] ?? ''}";
+                              if (d['remarks'] != null &&
+                                  d['remarks'].toString().isNotEmpty &&
+                                  d['remarks'].toString().toLowerCase() != 'null') {
+                                description += " (${d['remarks']})";
+                              }
+                            } catch (e) {
+                              // fallback
+                            }
+                          }
+                          return Text(
+                            description,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF0F172A),
+                            ),
+                          );
+                        }(),
+                      ),
+                      Text(
+                        '₹${exp['amount']}',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (exp['receipt_image'] != null) ...[
+                    const SizedBox(height: 8),
+                    _miniImageThumbnail(exp['receipt_image'].toString(), "Receipt"),
+                  ],
+                  () {
+                    String description = exp['description']?.toString() ?? '';
+                    if (!description.startsWith('{')) return const SizedBox.shrink();
+                    try {
+                      final details = jsonDecode(description) as Map<String, dynamic>;
+                      if (details['odoStart'] == null &&
+                          details['odoEnd'] == null &&
+                          details['odoStartImg'] == null &&
+                          details['odoEndImg'] == null &&
+                          (details['selfies'] == null ||
+                              (details['selfies'] as List).isEmpty)) {
+                        return const SizedBox.shrink();
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8.0),
+                            child: Divider(height: 1),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              if (details['odoStart'] != null)
+                                _miniInfoBlock(
+                                  'Odo Start',
+                                  '${details['odoStart']} km',
+                                ),
+                              if (details['odoEnd'] != null)
+                                _miniInfoBlock(
+                                  'Odo End',
+                                  '${details['odoEnd']} km',
+                                ),
+                              if (details['mode'] != null)
+                                _miniInfoBlock(
+                                  'Mode',
+                                  details['mode'].toString(),
+                                ),
+                            ],
+                          ),
+                          if (details['odoStartImg'] != null ||
+                              details['odoEndImg'] != null ||
+                              (details['selfies'] != null &&
+                                  (details['selfies'] as List).isNotEmpty)) ...[
+                            const SizedBox(height: 8),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  if (details['odoStartImg'] != null)
+                                    _miniImageThumbnail(
+                                      details['odoStartImg'],
+                                      "Start",
+                                    ),
+                                  if (details['odoEndImg'] != null)
+                                    _miniImageThumbnail(
+                                      details['odoEndImg'],
+                                      "End",
+                                    ),
+                                  if (details['selfies'] != null)
+                                    ...(details['selfies'] as List)
+                                        .map(
+                                          (s) => _miniImageThumbnail(
+                                            s.toString(),
+                                            "Selfie",
+                                          ),
+                                        )
+                                        .toList(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      );
+                    } catch (e) {
+                      return const SizedBox.shrink();
+                    }
+                  }(),
+                  () {
+                    final pFin = exp['finance_remarks']?.toString();
+                    final pHr = exp['hr_remarks']?.toString();
+                    final pRm = exp['rm_remarks']?.toString();
+                    final hasRemarks = (pFin != null && pFin.isNotEmpty) ||
+                        (pHr != null && pHr.isNotEmpty) ||
+                        (pRm != null && pRm.isNotEmpty);
+
+                    return Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(top: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (pFin != null && pFin.isNotEmpty)
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  const TextSpan(
+                                    text: 'Fin: ',
+                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                  TextSpan(text: pFin),
+                                ],
+                              ),
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: const Color(0xFF475569),
+                              ),
+                            ),
+                          if (pHr != null && pHr.isNotEmpty)
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  const TextSpan(
+                                    text: 'HR: ',
+                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                  TextSpan(text: pHr),
+                                ],
+                              ),
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: const Color(0xFF475569),
+                              ),
+                            ),
+                          if (pRm != null && pRm.isNotEmpty)
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  const TextSpan(
+                                    text: 'RM: ',
+                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                  TextSpan(text: pRm),
+                                ],
+                              ),
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: const Color(0xFF475569),
+                              ),
+                            ),
+                          if (!hasRemarks)
+                            Text(
+                              'No remarks',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: const Color(0xFF94A3B8),
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }(),
+                  if (!widget.isHistory) ...[
+                    const SizedBox(height: 16),
+                    TextField(
+                      onChanged: (v) => itemRemarks[exp['id'].toString()] = v,
+                      decoration: InputDecoration(
+                        hintText: 'Add justification...',
+                        hintStyle: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          color: const Color(0xFFCBD5E1),
+                          fontWeight: FontWeight.w600,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () =>
+                                _handleItemAction(exp['id'], 'Rejected'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Color(0xFFFFE4E6)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: Text(
+                              'Reject Item',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () =>
+                                _handleItemAction(exp['id'], 'Approved'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: Text(
+                              'Approve Item',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildMileageLog(Map<String, dynamic> odo) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _odoReading('Start Reading', odo['start_reading']?.toString() ?? '0'),
+          const Icon(
+            Icons.arrow_forward_rounded,
+            color: Color(0xFF94A3B8),
+            size: 20,
+          ),
+          _odoReading('End Reading', odo['end_reading']?.toString() ?? '0'),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFBB0633),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '${odo['total_km'] ?? 0} KM',
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _odoReading(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 10,
+            color: const Color(0xFF94A3B8),
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+        ),
+        Text(
+          '$value KM',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+      ],
+    );
+  }
+  Widget _miniInfoBlock(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 9,
+            color: Colors.grey,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _miniImageThumbnail(String? imagePath, String label) {
+    if (imagePath == null || imagePath.isEmpty) return const SizedBox.shrink();
+
+    String path = imagePath.trim();
+    // Handle JSON array string if needed (common for receipts)
+    if (path.startsWith('[') && path.endsWith(']')) {
+      try {
+        final List<dynamic> list = jsonDecode(path);
+        if (list.isNotEmpty) {
+          path = list.first.toString().trim();
+        }
+      } catch (e) {
+        // fallback to original string
+      }
+    }
+
+    // Clean legacy formats [u'path'] or ['path'] or 'path'
+    path = path
+        .replaceFirst(RegExp(r"^\[u'"), '')
+        .replaceFirst(RegExp(r"^u'"), '')
+        .replaceFirst(RegExp(r"^'"), '');
+    path = path.replaceFirst(RegExp(r"'\]$"), '').replaceFirst(RegExp(r"'$"), '');
+
+    Widget imageWidget;
+    try {
+      if (path.startsWith('data:image')) {
+        final base64String = path.split(',').last;
+        imageWidget =
+            Image.memory(base64Decode(base64String), fit: BoxFit.cover);
+      } else if (path.startsWith('/9j/') ||
+          (path.length > 300 && !path.contains('/') && !path.contains(':'))) {
+        imageWidget = Image.memory(base64Decode(path), fit: BoxFit.cover);
+      } else {
+        const String backendBase = 'http://192.168.1.138:4567';
+        final String fullUrl = path.startsWith('http')
+            ? path
+            : '$backendBase${path.startsWith('/') ? '' : '/'}$path';
+        imageWidget = Image.network(
+          fullUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (c, e, s) =>
+              const Icon(Icons.broken_image, size: 20, color: Colors.grey),
+        );
+      }
+    } catch (e) {
+      imageWidget = const Icon(Icons.error_outline, size: 20, color: Colors.red);
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Stack(
+          children: [
+            Positioned.fill(child: imageWidget),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                color: Colors.black.withOpacity(0.5),
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
