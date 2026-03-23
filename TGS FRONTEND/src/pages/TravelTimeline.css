@@ -1,0 +1,188 @@
+.timeline-zigzag-wrapper {
+    width: 100%;
+    padding: 1rem 0;
+    background: transparent;
+}
+
+.timeline-zigzag-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    width: 100%;
+    padding: 0 1rem;
+    height: 380px; 
+}
+
+.zigzag-line-main {
+    position: absolute;
+    top: 50%;
+    left: 1rem;
+    right: 1rem;
+    height: 4px;
+    background: #cbd5e1;
+    transform: translateY(-50%);
+    z-index: 1;
+    border-radius: 2px;
+}
+
+.zigzag-node {
+    position: relative;
+    z-index: 2;
+    flex: 1; 
+    min-width: 0; 
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100%;
+    padding: 0 5px;
+}
+
+.zigzag-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+}
+
+.zigzag-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.top-section.align-bottom {
+    justify-content: flex-end;
+}
+
+.bottom-section.align-top {
+    justify-content: flex-start;
+}
+
+.zigzag-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 0px;
+    position: relative;
+}
+
+.zigzag-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    z-index: 3;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.zigzag-connector-line {
+    width: 3px;
+    z-index: 2;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.top-line {
+    bottom: 50%;
+    height: 35px;
+}
+
+.bottom-line {
+    top: 50%;
+    height: 35px;
+}
+
+.node-icon-circle {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    margin-top: 10px;
+}
+
+.node-icon-circle svg {
+    width: 20px;
+    height: 20px;
+}
+
+.bottom-section .node-icon-circle {
+    margin-top: 0px;
+    margin-bottom: 10px;
+}
+
+.node-date-box {
+    color: white;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-weight: 800;
+    font-size: 0.8rem;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    text-align: center;
+    margin-bottom: 10px;
+    width: 100%;
+    max-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bottom-section .node-date-box {
+    margin-top: 10px;
+    margin-bottom: 0;
+}
+
+.node-text {
+    text-align: center;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    width: 100%;
+}
+
+.node-text h4 {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin-bottom: 0.2rem;
+    line-height: 1.2;
+    word-wrap: break-word;
+}
+
+.node-text p {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 600;
+    line-height: 1.2;
+    display: none; /* Hide descriptions to save space */
+}
+
+.zigzag-node.pending .node-date-box,
+.zigzag-node.pending .node-icon-circle,
+.zigzag-node.pending .zigzag-dot {
+    background: #cbd5e1 !important;
+}
+
+.zigzag-node.pending .zigzag-connector-line {
+    background: #cbd5e1 !important;
+}
+
+.zigzag-node.current {
+    animation: bounce-in 0.5s ease-out;
+}
+
+@keyframes bounce-in {
+    0% { transform: scale(0.9); opacity: 0; }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); opacity: 1; }
+}
