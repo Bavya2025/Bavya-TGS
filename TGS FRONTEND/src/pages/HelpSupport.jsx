@@ -171,11 +171,32 @@ const HelpSupport = () => {
                         <p>Find ISO and project-specific location codes.</p>
                         <button className="btn-link" onClick={() => navigate('/location-codes')}>View Codes <ChevronRight size={16} /></button>
                     </div>
-                    <div className="action-card">
-                        <div className="action-icon"><FileSpreadsheet /></div>
-                        <h3>Download data template</h3>
-
-                        <button className="btn-link" onClick={handleDownloadTemplate}>Inspection Tour Schedule Template <Download size={16} style={{ marginLeft: '4px' }} /></button>
+                    <div className="action-card template-premium-card" style={{ border: '1px solid #e2e8f0', background: 'linear-gradient(135deg, #fff 0%, #f0fdf4 100%)' }}>
+                        <div className="action-icon" style={{ background: '#dcfce7', color: '#16a34a' }}><FileSpreadsheet /></div>
+                        <h3>Reporting Templates</h3>
+                        <p>Standardized Excel formats for bulk activity logging.</p>
+                        <button 
+                            className="btn-link" 
+                            style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '8px', 
+                                color: '#16a34a', 
+                                fontWeight: 800,
+                                padding: '10px 16px',
+                                background: 'white',
+                                borderRadius: '10px',
+                                width: 'fit-content',
+                                marginTop: '12px',
+                                textDecoration: 'none',
+                                border: '1px solid #dcfce7',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                            }} 
+                            onClick={handleDownloadTemplate}
+                        >
+                            <span>Download ITS Template</span>
+                            <Download size={14} />
+                        </button>
                     </div>
                 </div>
 

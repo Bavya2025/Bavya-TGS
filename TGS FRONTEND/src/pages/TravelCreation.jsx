@@ -320,28 +320,27 @@ const TravelCreation = () => {
                                         required
                                         className="h-[48px]"
                                     />
-                                </div>
-                                <div className="mt-2 flex">
-                                    <button 
-                                        type="button" 
-                                        onClick={handleDownloadTemplate} 
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50/70 hover:bg-emerald-50 text-emerald-700 text-[10px] font-extrabold rounded-xl border border-emerald-100/80 hover:border-emerald-200 transition-all shadow-sm group"
-                                    >
-                                        <div className="w-5 h-5 rounded-lg bg-emerald-100/80 flex items-center justify-center shrink-0 group-hover:bg-emerald-200 transition-colors">
-                                            <Download size={11} className="text-emerald-600" />
-                                        </div>
-                                        <span className="max-w-[180px] sm:max-w-[240px] truncate">{(() => {
-                                            let monthFormatted = 'MONTH';
-                                            if (formData.month) {
-                                                const date = new Date(formData.month + '-01');
-                                                const month = date.toLocaleString('default', { month: 'short' }).toUpperCase();
-                                                const year = date.getFullYear().toString().slice(-2);
-                                                monthFormatted = `${month}${year}`;
-                                            }
-                                            return `ITS-${formData.project || 'GENERAL'}-${formData.locationCode || 'VIJ'}-${monthFormatted}.xlsx`;
-                                        })()}</span>
-                                    </button>
-                                </div>
+                                </div><br />
+                                <button
+                                    type="button"
+                                    className="mt-4 flex items-center gap-3 px-4 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-sm font-bold rounded-xl transition-all border border-emerald-200 hover:border-emerald-300 shadow-sm group w-full sm:w-auto"
+                                    onClick={handleDownloadTemplate}
+                                >
+                                    <div className="w-8 h-8 rounded-full bg-emerald-100 group-hover:bg-emerald-200 flex items-center justify-center transition-colors shrink-0">
+                                        <Download size={16} className="text-emerald-600" />
+                                    </div>
+                                    <span className="truncate">Download {(() => {
+                                        let monthFormatted = 'MONTH';
+                                        if (formData.month) {
+                                            const date = new Date(formData.month + '-01');
+                                            const month = date.toLocaleString('default', { month: 'short' }).toUpperCase();
+                                            const year = date.getFullYear().toString().slice(-2);
+                                            monthFormatted = `${month}${year}`;
+                                        }
+                                        return `ITS-${formData.project || 'GENERAL'}-${formData.locationCode || 'VIJ'}-${monthFormatted}.xlsx`;
+                                    })()}</span>
+                                </button>
+                                <br />
                             </div>
 
                             <div className="input-field">

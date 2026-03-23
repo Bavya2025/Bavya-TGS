@@ -1472,9 +1472,9 @@ const TripExpenseGrid = ({
                     {!isLocked && (
                         <div style={{ display: 'flex', gap: '10px' }}>
                             {showBulkUpload && nature === 'Local Travel' && (
-                                <button className="add-cat-row-btn" style={{ background: '#10b981', color: 'white', borderColor: '#10b981' }} onClick={() => setBulkModal(prev => ({ ...prev, visible: true }))}>
-                                    <Upload size={14} />
-                                    <span>Bulk Upload (Excel)</span>
+                                <button className="add-cat-row-btn" style={{ background: '#10b981', color: 'white', borderColor: '#10b981' }} onClick={() => setBulkModal(prev => ({ ...prev, visible: true, activeTab: 'history' }))}>
+                                    <RotateCcw size={14} />
+                                    <span>Bulk Upload Rejections</span>
                                 </button>
                             )}
                             <button className="add-cat-row-btn" onClick={() => addRow(nature)}>

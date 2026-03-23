@@ -708,41 +708,83 @@ const TripStory = () => {
                 )}
             </div>
 
-            {/* REPORT EXPORT ACTIONS AT BOTTOM */}
+            {/* PREMIUM EXPORT ACTIONS */}
             <div className="story-footer-actions animate-fade-in" style={{
+                padding: '3rem 0',
+                borderTop: '2px dashed #e2e8f0',
+                marginTop: '3rem',
                 display: 'flex',
-                justifyContent: 'center',
-                gap: '1rem',
-                padding: '2rem 0',
-                borderTop: '1px solid #e2e8f0',
-                marginTop: '2rem'
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '1.5rem'
             }}>
-                <button
-                    className="btn btn-secondary"
-                    style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: '700' }}
-                    onClick={() => handleExport('pdf')}
-                    disabled={isExportingPDF}
-                >
-                    <FileText size={20} />
-                    {isExportingPDF ? 'Generating PDF...' : 'Download PDF Statement'}
-                </button>
-                <button
-                    className="btn btn-secondary"
-                    style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: '700' }}
-                    onClick={() => handleExport('excel')}
-                    disabled={isExportingExcel}
-                >
-                    <Download size={20} />
-                    {isExportingExcel ? 'Generating Excel...' : 'Export to Excel'}
-                </button>
-                <button
-                    className="btn btn-outline"
-                    style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: '700', border: '1px solid #cbd5e1' }}
-                    onClick={() => window.print()}
-                >
-                    <Printer size={20} />
-                    <span>Print Summary</span>
-                </button>
+                <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', marginBottom: '0.5rem' }}>Finalize & Export</h3>
+                    <p style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}>Download your trip expense statement in your preferred format.</p>
+                </div>
+
+                <div style={{
+                    display: 'flex',
+                    background: '#f8fafc',
+                    padding: '8px',
+                    borderRadius: '20px',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                    gap: '8px',
+                    flexWrap: 'wrap',
+                    justifyContent: 'center'
+                }}>
+                    <button
+                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${isExportingPDF ? 'bg-slate-200 text-slate-400' : 'bg-white text-slate-700 hover:bg-primary/5 hover:text-primary hover:border-primary border border-transparent hover:shadow-md'}`}
+                        onClick={() => handleExport('pdf')}
+                        disabled={isExportingPDF}
+                    >
+                        <FileText size={18} className={isExportingPDF ? '' : 'text-primary'} />
+                        <span>{isExportingPDF ? 'Generating PDF...' : 'PDF Statement'}</span>
+                    </button>
+
+                    <button
+                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${isExportingExcel ? 'bg-slate-200 text-slate-400' : 'bg-white text-slate-700 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 border border-transparent hover:shadow-md'}`}
+                        onClick={() => handleExport('excel')}
+                        disabled={isExportingExcel}
+                    >
+                        <Download size={18} className={isExportingExcel ? '' : 'text-emerald-500'} />
+                        <span>{isExportingExcel ? 'Exporting...' : 'Excel Report'}</span>
+                    </button>
+
+                    <div style={{ width: '1px', background: '#e2e8f0', margin: '4px 8px' }} />
+
+                    <button
+                        className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-slate-700 bg-white hover:bg-slate-50 border border-transparent hover:border-slate-200 hover:shadow-md transition-all"
+                        onClick={() => window.print()}
+                    >
+                        <Printer size={18} className="text-slate-400" />
+                        <span>Print</span>
+                    </button>
+
+                    <button
+                        className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-slate-700 bg-white hover:bg-blue-50 hover:text-blue-600 border border-transparent hover:border-blue-200 hover:shadow-md transition-all"
+                        onClick={() => {
+                            if (navigator.share) {
+                                navigator.share({
+                                    title: `Trip Story - ${trip.trip_id}`,
+                                    text: `Check out the expense statement for ${trip.trip_id}`,
+                                    url: window.location.href
+                                }).catch(console.error);
+                            } else {
+                                navigator.clipboard.writeText(window.location.href);
+                                showToast("Link copied to clipboard!", "success");
+                            }
+                        }}
+                    >
+                        <Share2 size={18} className="text-blue-500" />
+                        <span>Share</span>
+                    </button>
+                </div>
+
+                <p style={{ fontSize: '0.75rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                    Statement generated on {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </p>
             </div>
 
             <TripWalletModal

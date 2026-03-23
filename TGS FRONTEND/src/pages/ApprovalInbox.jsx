@@ -26,7 +26,9 @@ import {
     Mail,
     Paperclip,
     Download,
-    X
+    X,
+    ClipboardList,
+    RotateCcw
 } from 'lucide-react';
 import api from '../api/api';
 import { useToast } from '../context/ToastContext';
@@ -150,20 +152,28 @@ const ApprovalInbox = ({ enforceTab = null }) => {
         let remarks = "";
         let dataJsonToSave = null;
         
-        if (action === 'reject') {
-            const batch = batches.find(b => b.id === batchId);
-            const edits = batchItemEdits[batchId] || {};
-            
-            if (Object.keys(edits).length > 0) {
-                // Apply edits to original data_json
-                dataJsonToSave = (batch.data_json || []).map((row, idx) => {
-                    if (edits[idx]) {
-                        return { ...row, _status: edits[idx].status, _remarks: edits[idx].remarks };
-                    }
-                    return row;
-                });
-            }
+        const batch = batches.find(b => b.id === batchId);
+        const edits = batchItemEdits[batchId] || {};
+        
+        // Sync row-level edits for ANY action (approve/reject)
+        if (Object.keys(edits).length > 0) {
+            dataJsonToSave = (batch.data_json || []).map((row, idx) => {
+                // If previously rejected, KEEP it rejected
+                if (row._status === 'Rejected') return row;
+                
+                if (edits[idx]) {
+                    return { 
+                        ...row, 
+                        _status: edits[idx].status, 
+                        _remarks: edits[idx].remarks,
+                        _remark_by: user?.name || 'Manager'
+                    };
+                }
+                return row;
+            });
+        }
 
+        if (action === 'reject') {
             remarks = window.prompt("Please enter the reason for rejection (or leave blank if detailed below):");
             if (remarks === null) return; // User cancelled
             if (!remarks.trim() && Object.keys(edits).length === 0) {
@@ -1068,108 +1078,159 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                                             </div>
                                                         </div>
                                                         {expandedBatch === batch.id && (
-                                                            <div className="premium-card animate-fade-in mb-4 overflow-x-auto p-4 bg-white border border-slate-200">
-                                                                <h5 className="font-bold text-slate-700 mb-3 border-b pb-2">Batch Details (Raw Data)</h5>
-                                                                <table className="w-full text-xs border-collapse">
-                                                                    <thead>
-                                                                        <tr className="bg-slate-100 text-slate-600 uppercase">
-                                                                            {batch.data_json && batch.data_json.length > 0 && Object.keys(batch.data_json[0]).filter(k => !k.startsWith('_')).map(key => {
-                                                                                const map = {
-                                                                                    date: 'Date',
-                                                                                    time: 'Time',
-                                                                                    mode: 'Mode',
-                                                                                    origin_route: 'From Location',
-                                                                                    destination_route: 'To Location',
-                                                                                    odo_start: 'ODO Start',
-                                                                                    odo_end: 'ODO End',
-                                                                                    vehicle: 'Vehicle',
-                                                                                    visit_intent: 'Visit Intent',
-                                                                                    remarks: 'Remarks'
-                                                                                };
-                                                                                return (
-                                                                                    <th key={key} className="p-2 border text-left">
-                                                                                        {map[key] || key.replace(/_/g, ' ')}
-                                                                                    </th>
-                                                                                );
-                                                                            })}
-                                                                            <th className="p-2 border text-left" style={{ minWidth: '100px' }}>Row Auto-Audit</th>
-                                                                            <th className="p-2 border text-left" style={{ minWidth: '120px' }}>Reject Row</th>
-                                                                            <th className="p-2 border text-left" style={{ minWidth: '150px' }}>Rejection Remarks</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        {((batch.data_json || []).map((row, rIdx) => ({ ...row, __idx: rIdx })).filter(r => {
-                                                                            const d = String(r.date || '');
-                                                                            return d && !d.toLowerCase().includes('instruc');
-                                                                        })).map((row, filterIdx) => {
-                                                                            const originalIdx = row.__idx;
-                                                                            const itemEdit = (batchItemEdits[batch.id] || {})[originalIdx] || {};
-                                                                            return (
-                                                                            <tr key={filterIdx} className={itemEdit.status === 'Rejected' ? 'bg-red-50 border-b' : 'hover:bg-slate-50 border-b'}>
-                                                                                {Object.entries(row).filter(([k]) => !k.startsWith('_')).map(([k, val], vIdx) => {
-                                                                                    let displayVal = val;
-                                                                                    if (k === 'vehicle' && String(val).toLowerCase() === 'own bike') {
-                                                                                        displayVal = 'Own Vehicle';
-                                                                                    }
-                                                                                    return <td key={vIdx} className="p-2 border">{String(displayVal || '-')}</td>;
+                                                            <div className="premium-card animate-fade-in mb-4 overflow-hidden bg-white border border-slate-200 shadow-xl" style={{ borderRadius: '16px' }}>
+                                                                <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+                                                                    <h5 className="font-extrabold text-slate-800 flex items-center gap-2">
+                                                                        <ClipboardList size={18} className="text-indigo-600" />
+                                                                        Audit Daily Activities ({((batch.data_json || []).filter(r => !String(r.date || '').toLowerCase().includes('instruc'))).length} Entries)
+                                                                    </h5>
+                                                                    {Object.keys(batchItemEdits[batch.id] || {}).filter(k => batchItemEdits[batch.id][k].status === 'Rejected').length > 0 && (
+                                                                        <div className="animate-bounce bg-rose-100 text-rose-700 px-3 py-1 rounded-full text-xs font-bold border border-rose-200">
+                                                                            {Object.keys(batchItemEdits[batch.id] || {}).filter(k => batchItemEdits[batch.id][k].status === 'Rejected').length} Items marked for rejection
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div style={{ overflowX: 'auto', maxHeight: '500px' }}>
+                                                                    <table className="w-full text-xs border-collapse" style={{ minWidth: '1000px' }}>
+                                                                        <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc' }}>
+                                                                            <tr className="text-slate-500 border-b">
+                                                                                {batch.data_json && batch.data_json.length > 0 && Object.keys(batch.data_json[0]).filter(k => !k.startsWith('_')).map(key => {
+                                                                                    const map = {
+                                                                                        date: 'Date',
+                                                                                        time: 'Time',
+                                                                                        mode: 'Mode',
+                                                                                        origin_route: 'From Location',
+                                                                                        destination_route: 'To Location',
+                                                                                        odo_start: 'ODO Start',
+                                                                                        odo_end: 'ODO End',
+                                                                                        vehicle: 'Vehicle',
+                                                                                        visit_intent: 'Visit Intent',
+                                                                                        remarks: 'Remarks'
+                                                                                    };
+                                                                                    return (
+                                                                                        <th key={key} className="p-2 border text-left">
+                                                                                            {map[key] || key.replace(/_/g, ' ')}
+                                                                                        </th>
+                                                                                    );
                                                                                 })}
-                                                                                <td className="p-2 border">
-                                                                                    {row._status === 'Rejected' ? (
-                                                                                        <span style={{ color: 'red', fontWeight: 600 }}>Rejected Before</span>
-                                                                                    ) : (
-                                                                                        <span style={{ color: '#10b981' }}>Pending / OK</span>
-                                                                                    )}
-                                                                                </td>
-                                                                                <td className="p-2 border text-center">
-                                                                                    <button 
-                                                                                        onClick={() => {
-                                                                                            const isRejected = itemEdit.status === 'Rejected';
-                                                                                            setBatchItemEdits(prev => ({
-                                                                                                ...prev,
-                                                                                                [batch.id]: {
-                                                                                                    ...(prev[batch.id] || {}),
-                                                                                                    [originalIdx]: {
-                                                                                                        ...((prev[batch.id] || {})[originalIdx] || {}),
-                                                                                                        status: isRejected ? 'Pending' : 'Rejected'
-                                                                                                    }
-                                                                                                }
-                                                                                            }));
-                                                                                        }}
-                                                                                        style={{ 
-                                                                                            padding: '4px 8px', borderRadius: '4px', border: '1px solid', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer',
-                                                                                            backgroundColor: itemEdit.status === 'Rejected' ? '#fee2e2' : 'white',
-                                                                                            borderColor: itemEdit.status === 'Rejected' ? '#ef4444' : '#cbd5e1',
-                                                                                            color: itemEdit.status === 'Rejected' ? '#ef4444' : '#64748b'
-                                                                                        }}
-                                                                                    >
-                                                                                        {itemEdit.status === 'Rejected' ? 'Undo Reject' : 'Reject'}
-                                                                                    </button>
-                                                                                </td>
-                                                                                <td className="p-2 border">
-                                                                                    <input 
-                                                                                        type="text" 
-                                                                                        placeholder="Optional reason..."
-                                                                                        value={itemEdit.remarks || ''}
-                                                                                        onChange={e => {
-                                                                                            setBatchItemEdits(prev => ({
-                                                                                                ...prev,
-                                                                                                [batch.id]: {
-                                                                                                    ...(prev[batch.id] || {}),
-                                                                                                    [originalIdx]: {
-                                                                                                        ...((prev[batch.id] || {})[originalIdx] || {}),
-                                                                                                        remarks: e.target.value
-                                                                                                    }
-                                                                                                }
-                                                                                            }));
-                                                                                        }}
-                                                                                        style={{ width: '100%', padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.8rem', outline: 'none' }}
-                                                                                    />
-                                                                                    {row._remarks && <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '2px' }}>Previous: {row._remarks}</div>}
-                                                                                </td>
+                                                                                <th className="p-3 border-b text-left" style={{ minWidth: '100px' }}>Audit Status</th>
+                                                                                <th className="p-3 border-b text-center" style={{ minWidth: '120px' }}>Action</th>
+                                                                                <th className="p-3 border-b text-left" style={{ minWidth: '220px' }}>Rejection Details</th>
                                                                             </tr>
-                                                                        )})}
-                                                                    </tbody>
-                                                                </table>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {((batch.data_json || []).map((row, rIdx) => ({ ...row, __idx: rIdx })).filter(r => {
+                                                                                const d = String(r.date || '');
+                                                                                return d && !d.toLowerCase().includes('instruc');
+                                                                            })).map((row, filterIdx) => {
+                                                                                const originalIdx = row.__idx;
+                                                                                const itemEdit = (batchItemEdits[batch.id] || {})[originalIdx] || {};
+                                                                                const isActuallyRejected = row._status === 'Rejected' || itemEdit.status === 'Rejected';
+                                                                                
+                                                                                return (
+                                                                                <tr key={filterIdx} className={isActuallyRejected ? 'bg-rose-50 border-b' : 'hover:bg-slate-50 border-b'}>
+                                                                                    {Object.entries(row).filter(([k]) => !k.startsWith('_')).map(([k, val], vIdx) => (
+                                                                                        <td key={vIdx} className={`p-3 border-b ${isActuallyRejected ? 'text-slate-400 line-through' : 'text-slate-700 font-medium'}`}>
+                                                                                            {String(val || '-')}
+                                                                                        </td>
+                                                                                    ))}
+                                                                                    <td className="p-3 border-b">
+                                                                                        {row._status === 'Rejected' ? (
+                                                                                            <div className="flex items-center gap-1.5 text-rose-600 font-bold bg-rose-50 px-2 py-1 rounded-md border border-rose-100 w-fit">
+                                                                                                <XCircle size={14} /> Rejected
+                                                                                            </div>
+                                                                                        ) : itemEdit.status === 'Rejected' ? (
+                                                                                            <div className="flex items-center gap-1.5 text-orange-600 font-bold bg-orange-50 px-2 py-1 rounded-md border border-orange-100 w-fit">
+                                                                                                <AlertTriangle size={14} /> Rejection Queued
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <div className="flex items-center gap-1.5 text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 w-fit">
+                                                                                                <CheckCircle size={14} /> Validated
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </td>
+                                                                                    <td className="p-3 border-b text-center">
+                                                                                        <button 
+                                                                                            disabled={row._status === 'Rejected'}
+                                                                                            onClick={() => {
+                                                                                                const isRejected = itemEdit.status === 'Rejected';
+                                                                                                setBatchItemEdits(prev => ({
+                                                                                                    ...prev,
+                                                                                                    [batch.id]: {
+                                                                                                        ...(prev[batch.id] || {}),
+                                                                                                        [originalIdx]: {
+                                                                                                            ...((prev[batch.id] || {})[originalIdx] || {}),
+                                                                                                            status: isRejected ? 'Pending' : 'Rejected'
+                                                                                                        }
+                                                                                                    }
+                                                                                                }));
+                                                                                            }}
+                                                                                            style={{ 
+                                                                                                display: 'flex', alignItems: 'center', gap: '6px', margin: '0 auto',
+                                                                                                padding: '6px 12px', borderRadius: '8px', border: '1px solid', fontSize: '0.75rem', fontWeight: 700, 
+                                                                                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                                                cursor: row._status === 'Rejected' ? 'not-allowed' : 'pointer',
+                                                                                                backgroundColor: row._status === 'Rejected' ? '#f8fafc' : (itemEdit.status === 'Rejected' ? '#fff' : '#fff'),
+                                                                                                borderColor: row._status === 'Rejected' ? '#e2e8f0' : (itemEdit.status === 'Rejected' ? '#4f46e5' : '#e2e8f0'),
+                                                                                                color: row._status === 'Rejected' ? '#94a3b8' : (itemEdit.status === 'Rejected' ? '#4f46e5' : '#64748b'),
+                                                                                                boxShadow: itemEdit.status === 'Rejected' ? '0 0 10px rgba(79, 70, 229, 0.1)' : 'none'
+                                                                                            }}
+                                                                                            className="hover:scale-105 active:scale-95"
+                                                                                        >
+                                                                                            {row._status === 'Rejected' ? (
+                                                                                                <><PauseCircle size={14} /> Locked</>
+                                                                                            ) : (itemEdit.status === 'Rejected' ? (
+                                                                                                <><RotateCcw size={14} /> Undo</>
+                                                                                            ) : (
+                                                                                                <><XCircle size={14} /> Reject</>
+                                                                                            ))}
+                                                                                        </button>
+                                                                                    </td>
+                                                                                    <td className="p-3 border-b">
+                                                                                        <div className="flex flex-col gap-1.5 min-w-[180px]">
+                                                                                            <input 
+                                                                                                type="text" 
+                                                                                                placeholder="Explain rejection reason..."
+                                                                                                disabled={row._status === 'Rejected'}
+                                                                                                value={itemEdit.remarks || ''}
+                                                                                                onChange={e => {
+                                                                                                    setBatchItemEdits(prev => ({
+                                                                                                        ...prev,
+                                                                                                        [batch.id]: {
+                                                                                                            ...(prev[batch.id] || {}),
+                                                                                                            [originalIdx]: {
+                                                                                                                ...((prev[batch.id] || {})[originalIdx] || {}),
+                                                                                                                remarks: e.target.value
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }));
+                                                                                                }}
+                                                                                                style={{ 
+                                                                                                    width: '100%', padding: '8px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.8rem', outline: 'none',
+                                                                                                }}
+                                                                                            />
+                                                                                            {row._remarks && (
+                                                                                                <div className="flex items-start gap-2 bg-slate-100 p-2 rounded-lg border border-slate-200 shadow-sm animate-fade-in">
+                                                                                                    <div className="mt-0.5 bg-indigo-100 text-indigo-600 p-1 rounded-md"><User size={10} /></div>
+                                                                                                    <div style={{ fontSize: '0.7rem', color: '#475569', lineHeight: '1.3' }}>
+                                                                                                        <span style={{ fontWeight: 800, color: '#1e293b', display: 'block' }}>{row._remark_by || 'Approver'}</span>
+                                                                                                        {row._remarks}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </td>
+                                                                                </tr>
+                                                                            )})}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                                <div className="p-4 bg-slate-50 border-t flex justify-end gap-3 items-center">
+                                                                    <p className="text-[10px] text-slate-500 mr-auto flex items-center gap-1.5">
+                                                                        <AlertTriangle size={12} className="text-amber-500" /> 
+                                                                        Locked rows were rejected by previous managers and cannot be modified. Rows marked for rejection will not generate expenses.
+                                                                    </p>
+                                                                </div>
                                                             </div>
                                                         )}
                                                     </React.Fragment>

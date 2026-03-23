@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('core', '0004_alter_loginhistory_failure_reason'),
+        ('core', '0001_initial'),
     ]
 
     operations = [

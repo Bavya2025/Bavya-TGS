@@ -1,8 +1,8 @@
-from rest_framework import generics, viewsets, status, serializers
-from django.core.exceptions import PermissionDenied
-from rest_framework.response import Response
-from rest_framework.decorators import action
-from .models import (
+from rest_framework import generics, viewsets, status, serializers # type: ignore
+from django.core.exceptions import PermissionDenied # type: ignore
+from rest_framework.response import Response # type: ignore
+from rest_framework.decorators import action # type: ignore
+from .models import ( # type: ignore
     Trip, Expense, TravelClaim, TravelAdvance, TripOdometer, Dispute, PolicyDocument, BulkActivityBatch, JobReport,
     TravelModeMaster, BookingTypeMaster, AirlineMaster, FlightClassMaster, TrainClassMaster,
     BusOperatorMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
@@ -11,9 +11,9 @@ from .models import (
     StayTypeMaster, RoomTypeMaster, MealCategoryMaster, MealTypeMaster, IncidentalTypeMaster,
     CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking
 )
-from .serializers import (
+from .serializers import ( # type: ignore
     TripSerializer, ExpenseSerializer, TravelClaimSerializer, TravelAdvanceSerializer,
-    TripOdometerSerializer, DisputeSerializer, PolicyDocumentSerializer, BulkActivityBatchSerializer, JobReportSerializer,
+    TripOdometerSerializer, DisputeSerializer, PolicyDocumentSerializer, PolicyDocumentDetailSerializer, BulkActivityBatchSerializer, JobReportSerializer,
     TravelModeMasterSerializer, BookingTypeMasterSerializer, AirlineMasterSerializer,
     FlightClassMasterSerializer, TrainClassMasterSerializer, BusOperatorMasterSerializer,
     BusTypeMasterSerializer, IntercityCabVehicleMasterSerializer, TravelProviderMasterSerializer,
@@ -24,42 +24,40 @@ from .serializers import (
     CustomMasterDefinitionSerializer, CustomMasterValueSerializer, MasterModuleSerializer,
     TripTrackingSerializer
 )
-import io
-import json
-import pandas as pd
-from django.http import HttpResponse
-from rest_framework.permissions import AllowAny
-from django.db.models import Q
-import base64
-import binascii
-from api_management.utils import encrypt_key, decrypt_key
-from django.utils import timezone
-from rest_framework.views import APIView
-from django.db.models import Sum
-from core.models import Notification, User
-from core.permissions import IsCustomAuthenticated
-import requests
-import datetime
+import io # type: ignore
+import json # type: ignore
+import pandas as pd # type: ignore
+from django.http import HttpResponse # type: ignore
+from rest_framework.permissions import AllowAny # type: ignore
+from django.db.models import Q # type: ignore
+import base64 # type: ignore
+import binascii # type: ignore
+from api_management.utils import encrypt_key, decrypt_key # type: ignore
+from django.utils import timezone # type: ignore
+from rest_framework.views import APIView # type: ignore
+from django.db.models import Sum # type: ignore
+from core.models import Notification, User # type: ignore
+from core.permissions import IsCustomAuthenticated # type: ignore
+import requests # type: ignore
+import datetime # type: ignore
 
 def decode_id(encoded_id):
-    import base64
-    import binascii
-    
-    if not encoded_id:
+    s_id = str(encoded_id) if encoded_id else ""
+    if not s_id:
         return None
         
     try:
         # Check if it's already a numeric-looking ID or doesn't look like base64
-        if encoded_id.isdigit() or encoded_id.startswith('TRP-') or encoded_id.startswith('ITS-'):
-            return encoded_id
+        if s_id.isdigit() or s_id.startswith('TRP-') or s_id.startswith('ITS-'):
+            return s_id
             
-        padding = 4 - (len(encoded_id) % 4)
+        padding = 4 - (len(s_id) % 4)
         if padding != 4:
-            encoded_id += '=' * padding
+            s_id += '=' * padding
         
-        encoded_id = encoded_id.replace('-', '+').replace('_', '/')
+        s_id = s_id.replace('-', '+').replace('_', '/')
         
-        decoded_bytes = base64.b64decode(encoded_id)
+        decoded_bytes = base64.b64decode(s_id)
         return decoded_bytes.decode('utf-8')
     except (binascii.Error, UnicodeDecodeError, ValueError):
         return encoded_id
@@ -128,9 +126,6 @@ def get_hr_head(user):
         return local_hr[0]
     
     return all_hr[0] if all_hr else None
-
-    local_heads = [u for u in heads if u.base_location == user.base_location]
-    return local_heads[0] if local_heads else (heads[0] if heads else None)
 
 def notify_hr(title, message):
     """Notify all users with HR role."""
@@ -231,7 +226,7 @@ class TripListCreateView(generics.ListCreateAPIView):
             if user_role in ['admin', 'guesthousemanager', 'finance', 'cfo']:
                 return Trip.objects.all().order_by('-created_at')
             
-            from django.db.models import Q
+            from django.db.models import Q # type: ignore
             return Trip.objects.filter(
                 Q(user=user) | 
                 Q(current_approver=user)
@@ -242,7 +237,7 @@ class TripListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer, is_local=False):
         user = getattr(self.request, 'custom_user', None)
         if not user:
-            from rest_framework.exceptions import AuthenticationFailed
+            from rest_framework.exceptions import AuthenticationFailed # type: ignore
             raise AuthenticationFailed("Authentication required.")
         
         # Admin / Superuser skip approvals
@@ -282,7 +277,7 @@ class TripListCreateView(generics.ListCreateAPIView):
             # also log full traceback on server for diagnostics
             import traceback
             traceback.print_exc()
-            from rest_framework.exceptions import ValidationError
+            from rest_framework.exceptions import ValidationError # type: ignore # type: ignore # type: ignore
             msg = str(e)
             print("ERROR IN TRIP CREATION:", msg)
             raise ValidationError({"detail": msg})
@@ -314,8 +309,8 @@ class TravelListCreateView(TripListCreateView):
         if not user: return Trip.objects.none()
         return Trip.objects.filter(user=user, consider_as_local=True).order_by('-created_at')
 
-    def perform_create(self, serializer):
-        super().perform_create(serializer, is_local=True)
+    def perform_create(self, serializer, is_local=True): # type: ignore
+        super().perform_create(serializer, is_local=is_local)
 
 class TripBookingSearchView(generics.ListAPIView):
     serializer_class = TripSerializer
@@ -363,9 +358,8 @@ class TripDetailView(generics.RetrieveUpdateDestroyAPIView):
         
         obj = super().get_object()
         user = getattr(self.request, 'custom_user', None)
-        
         if not user:
-            self.permission_denied(self.request, message="Not authenticated")
+            raise PermissionDenied("Not authenticated")
             
         user_role = (user.role.name.lower() if user.role else '')
         is_admin = user_role in ['admin', 'it-admin', 'superuser']
@@ -511,7 +505,7 @@ class ApprovalsView(APIView):
         disputes = Dispute.objects.none()
 
         if tab == 'history':
-            from core.models import AuditLog
+            from core.models import AuditLog # type: ignore
             # Include 'UPDATE' to capture older approvals or edits made by managers
             involved_logs = AuditLog.objects.filter(user=user, action__in=['APPROVE', 'FORWARD', 'REJECT', 'UPDATE'])
             
@@ -708,7 +702,7 @@ class ApprovalsView(APIView):
             item_status = request.data.get('item_status')
             remarks = request.data.get('remarks', '')
             if item_id:
-                from .models import Expense
+                from .models import Expense # type: ignore
                 expense = Expense.objects.filter(id=item_id).first()
                 if expense:
                     update_fields = {'status': item_status}
@@ -777,7 +771,7 @@ class ApprovalsView(APIView):
             if not authorized:
                 raise Exception("You are not authorized to perform this action on this request.")
 
-        from core.models import AuditLog
+        from core.models import AuditLog # type: ignore
         if action == 'Reject':
             obj.status = 'Rejected'
             obj.current_approver = None
@@ -822,7 +816,7 @@ class ApprovalsView(APIView):
         if action == 'Approve':
             is_hr = _is_hr(user)
             is_finance = _is_finance_executive(user) or _is_finance_head(user)
-            from core.models import AuditLog
+            from core.models import AuditLog # type: ignore
             AuditLog.objects.create(
                 user=user, action='APPROVE', model_name=obj.__class__.__name__,
                 object_id=str(obj.pk), object_repr=str(obj)
@@ -836,7 +830,7 @@ class ApprovalsView(APIView):
                     
                     # If this is a claim, calculate the approved total based on item statuses
                     if isinstance(obj, TravelClaim):
-                        from django.db.models import Sum
+                        from django.db.models import Sum # type: ignore
                         # Re-calculate approved total from items not marked as Rejected
                         # We assume anything not 'Rejected' is 'Approved' or 'Pending' (which defaults to OK in this step)
                         # Actually, better to strictly count only 'Approved' or 'Pending'
@@ -1180,7 +1174,7 @@ class PolicyDocumentViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            from core.permissions import IsAdmin
+            from core.permissions import IsAdmin # type: ignore
             return [IsAdmin()]
         return [IsCustomAuthenticated()]
 
@@ -1209,6 +1203,9 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = getattr(self.request, 'custom_user', None)
+        if not user:
+            raise serializers.ValidationError("Authentication failed. Please log in again.")
+            
         trip = serializer.validated_data.get('trip')
         if trip and trip.user != user:
             raise serializers.ValidationError("Unauthorized trip association")
@@ -1233,7 +1230,7 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
             # If no managers at all, go to HR
             current_approver = get_hr_head(user)
 
-        from django.db.models import Sum
+        from django.db.models import Sum # type: ignore
         total_expense_sum = trip.expenses.aggregate(s=Sum('amount'))['s'] or 0
 
         claim = serializer.save(
@@ -1268,7 +1265,7 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         claim = serializer.save()
         
-        from django.db.models import Sum
+        from django.db.models import Sum # type: ignore
         total_amount = claim.trip.expenses.aggregate(s=Sum('amount'))['s'] or 0
         claim.total_amount = total_amount
         claim.approved_amount = total_amount
@@ -1301,13 +1298,16 @@ class TravelAdvanceViewSet(viewsets.ModelViewSet):
             trip_id = decode_id(trip_id)
             queryset = queryset.filter(trip__trip_id=trip_id)
         return queryset
-
     def perform_create(self, serializer):
         user = getattr(self.request, 'custom_user', None)
+        if not user:
+             from rest_framework.exceptions import AuthenticationFailed # type: ignore
+             raise AuthenticationFailed("Action requires authentication.")
+
         trip = serializer.validated_data.get('trip')
         if trip and trip.user != user:
             raise serializers.ValidationError("Unauthorized trip association")
-            
+
         reporting_manager = user.reporting_manager
         senior_manager = user.senior_manager
         hod_director = user.hod_director
@@ -1603,7 +1603,7 @@ class TripSettlementView(APIView):
         except Trip.DoesNotExist:
             return Response({"error": "Trip not found"}, status=404)
 
-        advances_list = TravelAdvance.objects.filter(trip=trip).order_at = ['created_at']
+        advances_list = TravelAdvance.objects.filter(trip=trip).order_by('created_at')
         total_advance = sum(a.requested_amount for a in advances_list if a.status == 'COMPLETED')
         
         claim_amt = 0
@@ -1657,6 +1657,9 @@ class TripSettlementView(APIView):
     def post(self, request):
         # Handle Finalize & Settle action
         user = getattr(request, 'custom_user', None)
+        if not user:
+            return Response({"error": "Authentication required"}, status=401)
+            
         trip_id_enc = request.data.get('trip_id')
         if not trip_id_enc:
             return Response({"error": "Trip ID required"}, status=400)
@@ -1704,7 +1707,7 @@ class CFOWarRoomView(APIView):
         avg_cost = (float(total_claims) / total_trips) if total_trips > 0 else 0
         
         # 3. Guest House Occupancy
-        from guest_house.models import Room, RoomBooking
+        from guest_house.models import Room, RoomBooking # type: ignore
         total_rooms = Room.objects.count()
         # Active bookings today
         active_bookings = RoomBooking.objects.filter(start_date__lte=now, end_date__gte=now).count()
@@ -1720,7 +1723,7 @@ class CFOWarRoomView(APIView):
             { 
                 "title": 'Total Spend (Monthly)', 
                 "value": f"₹{monthly_spend:,.0f}", 
-                "change": f"{abs(percent_change_spend):.1f}%", 
+                "change": f"{abs(float(percent_change_spend)):.1f}%", # type: ignore
                 "trend": 'up' if percent_change_spend >= 0 else 'down',
                 "icon": 'IndianRupee'
             },
@@ -1756,7 +1759,7 @@ class CFOWarRoomView(APIView):
 
         # 6. Advance Aging
         advances = TravelAdvance.objects.exclude(status='COMPLETED')
-        aging_buckets = { "0-30": 0, "31-60": 0, "60+": 0 }
+        aging_buckets = { "0-30": 0.0, "31-60": 0.0, "60+": 0.0 }
         for adv in advances:
             days = (now - adv.created_at).days
             amt = float(adv.requested_amount)
@@ -1808,14 +1811,14 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def template(self, request):
-        import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-        from openpyxl.utils import get_column_letter
-        from openpyxl.worksheet.datavalidation import DataValidation
-        from openpyxl.styles.differential import DifferentialStyle
-        from openpyxl.formatting.rule import FormulaRule
+        import openpyxl # type: ignore
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side # type: ignore
+        from openpyxl.utils import get_column_letter # type: ignore
+        from openpyxl.worksheet.datavalidation import DataValidation # type: ignore
+        from openpyxl.styles.differential import DifferentialStyle # type: ignore
+        from openpyxl.formatting.rule import FormulaRule # type: ignore
         import datetime
-        from django.utils import timezone
+        from django.utils import timezone # type: ignore
 
         wb = openpyxl.Workbook()
 
@@ -1824,7 +1827,7 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         loc_sheet.sheet_state = 'hidden'
 
         # 1. Try to get locations of employees reporting to the current manager
-        from api_management.services import get_manager_reports_locations
+        from api_management.services import get_manager_reports_locations # type: ignore
         user = getattr(request, 'custom_user', None)
         manager_code = user.employee_id if user else None
         
@@ -1864,7 +1867,7 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         HEADER_FILL   = PatternFill("solid", fgColor="BB0633")   # brand red
         NOTE_FILL     = PatternFill("solid", fgColor="FFF3CD")   # warm yellow
         HEADER_FONT   = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
-        NOTE_FONT     = Font(name="Calibri", italic=True, color="856404", size=9)
+        NOTE_FONT   = Font(name="Calibri", italic=True, color="856404", size=9)
         DATA_FONT     = Font(name="Calibri", size=10)
         CENTER        = Alignment(horizontal="center", vertical="center", wrap_text=True)
         LEFT          = Alignment(horizontal="left",   vertical="center", wrap_text=True)
@@ -1908,7 +1911,13 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         from zoneinfo import ZoneInfo
         ist_tz    = ZoneInfo('Asia/Kolkata')
         now_ist   = datetime.datetime.now(ist_tz)
-        time_str  = now_ist.strftime("%H:%M")
+        
+        # Round time to nearest 5 minutes
+        minute_rounded = (now_ist.minute // 5) * 5
+        now_rounded = now_ist.replace(minute=minute_rounded, second=0, microsecond=0)
+        time_str    = now_rounded.strftime("%H:%M")
+        # Excel stores time as a fraction of a day (e.g. 09:30 = 9.5/24)
+        now_fraction = (now_ist.hour * 3600 + now_ist.minute * 60) / 86400
 
         sample = [today_str, time_str, locations[0] if locations else "Office",
                   locations[1] if len(locations) > 1 else "Client Site",
@@ -1949,20 +1958,22 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         ws.add_data_validation(dv_date)
         dv_date.sqref = "A3:A103"   # Column A
 
-        # ── Validation 2: Time format HH:MM ─────────────────────────────────
-        # Excel stores time as a fraction of a day (e.g. 09:30 = 9.5/24)
-        now_fraction = (now_ist.hour * 3600 + now_ist.minute * 60) / 86400
+        # ── Validation 2: Time format HH:MM and 5-min increments ──────────────
+        # Use a custom formula to enforce both: >= now AND multi-of-5-mins
+        # 1440 = minutes in a day. ROUND ensures precision.
+        # Custom formulas in Excel Validation MUST start with '='
+        time_formula = f"=AND(MOD(ROUND(B3*1440,0),5)=0, B3>={float(now_fraction):.8f})"
+        
         dv_time = DataValidation(
-            type="time",
-            operator="greaterThanOrEqual",
-            formula1=str(round(now_fraction, 8)),
+            type="custom",
+            formula1=time_formula,
             showDropDown=False,
             showErrorMessage=True,
             errorTitle="Invalid Time",
-            error=f"Time must be ≥ current time ({time_str}). Use HH:MM (24h) format.",
+            error=f"Time must be a multiple of 5 minutes (e.g., 12:10, 12:15) and NOT in the past.",
             showInputMessage=True,
             promptTitle="Time (HH:MM)",
-            prompt=f"Enter time in HH:MM (24h). Must be ≥ {time_str} for today."
+            prompt=f"Enter time in HH:MM (24h). Must be ≥ {time_str} and a multiple of 5 minutes."
         )
         ws.add_data_validation(dv_time)
         dv_time.sqref = "B3:B103"   # Column B
@@ -1997,6 +2008,14 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         ws.add_data_validation(dv_to)
         dv_to.sqref = "D3:D103"   # Column D
 
+        # ── Conditional Formatting for Duplicate Locations ───────────────────
+        # Highlight Red if From == To
+        from openpyxl.styles import PatternFill # type: ignore
+        red_fill = PatternFill(start_color='FEE2E2', end_color='FEE2E2', fill_type='solid')
+        ws.conditional_formatting.add("C3:D103",
+            openpyxl.formatting.rule.FormulaRule(formula=["=$C3=$D3"], stopIfTrue=True, fill=red_fill))
+
+
         # Column E (Purpose) – no list validation, free text; just an input hint
         dv_purpose = DataValidation(
             type="textLength",
@@ -2026,128 +2045,146 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = 'attachment; filename="bulk_activity_template.xlsx"'
         return response
 
+    def get_queryset(self):
+        queryset = BulkActivityBatch.objects.all().order_by('-created_at')
+        trip_id = self.request.query_params.get('trip_id')
+        if trip_id:
+            queryset = queryset.filter(trip_id=trip_id)
+        
+        user = getattr(self.request, 'custom_user', None)
+        if user:
+            from django.db.models import Q # type: ignore
+            queryset = queryset.filter(Q(user=user) | Q(current_approver=user))
+            
+        return queryset
+
     @action(detail=False, methods=['post'])
     def upload(self, request):
+        user = getattr(request, 'custom_user', None)
+        if not user:
+            return Response({"error": "Authentication required"}, status=401)
+
         file = request.FILES.get('file')
+        json_data = request.data.get('data_json') # For resubmitting/editing rejected rows
         trip_id = request.data.get('trip_id') # Selected by user in UI
+        parent_batch_id = request.data.get('parent_batch_id')
         
-        if not file:
-            return Response({"error": "No file uploaded"}, status=400)
+        if not file and not json_data:
+            return Response({"error": "No file or data provided"}, status=400)
             
+        rows = []
+        file_name = "resubmission.json"
+        
         try:
-            # drop the instruction row that sits just below the header
-            df = pd.read_excel(file, skiprows=[1])
+            if file:
+                file_name = file.name
+                # drop the instruction row that sits just below the header
+                df = pd.read_excel(file, skiprows=[1])
 
-            # Map columns to internal JSON; ignore completely empty rows or
-            # any row where the date field clearly contains the word "instruc"
-            rows = []
-            for _, row in df.iterrows():
-                # treat rows with no data as blanks
-                if row.dropna().empty:
-                    continue
+                for index, row in df.iterrows():
+                    if row.dropna().empty: continue
+                    date_raw = row.get('Date', row.get('Date (YYYY-MM-DD)', ''))
+                    if pd.isna(date_raw): continue
+                    date_val = str(date_raw).strip()
+                    if 'instruc' in date_val.lower(): continue
+                    if len(str(date_val)) > 10: date_val = str(date_val)[:10] # type: ignore
 
-                # Support both new column names and old legacy names
-                date_raw = row.get('Date', row.get('Date (YYYY-MM-DD)', ''))
-                if pd.isna(date_raw):
-                    continue
-                date_val = str(date_raw).strip()
-                if 'instruc' in date_val.lower():
-                    # skip the instructions/sample row
-                    continue
-                if len(date_val) > 10:
-                    date_val = date_val[:10]
-
-                # Read the new Time column (stored as HH:MM string or Excel time fraction)
-                time_raw = row.get('Time', '')
-                if time_raw and str(time_raw).strip() not in ('', 'nan', 'NaT'):
-                    time_str = str(time_raw).strip()
-                    # Excel may read time as a float fraction of a day (e.g. 0.395833...)
-                    try:
-                        frac = float(time_str)
-                        if 0 <= frac < 1:
-                            total_secs = int(frac * 86400)
-                            time_str = f"{total_secs // 3600:02d}:{(total_secs % 3600) // 60:02d}"
-                    except (ValueError, TypeError):
-                        pass  # already a string like "09:30"
-                    # Strip any trailing :00 seconds if HH:MM:SS
-                    time_str = ':'.join(time_str.split(':')[:2])
-                else:
+                    time_raw = row.get('Time', '')
                     time_str = ''
+                    if time_raw and str(time_raw).strip() not in ('', 'nan', 'NaT'):
+                        time_str = str(time_raw).strip()
+                        try:
+                            frac = float(time_str)
+                            if 0 <= frac < 1:
+                                total_secs = int(frac * 86400)
+                                time_str = f"{total_secs // 3600:02d}:{(total_secs % 3600) // 60:02d}"
+                        except (ValueError, TypeError): pass
+                        time_str = ':'.join(str(time_str).split(':')[:2]) # type: ignore
 
-                rows.append({
-                    "date": date_val,
-                    "time": time_str,
-                    "mode": "Bike",
-                    "origin_route": str(row.get('From Location', row.get('from location', ''))),
-                    "destination_route": str(row.get('To Location', row.get('to location', ''))),
-                    "vehicle": "Own Bike",
-                    "visit_intent": str(row.get('Purpose', row.get('purpose', '')))
-                })
-            
-            user = request.custom_user
-            
-            # Find the first valid approver in the management hierarchy
-            from core.models import User
-            def is_management_role(u):
-                if not u or not u.role: return False
-                return u.role.name.lower() in ['admin', 'it-admin', 'superuser', 'it admin', 'system administrator']
+                    origin = str(row.get('From Location', row.get('from location', ''))).strip()
+                    destination = str(row.get('To Location', row.get('to location', ''))).strip()
+                    if origin and destination and origin.lower() == destination.lower():
+                        raise Exception(f"Row {index + 3}: From Location and To Location cannot be the same.")
 
-            rm = user.reporting_manager
-            sm = user.senior_manager
-            hod = user.hod_director
+                    rows.append({
+                        "date": date_val, "time": time_str, "mode": "Bike",
+                        "origin_route": origin, "destination_route": destination,
+                        "vehicle": "Own Bike", "visit_intent": str(row.get('Purpose', row.get('purpose', '')))
+                    })
+            else:
+                # Direct JSON submission (resubmitting rejected rows)
+                rows = json_data if isinstance(json_data, list) else []
+                from datetime import datetime
+                file_name = f"resubmitted_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
             
-            current_approver = rm if not is_management_role(rm) else None
-            h_level = 1
+            if not rows:
+                return Response({"error": "No valid activity rows found"}, status=400)
+
+            if not user:
+                return Response({"error": "User not found in request"}, status=400)
+
+            rm, sm, hod = user.reporting_manager, user.senior_manager, user.hod_director
+            
+            def is_mgmt(u):
+                return u and hasattr(u, 'role') and u.role and u.role.name.lower() in ['admin', 'superuser', 'it admin']
+
+            current_approver = rm if not is_mgmt(rm) else (sm if not is_mgmt(sm) else (hod if not is_mgmt(hod) else None))
+            h_level = 1 if current_approver == rm else (2 if current_approver == sm else (3 if current_approver == hod else 1))
             
             if not current_approver:
-                current_approver = sm if not is_management_role(sm) else None
-                h_level = 2
-            
-            if not current_approver:
-                current_approver = hod if not is_management_role(hod) else None
-                h_level = 3
-                
-            if not current_approver:
-                 # Final fallback to HR Head
-                 from .views import get_hr_head
                  current_approver = get_hr_head(user)
                  h_level = 1
 
             batch = BulkActivityBatch.objects.create(
-                user=user,
-                trip_id=trip_id,
-                file_name=file.name,
-                data_json=rows,
-                status='Submitted',
-                current_approver=current_approver,
-                hierarchy_level=h_level
+                user=user, trip_id=trip_id, file_name=file_name,
+                data_json=rows, status='Submitted',
+                current_approver=current_approver, hierarchy_level=h_level
             )
+            
+            # If this is a resubmission, mark the parent batch as Resolved
+            if parent_batch_id:
+                try:
+                    parent_batch = BulkActivityBatch.objects.get(id=parent_batch_id)
+                    parent_batch.status = 'Resolved'
+                    parent_batch.save()
+                except BulkActivityBatch.DoesNotExist:
+                    pass
             
             if current_approver:
                 Notification.objects.create(
-                    user=current_approver,
-                    title="New Bulk Activity Batch",
-                    message=f"{user.name} submitted a bulk travel log for approval.",
-                    type='info'
+                    user=current_approver, title="New Bulk Activity Batch",
+                    message=f"{user.name} submitted a bulk travel log for approval.", type='info'
                 )
             
             return Response(BulkActivityBatchSerializer(batch).data)
         except Exception as e:
-            return Response({"error": f"Failed to parse Excel: {str(e)}"}, status=400)
+            return Response({"error": f"Failed to process submission: {str(e)}"}, status=400)
 
     @action(detail=True, methods=['post'], url_path='approve')
     def approve_batch(self, request, pk=None):
         batch = self.get_object()
         user = getattr(request, 'custom_user', None)
         
+        if not user:
+             return Response({"error": "Authentication required"}, status=401)
+             
         if batch.status not in ['Submitted', 'Manager Approved']:
             return Response({"error": "Batch is not in a valid status for approval"}, status=400)
             
         if batch.current_approver != user:
              return Response({"error": "Unauthorized: You are not the designated approver."}, status=403)
-            
+
+        # Sync any row-level rejections/remarks from frontend
+        if 'data_json' in request.data and request.data['data_json']:
+            batch.data_json = request.data['data_json']
+            batch.save()
+
         is_hr = _is_hr(user)
         requester = batch.user
+
+        # Count newly/previously rejected rows for better notification
+        rejected_rows = [r for r in batch.data_json if r.get('_status') == 'Rejected']
+        rejection_note = f" (with {len(rejected_rows)} lines rejected)" if rejected_rows else ""
         
         # If the approver is not HR, do management chain logic
         if not is_hr:
@@ -2186,9 +2223,9 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 )
                 Notification.objects.create(
                     user=requester,
-                    title=f"Approved by {user.name}",
-                    message=f"Your bulk travel log has been approved by {user.name} and forwarded to {next_approver.name} for the next level review.",
-                    type='success'
+                    title=f"Forwarded by {user.name}",
+                    message=f"Your bulk travel log has been reviewed by {user.name}{rejection_note} and forwarded to {next_approver.name}.",
+                    type='warning' if rejected_rows else 'success'
                 )
                 return Response({"message": f"Batch approved and forwarded to {next_approver.name}."})
             else:
@@ -2206,9 +2243,9 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 
                 Notification.objects.create(
                     user=requester,
-                    title=f"Approved by {user.name}",
-                    message=f"Your bulk travel log has been approved by {user.name} and sent to HR for verification.",
-                    type='success'
+                    title="Management Reviewed",
+                    message=f"Your bulk travel log has been reviewed by management{rejection_note} and sent to HR for verification.",
+                    type='warning' if rejected_rows else 'success'
                 )
                 
                 if hr_head:
@@ -2233,7 +2270,11 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 batch.trip.save()
         # Create Expenses (Activities) for each row only when the final manager approves
         created_ids = []
-        for row in batch.data_json:
+        for row in (batch.data_json or []):
+            # SKIP REJECTED ROWS during final creation
+            if row.get('_status') == 'Rejected':
+                continue
+
             # 1. Get Origin and Destination from JSON
             origin = str(row.get('origin_route', '')).strip()
             destination = str(row.get('destination_route', '')).strip()
@@ -2273,8 +2314,8 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
             except Exception:
                 continue
 
-            if len(clean_date) > 10:
-                clean_date = clean_date[:10]
+            if len(str(clean_date)) > 10:
+                clean_date = str(clean_date)[:10] # type: ignore
 
             desc_json = {
                 "natureOfVisit": row.get('visit_intent'), # Updated to use visit_intent as purpose was removed
@@ -2295,8 +2336,8 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
             
             def safe_float(val):
                 try: 
-                    return float(val) if val not in [None, '', '-'] else 0.0
-                except: 
+                    return float(val) if val not in [None, '', '-', 'nan', 'NaN'] else 0.0 # type: ignore
+                except (ValueError, TypeError): 
                     return 0.0
 
             odo_s = safe_float(row.get('odo_start', 0))
@@ -2312,7 +2353,7 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 status='Approved', 
                 odo_start=odo_s,
                 odo_end=odo_e,
-                distance=max(0, odo_e - odo_s),
+                distance=max(0.0, float(odo_e - odo_s)),
                 travel_mode=mapped_mode,
                 vehicle_type=mapped_subType,
                 latitude=0, longitude=0
