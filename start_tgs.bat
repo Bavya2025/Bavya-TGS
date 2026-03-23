@@ -13,19 +13,19 @@ SET "NGINX_URL=http://nginx.org/download/nginx-1.24.0.zip"
 :: --- APP 1: TGS (at %~dp0) ---
 SET APP1_NAME=TGS_Core
 SET APP1_PATH=%~dp0
-SET APP1_FRONTEND=TGS_FRONTEND
+SET APP1_FRONTEND=frontend
 SET APP1_HIGH_LOAD=false
 SET APP1_PORTS=4567 4568
 
-:: --- APP 2: Finance ---
-SET APP2_NAME=Finance_App
-SET APP2_PATH=C:\Apps\Finance
+:: --- REPLICATED INSTANCES FOR HIGH LOAD ---
+:: All points to the same TGS root to scale workers
+SET APP2_NAME=TGS_Replica_1
+SET APP2_PATH=%~dp0
 SET APP2_FRONTEND=frontend
 SET APP2_PORTS=4570
 
-:: --- APP 3: HR ---
-SET APP3_NAME=HR_App
-SET APP3_PATH=C:\Apps\HR
+SET APP3_NAME=TGS_Replica_2
+SET APP3_PATH=%~dp0
 SET APP3_FRONTEND=frontend
 SET APP3_PORTS=4573
 
@@ -69,12 +69,13 @@ set "APP_ROOT_FWD=%~dp0"
 set "APP_ROOT_FWD=%APP_ROOT_FWD:\=/%"
 if "%APP_ROOT_FWD:~-1%"=="/" set "APP_ROOT_FWD=%APP_ROOT_FWD:~0,-1%"
 
-powershell -Command "(Get-Content '%~dp0nginx.conf') -replace 'include\s+\"[^\"]*?/?tools/nginx/conf/mime\.types\";', 'include       \"%APP_ROOT_FWD%/tools/nginx/conf/mime.types\";' -replace 'root\s+\"[^\"]*?/?TGS_FRONTEND/dist\";', 'root \"%APP_ROOT_FWD%/TGS_FRONTEND/dist\";' | Set-Content '%~dp0nginx.conf'"
+:: Removed fixed path replacement as nginx.conf now uses relative paths with prefix -p
+:: powershell -Command "(Get-Content '%~dp0nginx.conf') -replace 'include\s+\"[^\"]*?/?tools/nginx/conf/mime\.types\";', 'include       \"%APP_ROOT_FWD%/tools/nginx/conf/mime.types\";' -replace 'root\s+\"[^\"]*?/?TGS_FRONTEND/dist\";', 'root \"%APP_ROOT_FWD%/TGS_FRONTEND/dist\";' | Set-Content '%~dp0nginx.conf'"
 
 echo [FINAL] Starting Nginx...
 if exist "%NGINX_ROOT%\nginx.exe" (
     cd /d "%NGINX_ROOT%"
-    start "" nginx.exe -c "%~dp0nginx.conf"
+    start "" nginx.exe -p "%~dp0" -c "%~dp0nginx.conf"
 ) else (
     echo [ERROR] Nginx binary not found at %NGINX_ROOT%.
     pause & exit /b
@@ -107,12 +108,17 @@ if not exist "%B_PATH%\backend\manage.py" (
 
 echo [INIT] Setting up %NAME%...
 
-:: Build Frontend
+:: Build Frontend (Skip if already built for this path in this run)
 if exist "%B_PATH%\%FE_DIR%" (
-    echo      -- Building Frontend...
-    cd /d "%B_PATH%\%FE_DIR%"
-    if not exist "node_modules" call npm install --quiet
-    call npm run build
+    if "!ALREADY_BUILT_%B_PATH:\=_%!"=="true" (
+        echo      -- Skipping redundant build for %NAME%
+    ) else (
+        echo      -- Building Frontend for %NAME%...
+        cd /d "%B_PATH%\%FE_DIR%"
+        if not exist "node_modules" call npm install --quiet
+        call npm run build
+        set "ALREADY_BUILT_%B_PATH:\=_%=true"
+    )
 )
 
 :: Setup Backend
