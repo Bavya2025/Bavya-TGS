@@ -3,7 +3,7 @@ import api from '../api/api';
 import {
     Plus, Edit2, Trash2, CheckCircle, XCircle, ChevronDown, AlignLeft, Settings, Layers, AlertCircle
 } from 'lucide-react';
-import '../styles/AdminMasterManagement.css';
+//
 import { useToast } from '../context/ToastContext';
 
 // Config layout for managing the system architecture itself
@@ -35,6 +35,16 @@ export default function AdminMasterManagement() {
     const [formData, setFormData] = useState({});
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
+
+    const getVisibleFields = (tab) => {
+        if (!tab) return [];
+        if (tab.id === 'custom_master_def') {
+            return tab.fields.filter(field => !['api_endpoint', 'fields_list'].includes(field));
+        }
+        return tab.fields;
+    };
+
+    const visibleFields = getVisibleFields(activeTab);
 
     // Initial load: Fetch the structure from the database
     useEffect(() => {
@@ -69,7 +79,7 @@ export default function AdminMasterManagement() {
                         id: `table_${def.id}`,
                         name: def.table_name,
                         endpoint: def.api_endpoint || 'custom-master-values',
-                        fields: def.fields_list ? def.fields_list.split(',') : ['name', 'code'],
+                        fields: def.fields_list ? def.fields_list.split(',').map(f => f.trim()) : ['name', 'code'],
                         definitionId: def.api_endpoint ? null : def.id, // Only send definitionId for custom values table
                         isCustom: !def.is_system
                     }));
@@ -90,6 +100,13 @@ export default function AdminMasterManagement() {
                 const updatedActive = newGroups.find(g => g.id === activeGroup.id);
                 if (updatedActive) {
                     setActiveGroup(updatedActive);
+                    // Update activeTab to ensure its fields array is refreshed from the new definition fetch
+                    if (activeTab) {
+                        const newTab = updatedActive.tables.find(t => t.id === activeTab.id);
+                        if (newTab) {
+                            setActiveTab(newTab);
+                        }
+                    }
                 } else {
                     const first = newGroups[0];
                     if (first) {
@@ -110,7 +127,7 @@ export default function AdminMasterManagement() {
 
             // If it's a generic custom value table, we must filter by the specific definition ID
             if (activeTab.definitionId) {
-                url += `?definition_id=${activeTab.definitionId}`;
+                url += `?definition=${activeTab.definitionId}`;
             }
 
             const res = await api.get(url);
@@ -125,13 +142,23 @@ export default function AdminMasterManagement() {
     const handleOpenForm = (item = null) => {
         setEditingItem(item);
         if (item) {
-            setFormData(item);
+            const nextFormData = { ...item };
+            if (activeTab.id === 'custom_master_def') {
+                nextFormData.api_endpoint = item.api_endpoint || '';
+                nextFormData.fields_list = item.fields_list || '';
+            }
+            setFormData(nextFormData);
         } else {
             const initial = {};
             activeTab.fields.forEach(f => {
                 if (f === 'module_ref' && activeGroup.id !== 'config') initial[f] = activeGroup.id;
+                else if (f.startsWith('is_')) initial[f] = false;
                 else initial[f] = '';
             });
+            if (activeTab.id === 'custom_master_def') {
+                initial.api_endpoint = '';
+                initial.fields_list = '';
+            }
             setFormData(initial);
         }
         setIsFormOpen(true);
@@ -141,6 +168,11 @@ export default function AdminMasterManagement() {
         e.preventDefault();
         try {
             const payload = { ...formData };
+
+            if (activeTab.id === 'custom_master_def') {
+                payload.api_endpoint = payload.api_endpoint || '';
+                payload.fields_list = (payload.fields_list || 'name,code').trim();
+            }
 
             // Inject definition ID for custom value records
             if (activeTab.definitionId) {
@@ -161,7 +193,11 @@ export default function AdminMasterManagement() {
                 fetchStructure();
             }
         } catch (error) {
-            showToast("Operation failed. Check inputs.", "error");
+            const errorData = error.response?.data;
+            const firstFieldError = errorData && typeof errorData === 'object'
+                ? Object.values(errorData).flat().find(Boolean)
+                : null;
+            showToast(firstFieldError || errorData?.detail || "Operation failed. Check inputs.", "error");
         }
     };
 
@@ -185,14 +221,14 @@ export default function AdminMasterManagement() {
     };
 
     return (
-        <div className="admin-mgmt-wrapper custom-scrollbar">
+        <div className="content-inner animate-fade-in">
             <div className="admin-mgmt-header">
                 <h1>Master Data Management</h1>
                 <p>Configure system hierarchies and dynamic data tables.</p>
             </div>
 
             {/* Top Navigation - Module Level */}
-            <div className="module-nav">
+            <div className="trip-category-toggle">
                 {groups.map(group => (
                     <button
                         key={group.id}
@@ -210,7 +246,7 @@ export default function AdminMasterManagement() {
 
             <div className="admin-content-grid">
                 {/* Sidebar - Table Level */}
-                <div className="sidebar-panel">
+                <div className="glass premium-card">
                     <h3 className="sidebar-title">Available Tables</h3>
                     <div className="master-selector-list">
                         {activeGroup.tables.map(table => (
@@ -227,7 +263,7 @@ export default function AdminMasterManagement() {
                 </div>
 
                 {/* Main Data Panel */}
-                <div className="main-table-panel">
+                <div className="glass premium-card">
                     <div className="panel-header">
                         <h2>{activeTab.name}</h2>
                         <button className="add-btn" onClick={() => handleOpenForm()}>
@@ -247,7 +283,7 @@ export default function AdminMasterManagement() {
                                 <thead>
                                     <tr>
                                         <th>ID</th>
-                                        {activeTab.fields.map(f => (
+                                        {visibleFields.map(f => (
                                             <th key={f}>{f.replace(/_/g, ' ').toUpperCase()}</th>
                                         ))}
                                         <th style={{ textAlign: 'right' }}>ACTIONS</th>
@@ -257,12 +293,25 @@ export default function AdminMasterManagement() {
                                     {data.length > 0 ? data.map(item => (
                                         <tr key={item.id}>
                                             <td><span className="id-badge">{item.id}</span></td>
-                                            {activeTab.fields.map(f => (
+                                            {visibleFields.map(f => (
                                                 <td key={f}>
-                                                    {f === 'module_ref' ?
-                                                        (allModules.find(m => m.id === item[f])?.name || item[f]) :
-                                                        String(item[f] || '')
-                                                    }
+                                                    {f === 'module_ref' ? (
+                                                        allModules.find(m => m.id === item[f])?.name || item[f]
+                                                    ) : f.startsWith('is_') || item[f] === true || item[f] === false || item[f] === 'true' || item[f] === 'false' ? (
+                                                        <span style={{ 
+                                                            color: (item[f] === true || item[f] === 'true' || item[f] === 1 || item[f] === '1') ? '#059669' : '#dc2626',
+                                                            fontWeight: 'bold',
+                                                            background: (item[f] === true || item[f] === 'true' || item[f] === 1 || item[f] === '1') ? '#ecfdf5' : '#fef2f2',
+                                                            padding: '4px 10px',
+                                                            borderRadius: '20px',
+                                                            fontSize: '0.8rem',
+                                                            display: 'inline-block'
+                                                        }}>
+                                                            {(item[f] === true || item[f] === 'true' || item[f] === 1 || item[f] === '1') ? 'TRUE' : 'FALSE'}
+                                                        </span>
+                                                    ) : (
+                                                        item[f] === null || item[f] === undefined ? '' : String(item[f])
+                                                    )}
                                                 </td>
                                             ))}
                                             <td>
@@ -278,7 +327,7 @@ export default function AdminMasterManagement() {
                                         </tr>
                                     )) : (
                                         <tr>
-                                            <td colSpan={activeTab.fields.length + 2} className="empty-row">No records found.</td>
+                                            <td colSpan={visibleFields.length + 2} className="empty-row">No records found.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -294,7 +343,7 @@ export default function AdminMasterManagement() {
                     <div className="modal-content">
                         <h2 className="modal-title">{editingItem ? 'Edit Record' : 'Add New Record'}</h2>
                         <form onSubmit={handleSave}>
-                            {activeTab.fields.map(field => (
+                            {visibleFields.map(field => (
                                 <div key={field} className="form-field">
                                     <label>{field.replace(/_/g, ' ').toUpperCase()}</label>
                                     {field === 'module_ref' ? (
@@ -309,6 +358,13 @@ export default function AdminMasterManagement() {
                                                 <option key={m.id} value={m.id}>{m.name}</option>
                                             ))}
                                         </select>
+                                    ) : field.startsWith('is_') ? (
+                                        <input
+                                            type="checkbox"
+                                            className="form-checkbox-custom"
+                                            checked={formData[field] === true || formData[field] === 'true' || formData[field] === 1 || formData[field] === '1'}
+                                            onChange={e => setFormData({ ...formData, [field]: e.target.checked })}
+                                        />
                                     ) : (
                                         <input
                                             type="text"

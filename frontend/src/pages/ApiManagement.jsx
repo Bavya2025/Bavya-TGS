@@ -272,6 +272,7 @@ const ApiManagement = () => {
                 await api.delete(`/api/access-keys/${id}/`);
                 setGeneratedKeys(generatedKeys.filter(k => k.id !== id));
                 fetchDashboardData();
+                showToast("API key revoked successfully.", "success");
             } catch (error) {
                 showToast("Failed to revoke API key.", "error");
             }
@@ -454,7 +455,7 @@ const ApiManagement = () => {
                             className="btn-secondary whitespace-nowrap"
                             onClick={() => {
                                 navigator.clipboard.writeText(newlyCreatedKey?.key);
-                                alert("Copied to clipboard!");
+                                showToast("Copied to clipboard!", "success");
                             }}
                         >
                             <Copy size={16} /> Copy

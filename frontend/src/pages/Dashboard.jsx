@@ -88,7 +88,7 @@ const Dashboard = () => {
                         Hello, {user?.name || 'User'}! 
                     </h1>
                 </div>
-                <div className="header-actions">
+                <div className="dashboard-actions">
                     {userRole === 'guesthousemanager' ? (
                         <>
                             <button className="dashboard-action-btn primary" onClick={() => navigate('/guesthouse')}>

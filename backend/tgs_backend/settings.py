@@ -89,9 +89,10 @@ CORS_ALLOW_ALL_ORIGINS = True # Set to False in strict production
 #     "https://your-domain.com",
 # ]
 
-# CSRF Trusted Origins (Crucial for Nginx Proxying)
+# CSRF Trusted Origins (Crucial for Nginx Proxying and Local Dev)
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
+    "http://localhost:6785", # Added for local Vite dev
     "http://localhost:6786",
     "http://127.0.0.1:8000",
     "http://192.168.1.147", 

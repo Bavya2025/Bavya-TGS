@@ -193,10 +193,7 @@ const TravelExpenseGrid = ({
     const [fuelRates, setFuelRates] = useState({});
 
     // Bulk Upload State
-    const [bulkModal, setBulkModal] = useState({ visible: false, file: null, uploading: false, activeTab: 'upload' });
-    const [processedBatchIds, setProcessedBatchIds] = useState([]); // Track batches handled in this session
-    const [bulkHistory, setBulkHistory] = useState([]);
-    const [resubmitModal, setResubmitModal] = useState({ visible: false, batchId: null, rows: [], submitting: false });
+    const [bulkModal, setBulkModal] = useState({ visible: false, file: null, uploading: false });
 
     useEffect(() => {
         const fetchMasters = async () => {
@@ -212,25 +209,25 @@ const TravelExpenseGrid = ({
                 ] = await Promise.all([
                     api.get('/api/travel-mode-masters/'),
                     api.get('/api/booking-type-masters/'),
-                    api.get('/api/flight-class-masters/'),
-                    api.get('/api/train-class-masters/'),
-                    api.get('/api/bus-type-masters/'),
-                    api.get('/api/intercity-cab-vehicle-masters/'),
-                    api.get('/api/airline-masters/'),
-                    api.get('/api/bus-operator-masters/'),
+                    api.get('/api/travel-class-masters/?is_flight=true'),
+                    api.get('/api/travel-class-masters/?is_train=true'),
+                    api.get('/api/travel-class-masters/?is_bus=true'),
+                    api.get('/api/travel-vehicle-masters/?is_intercity_cab=true'),
+                    api.get('/api/travel-operator-masters/?is_flight=true'),
+                    api.get('/api/travel-operator-masters/?is_bus=true'),
                     api.get('/api/travel-provider-masters/'),
                     api.get('/api/local-travel-mode-masters/'),
-                    api.get('/api/local-car-subtype-masters/'),
-                    api.get('/api/local-bike-subtype-masters/'),
+                    api.get('/api/local-subtype-masters/?is_car=true'),
+                    api.get('/api/local-subtype-masters/?is_bike=true'),
                     api.get('/api/local-provider-masters/'),
                     api.get('/api/stay-type-masters/'),
                     api.get('/api/room-type-masters/'),
                     api.get('/api/meal-category-masters/'),
                     api.get('/api/meal-type-masters/'),
                     api.get('/api/incidental-type-masters/'),
-                    api.get('/api/train-provider-masters/'),
-                    api.get('/api/bus-provider-masters/'),
-                    api.get('/api/intercity-cab-provider-masters/')
+                    api.get('/api/travel-provider-masters/?is_train=true'),
+                    api.get('/api/travel-provider-masters/?is_bus=true'),
+                    api.get('/api/travel-provider-masters/?is_intercity_cab=true')
                 ]);
 
                 // Populate Travel
@@ -238,9 +235,9 @@ const TravelExpenseGrid = ({
                 if (bookedByRes.data.length > 0) setBookedByOptions(bookedByRes.data.filter(m => m.status).map(m => m.booking_type));
                 if (fClassesRes.data.length > 0) setFlightClasses(fClassesRes.data.filter(m => m.status).map(m => m.class_name));
                 if (tClassesRes.data.length > 0) setTrainClasses(tClassesRes.data.filter(m => m.status).map(m => m.class_name));
-                if (busTypesRes.data.length > 0) setBusSeatTypes(busTypesRes.data.filter(m => m.status).map(m => m.bus_type));
-                if (cabVehiclesRes.data.length > 0) setIntercityCabVehicleTypes(cabVehiclesRes.data.filter(m => m.status).map(m => m.vehicle_type));
-                if (airlinesRes.data.length > 0) setAirlines(airlinesRes.data.filter(m => m.status).map(m => m.airline_name));
+                if (busTypesRes.data.length > 0) setBusSeatTypes(busTypesRes.data.filter(m => m.status).map(m => m.class_name));
+                if (cabVehiclesRes.data.length > 0) setIntercityCabVehicleTypes(cabVehiclesRes.data.filter(m => m.status).map(m => m.vehicle_name));
+                if (airlinesRes.data.length > 0) setAirlines(airlinesRes.data.filter(m => m.status).map(m => m.operator_name));
                 if (busOpsRes.data.length > 0) setBusOperators(busOpsRes.data.filter(m => m.status).map(m => m.operator_name));
                 if (travProvRes.data.length > 0) setTravelProviders(travProvRes.data.filter(m => m.status).map(m => m.provider_name));
                 if (trainProvRes.data.length > 0) setTrainProviders(trainProvRes.data.filter(m => m.status).map(m => m.provider_name));
@@ -286,18 +283,7 @@ const TravelExpenseGrid = ({
             }
         };
         fetchFuelRates();
-        fetchBulkHistory();
-    }, [tripId]);
-
-    const fetchBulkHistory = async () => {
-        if (!tripId) return;
-        try {
-            const res = await api.get(`/api/bulk-activities/?trip_id=${tripId}`);
-            setBulkHistory(res.data);
-        } catch (err) {
-            console.error("Failed to fetch bulk history:", err);
-        }
-    };
+    }, []);
 
     // --- DATE RANGE CONSTRAINTS ---
     const getMinDate = () => {
@@ -544,22 +530,6 @@ const TravelExpenseGrid = ({
                     }
                 }
 
-                // 5-minute increment check
-                if (row.timeDetails.boardingTime) {
-                    const m = parseInt(row.timeDetails.boardingTime.split(':')[1]);
-                    if (m % 5 !== 0) {
-                        showToast(`Item #${rowNum}: Departure time must be in 5-minute increments (e.g. ${row.timeDetails.boardingTime.split(':')[0]}:${Math.round(m/5)*5}).`, "error");
-                        return false;
-                    }
-                }
-                if (row.timeDetails.actualTime) {
-                    const m = parseInt(row.timeDetails.actualTime.split(':')[1]);
-                    if (m % 5 !== 0) {
-                        showToast(`Item #${rowNum}: Arrival time must be in 5-minute increments (e.g. ${row.timeDetails.actualTime.split(':')[0]}:${Math.round(m/5)*5}).`, "error");
-                        return false;
-                    }
-                }
-
                 if (mode === 'Flight') {
                     if (!provider) { setRowError(row.id, 'provider', 'Airline Name is mandatory.'); return false; }
                     if (!ticketNo) { setRowError(row.id, 'ticketNo', 'Ticket Number is mandatory.'); return false; }
@@ -694,13 +664,6 @@ const TravelExpenseGrid = ({
                 if (row.timeDetails.boardingTime && row.timeDetails.actualTime) {
                     if (row.timeDetails.boardingTime >= row.timeDetails.actualTime) {
                         showToast(`Item #${rowNum}: End Time must be greater than Start Time.`, "error");
-                        return false;
-                    }
-                    // 5-minute increment check
-                    const m1 = parseInt(row.timeDetails.boardingTime.split(':')[1]);
-                    const m2 = parseInt(row.timeDetails.actualTime.split(':')[1]);
-                    if (m1 % 5 !== 0 || m2 % 5 !== 0) {
-                        showToast(`Item #${rowNum}: Times must be in 5-minute increments.`, "error");
                         return false;
                     }
                 }
@@ -1461,71 +1424,14 @@ const TravelExpenseGrid = ({
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             showToast("Bulk activities submitted for batch approval successfully!", "success");
-            setBulkModal({ visible: false, file: null, uploading: false, activeTab: 'upload' });
-            fetchBulkHistory();
+            setBulkModal({ visible: false, file: null, uploading: false });
+            // Let the main window know of update 
             if (onUpdate) onUpdate();
         } catch (error) {
             console.error('Upload error:', error);
             showToast(error.response?.data?.error || "Error uploading file", "error");
             setBulkModal(prev => ({ ...prev, uploading: false }));
         }
-    };
-
-    const handleResubmit = async () => {
-        if (resubmitModal.rows.length === 0) {
-            showToast("No rows to resubmit", "warning");
-            return;
-        }
-
-        setResubmitModal(prev => ({ ...prev, submitting: true }));
-        try {
-            const resubmitPayload = {
-                trip_id: tripId,
-                data_json: resubmitModal.rows,
-                parent_batch_id: resubmitModal.batchId
-            };
-            await api.post('/api/bulk-activities/upload/', resubmitPayload, {
-                headers: { 'Content-Type': 'application/json' }
-            });
-
-            showToast("Batch resubmitted successfully!", "success");
-            setResubmitModal({ visible: false, batchId: null, rows: [], submitting: false });
-
-            // Add to processed tracking to avoid showing "Resolve & Resubmit" again for this batch
-            if (resubmitModal.batchId) {
-                setProcessedBatchIds(prev => [...prev, resubmitModal.batchId]);
-            }
-
-            fetchBulkHistory();
-            if (onUpdate) onUpdate();
-        } catch (error) {
-            console.error('Resubmit error:', error);
-            showToast(error.response?.data?.error || "Failed to resubmit", "error");
-            setResubmitModal(prev => ({ ...prev, submitting: false }));
-        }
-    };
-
-    const startResubmission = (batch) => {
-        const rejectedRows = (batch.data_json || []).filter(r => r._status === 'Rejected');
-        if (rejectedRows.length === 0) {
-            showToast("No rejected rows found in this batch", "info");
-            return;
-        }
-        setResubmitModal({
-            visible: true,
-            batchId: batch.id,
-            rows: rejectedRows.map(r => ({ ...r, _status: 'Resubmitted' })),
-            submitting: false
-        });
-        setBulkModal(prev => ({ ...prev, visible: false }));
-    };
-
-    const updateResubmitRow = (idx, field, val) => {
-        setResubmitModal(prev => {
-            const newRows = [...prev.rows];
-            newRows[idx] = { ...newRows[idx], [field]: val };
-            return { ...prev, rows: newRows };
-        });
     };
 
     const isLocked = claimStatus && !['Draft', 'Rejected'].includes(claimStatus);
@@ -1565,9 +1471,9 @@ const TravelExpenseGrid = ({
                     {!isLocked && (
                         <div style={{ display: 'flex', gap: '10px' }}>
                             {showBulkUpload && nature === 'Local Travel' && (
-                                <button className="add-cat-row-btn" style={{ background: '#10b981', color: 'white', borderColor: '#10b981' }} onClick={() => setBulkModal(prev => ({ ...prev, visible: true, activeTab: 'history', hideUpload: true }))}>
-                                    <RotateCcw size={14} />
-                                    <span>Bulk Upload Rejections</span>
+                                <button className="add-cat-row-btn" style={{ background: '#10b981', color: 'white', borderColor: '#10b981' }} onClick={() => setBulkModal(prev => ({ ...prev, visible: true }))}>
+                                    <Upload size={14} />
+                                    <span>Bulk Upload (Excel)</span>
                                 </button>
                             )}
                             <button className="add-cat-row-btn" onClick={() => addRow(nature)}>
@@ -1650,7 +1556,7 @@ const TravelExpenseGrid = ({
                                                                         </div>
                                                                         <div className="input-with-label-mini">
                                                                             <label>Time</label>
-                                                                            <input type="time" step={300} value={row.timeDetails?.boardingTime || ''} onChange={e => updateTimeDetails(row.id, 'boardingTime', e.target.value)} className="cat-input" disabled={isLocked} />
+                                                                            <input type="time" value={row.timeDetails?.boardingTime || ''} onChange={e => updateTimeDetails(row.id, 'boardingTime', e.target.value)} className="cat-input" disabled={isLocked} />
                                                                         </div>
                                                                         <div className="input-with-label-mini">
                                                                             <label>Location</label>
@@ -2218,9 +2124,11 @@ const TravelExpenseGrid = ({
                                                                         {localProviders.map(s => <option key={s} value={s}>{s}</option>)}
                                                                     </select>
                                                                 )}
-                                                                <select className="cat-input mt-1" value={row.details.bookedBy || 'Self Booked'} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'bookedBy', e.target.value); }} disabled={isFixedLocal}>
-                                                                    {bookedByOptions.map(b => <option key={b} value={b}>{b}</option>)}
-                                                                </select>
+                                                                {!['Own Bike', 'Company Bike', 'Own Car', 'Company Car'].includes(row.details.subType) && !['Metro Train', 'Bus'].includes(row.details.mode) && (
+                                                                    <select className="cat-input mt-1" value={row.details.bookedBy || 'Self Booked'} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'bookedBy', e.target.value); }} disabled={isFixedLocal}>
+                                                                        {bookedByOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                                                                    </select>
+                                                                )}
                                                             </div>
                                                         </td>
                                                         <td>
@@ -3140,244 +3048,65 @@ const TravelExpenseGrid = ({
             {/* Bulk Upload Modal */}
             {bulkModal.visible && (
                 <div className="modal-overlay">
-                    <div className="modal-body bulk-upload-modal" style={{ maxWidth: '700px' }}>
-                        <button className="modal-close" onClick={() => setBulkModal({ visible: false, file: null, uploading: false, activeTab: 'upload' })}>
+                    <div className="modal-body bulk-upload-modal">
+                        <button className="modal-close" onClick={() => setBulkModal({ visible: false, file: null, uploading: false })}>
                             <X size={24} />
                         </button>
                         <div className="modal-header">
-                            {bulkModal.hideUpload ? <AlertTriangle className="modal-icon text-warning" /> : <Upload className="modal-icon text-primary" />}
-                            <h2>{bulkModal.hideUpload ? 'Local Rejection Manager' : 'Bulk Activity Center'}</h2>
-                            <p className="text-secondary">{bulkModal.hideUpload ? 'Review and resolve rejected local travel activities' : `Manage your mass local activities for ${tripId}`}</p>
+                            <Upload className="modal-icon text-primary" />
+                            <h2>Bulk Activity Upload</h2>
+                            <p className="text-secondary">Upload multiple daily local travel logs for this trip via Excel.</p>
                         </div>
-
-                        {!bulkModal.hideUpload && (
-                            <div className="bulk-modal-tabs">
-                                <button className={`bulk-tab-btn ${bulkModal.activeTab === 'upload' ? 'active' : ''}`} onClick={() => setBulkModal(p => ({ ...p, activeTab: 'upload' }))}>
-                                    <Plus size={16} /> New Upload
-                                </button>
-                                <button className={`bulk-tab-btn ${bulkModal.activeTab === 'history' ? 'active' : ''}`} onClick={() => setBulkModal(p => ({ ...p, activeTab: 'history' }))}>
-                                    <Clock size={16} /> History ({bulkHistory.length})
-                                </button>
-                            </div>
-                        )}
-
-                        <div className="modal-content mt-4">
-                            {bulkModal.activeTab === 'upload' ? (
-                                <>
-                                    <div className="upload-steps">
-                                        <div className="step-card">
-                                            <div className="step-number">1</div>
-                                            <div className="step-details">
-                                                <h4>Download Template</h4>
-                                                <p>Get the standard Excel format for daily entries.</p>
-                                                <button className="btn-outline-primary mt-2" onClick={handleDownloadTemplate} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', borderRadius: '4px', border: '1px solid #3b82f6', color: '#3b82f6', background: 'transparent', cursor: 'pointer' }}>
-                                                    <FileText size={18} /> Download Excel
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div className="step-card mt-3">
-                                            <div className="step-number">2</div>
-                                            <div className="step-details">
-                                                <h4>Upload Filled File</h4>
-                                                <p>Select your completed template for this trip.</p>
-                                                <div className="file-upload-wrapper mt-2">
-                                                    <input
-                                                        type="file"
-                                                        accept=".xlsx, .xls"
-                                                        id="bulkFile"
-                                                        onChange={(e) => setBulkModal(prev => ({ ...prev, file: e.target.files[0] }))}
-                                                        style={{ display: 'none' }}
-                                                    />
-                                                    <label htmlFor="bulkFile" className={`file-upload-label ${bulkModal.file ? 'has-file' : ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '20px', border: '2px dashed #cbd5e1', borderRadius: '8px', cursor: 'pointer', background: bulkModal.file ? '#f0fdf4' : '#f8fafc', color: bulkModal.file ? '#166534' : '#64748b' }}>
-                                                        <Upload size={24} />
-                                                        <span>{bulkModal.file ? bulkModal.file.name : 'Click to Browse File'}</span>
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="modal-actions mt-4" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                                        <button className="btn-secondary" onClick={() => setBulkModal({ visible: false, file: null, uploading: false, activeTab: 'upload' })} style={{ flex: 1, padding: '10px', border: '1px solid #cbd5e1', borderRadius: '4px', background: 'transparent', cursor: 'pointer' }}>
-                                            Cancel
-                                        </button>
-                                        <button
-                                            className={`btn-primary ${(!bulkModal.file || bulkModal.uploading) ? 'btn-disabled' : ''}`}
-                                            onClick={handleBulkUpload}
-                                            disabled={!bulkModal.file || bulkModal.uploading}
-                                            style={{ flex: 1, padding: '10px', background: 'var(--magenta)', color: 'white', border: 'none', borderRadius: '4px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: (!bulkModal.file || bulkModal.uploading) ? 'not-allowed' : 'pointer', opacity: (!bulkModal.file || bulkModal.uploading) ? 0.6 : 1 }}
-                                        >
-                                            {bulkModal.uploading ? (
-                                                <><Clock className="animate-spin" size={18} /> Uploading...</>
-                                            ) : (
-                                                <>Submit for Approval</>
-                                            )}
+                        <div className="modal-content">
+                            <div className="upload-steps">
+                                <div className="step-card">
+                                    <div className="step-number">1</div>
+                                    <div className="step-details">
+                                        <h4>Download Template</h4>
+                                        <p>Get the standard Excel format for daily entries.</p>
+                                        <button className="btn-outline-primary mt-2" onClick={handleDownloadTemplate} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', borderRadius: '4px', border: '1px solid #3b82f6', color: '#3b82f6', background: 'transparent', cursor: 'pointer' }}>
+                                            <FileText size={18} /> Download Excel
                                         </button>
                                     </div>
-                                </>
-                            ) : (
-                                <div className="bulk-history-view">
-                                    {(() => {
-                                        const displayHistory = bulkModal.hideUpload
-                                            ? bulkHistory.filter(batch => 
-                                                batch.status !== 'Resolved' && 
-                                                (batch.data_json || []).some(r => r._status === 'Rejected')
-                                            )
-                                            : bulkHistory;
-
-                                        if (displayHistory.length === 0) {
-                                            return (
-                                                <div className="empty-history text-center py-8">
-                                                    {bulkModal.hideUpload ? <CheckCircle2 size={40} className="text-success mx-auto mb-2" /> : <Clock size={40} className="text-muted mx-auto mb-2" />}
-                                                    <p className="text-muted">{bulkModal.hideUpload ? 'No active rejections found. All items are approved or pending.' : 'No upload history found for this trip.'}</p>
-                                                </div>
-                                            );
-                                        }
-
-                                        return (
-                                            <div className="history-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                                {displayHistory.map(batch => {
-                                                    const rejectedCount = (batch.data_json || []).filter(r => r._status === 'Rejected').length;
-                                                    return (
-                                                        <div key={batch.id} className={`history-item status-${batch.status.toLowerCase().replace(' ', '-')}`} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                                                            <div className="item-main" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <div className="item-info" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                                    <div style={{ background: '#f3f4f6', padding: '8px', borderRadius: '8px' }}>
-                                                                        <FileText size={18} className="text-primary" />
-                                                                    </div>
-                                                                    <div>
-                                                                        <div style={{ fontWeight: 600, color: '#111827', fontSize: '0.9rem' }}>{batch.file_name}</div>
-                                                                        <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>{new Date(batch.created_at).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="item-status">
-                                                                    <span className={`status-badge ${batch.status.toLowerCase().replace(' ', '-')}`} style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600 }}>{batch.status}</span>
-                                                                </div>
-                                                            </div>
-                                                            {rejectedCount > 0 && !processedBatchIds.includes(batch.id) && (
-                                                                <div className="item-alert" style={{ marginTop: '12px', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '8px', padding: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                    <div className="alert-text" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#9a3412', fontSize: '0.8rem', fontWeight: 500 }}>
-                                                                        <AlertTriangle size={16} />
-                                                                        <span>{rejectedCount} items were rejected from this batch.</span>
-                                                                    </div>
-                                                                    <button className="resolve-btn" onClick={() => startResubmission(batch)} style={{ background: '#f97316', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>Resolve & Resubmit</button>
-                                                                </div>
-                                                            )}
-                                                            {batch.remarks && (
-                                                                <div className="item-remark" style={{ marginTop: '8px', fontSize: '0.75rem', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                    <Info size={14} />
-                                                                    <span>{batch.remarks}</span>
-                                                                </div>
-                                                            )}
-                                                            {processedBatchIds.includes(batch.id) && (
-                                                                <div className="processed-tag" style={{ marginTop: '12px', background: '#f0fdf4', color: '#166534', fontSize: '0.7rem', fontWeight: 700, padding: '4px 10px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                    <Check size={12} /> ALREADY RESUBMITTED
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        );
-                                    })()}
                                 </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Resubmission Modal */}
-            {resubmitModal.visible && (
-                <div className="modal-overlay">
-                    <div style={{ position: 'relative', width: '1100px', maxWidth: '98%', maxWeight: '90vh', background: 'white !important', borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)', zIndex: 1000 }}>
-                        <button onClick={() => setResubmitModal({ visible: false, batchId: null, rows: [], submitting: false })} style={{ position: 'absolute', top: '16px', right: '16px', border: 'none', background: 'none', cursor: 'pointer', color: '#64748b', zIndex: 10 }}>
-                            <X size={24} />
-                        </button>
-                        <div style={{ padding: '24px', borderBottom: '1px solid #f1f5f9', background: 'white !important' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <RotateCcw size={24} className="text-warning" />
-                                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: '#111827' }}>Resolve Rejections</h2>
+                                <div className="step-card mt-3">
+                                    <div className="step-number">2</div>
+                                    <div className="step-details">
+                                        <h4>Upload Filled File</h4>
+                                        <p>Select your completed template for this trip.</p>
+                                        <div className="file-upload-wrapper mt-2">
+                                            <input
+                                                type="file"
+                                                accept=".xlsx, .xls"
+                                                id="bulkFile"
+                                                onChange={(e) => setBulkModal(prev => ({ ...prev, file: e.target.files[0] }))}
+                                                style={{ display: 'none' }}
+                                            />
+                                            <label htmlFor="bulkFile" className={`file-upload-label ${bulkModal.file ? 'has-file' : ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '20px', border: '2px dashed #cbd5e1', borderRadius: '8px', cursor: 'pointer', background: bulkModal.file ? '#f0fdf4' : '#f8fafc', color: bulkModal.file ? '#166534' : '#64748b' }}>
+                                                <Upload size={24} />
+                                                <span>{bulkModal.file ? bulkModal.file.name : 'Click to Browse File'}</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <p style={{ margin: '4px 0 0 36px', color: '#64748b', fontSize: '0.9rem' }}>Correct the rejected entries below and submit them as a new batch.</p>
-                        </div>
-                        <div style={{ padding: '24px', background: '#f8fafc !important', flex: 1, overflowY: 'auto' }}>
-                            <div style={{ width: '100% !important', background: 'white !important', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', overflowX: 'auto' }}>
-                                <table style={{ width: '100% !important', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'auto' }}>
-                                    <thead>
-                                        <tr style={{ background: '#f1f5f9' }}>
-                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '16%' }}>Date</th>
-                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '28%' }}>Route Correction</th>
-                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '18%' }}>Vehicle Info</th>
-                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '14%' }}>Odo/Distance</th>
-                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '24%' }}>Rejection Reason</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {resubmitModal.rows.map((row, idx) => {
-                                            const d = new Date(row.date || new Date());
-                                            const minDay = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
-                                            const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
-                                            return (
-                                                <tr key={idx} style={{ background: 'white', borderBottom: '1px solid #f1f5f9' }}>
-                                                    <td style={{ padding: '16px 20px', verticalAlign: 'top' }}>
-                                                        <input type="date" value={row.date} min={minDay} max={maxDay} onChange={e => updateResubmitRow(idx, 'date', e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', outline: 'none', background: '#fff' }} />
-                                                    </td>
-                                                    <td style={{ padding: '16px 20px', verticalAlign: 'top' }}>
-                                                        <div className="route-edit" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                                <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#94a3b8', width: '30px' }}>FROM</span>
-                                                                <input type="text" placeholder="Origin" value={row.origin_route} onChange={e => updateResubmitRow(idx, 'origin_route', e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
-                                                            </div>
-                                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                                <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#94a3b8', width: '30px' }}>TO</span>
-                                                                <input type="text" placeholder="Destination" value={row.destination_route} onChange={e => updateResubmitRow(idx, 'destination_route', e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '16px 20px', verticalAlign: 'top' }}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                <Car size={14} className="text-primary" />
-                                                                {row.mode || 'N/A'}
-                                                            </div>
-                                                            <div style={{ fontSize: '0.72rem', color: '#64748b', background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 600 }}>Purpose: {row.visit_intent || 'Field Visit'}</div>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '16px 20px', verticalAlign: 'top' }}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                            <div style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                <MapPin size={14} style={{ color: '#64748b' }} />
-                                                                {row.odo_start} – {row.odo_end}
-                                                            </div>
-                                                            <div style={{ fontSize: '0.65rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                <Clock size={12} /> Distance Locked
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="rejection-reason" style={{ padding: '16px 20px', verticalAlign: 'top' }}>
-                                                        <div className="reason-bubble" style={{ background: '#fef2f2', border: '1px solid #fee2e2', color: '#991b1b', padding: '12px', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 500, lineHeight: 1.5, position: 'relative', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                                            <div style={{ fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px', opacity: 0.7 }}>Rejection Remark</div>
-                                                            {row._remarks || "No remark provided"}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                            <div className="modal-actions mt-4" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                                <button className="btn-secondary" onClick={() => setBulkModal({ visible: false, file: null, uploading: false })} style={{ flex: 1, padding: '10px', border: '1px solid #cbd5e1', borderRadius: '4px', background: 'transparent', cursor: 'pointer' }}>
+                                    Cancel
+                                </button>
+                                <button
+                                    className={`btn-primary ${(!bulkModal.file || bulkModal.uploading) ? 'btn-disabled' : ''}`}
+                                    onClick={handleBulkUpload}
+                                    disabled={!bulkModal.file || bulkModal.uploading}
+                                    style={{ flex: 1, padding: '10px', background: 'var(--magenta)', color: 'white', border: 'none', borderRadius: '4px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: (!bulkModal.file || bulkModal.uploading) ? 'not-allowed' : 'pointer', opacity: (!bulkModal.file || bulkModal.uploading) ? 0.6 : 1 }}
+                                >
+                                    {bulkModal.uploading ? (
+                                        <><Clock className="animate-spin" size={18} /> Uploading...</>
+                                    ) : (
+                                        <>Submit for Approval</>
+                                    )}
+                                </button>
                             </div>
-                        </div>
-                        <div className="modal-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', padding: '20px', borderTop: '1px solid #e2e8f0' }}>
-                            <button className="btn-secondary" onClick={() => setResubmitModal({ visible: false, batchId: null, rows: [], submitting: false })}>Cancel</button>
-                            <button 
-                                className={`btn-primary ${resubmitModal.submitting ? 'loading' : ''}`} 
-                                onClick={handleResubmit}
-                                disabled={resubmitModal.submitting}
-                                style={{ background: 'var(--magenta)', color: 'white', padding: '10px 24px', borderRadius: '6px', border: 'none', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}
-                            >
-                                {resubmitModal.submitting ? <Clock className="animate-spin" size={18} /> : <RotateCcw size={18} />}
-                                Resubmit {resubmitModal.rows.length} Items
-                            </button>
                         </div>
                     </div>
                 </div>

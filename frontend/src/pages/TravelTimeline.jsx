@@ -5,18 +5,16 @@ import {
     CheckCircle2,
     Clock,
     MapPin,
+    Calendar,
     Briefcase,
     Plane,
     TrendingUp,
     ShieldCheck,
-    FileText,
-    CreditCard,
     Gauge
 } from 'lucide-react';
-import { decodeId, encodeId } from '../utils/idEncoder';
+import { encodeId, decodeId } from '../utils/idEncoder';
 import api from '../api/api';
 import { useToast } from '../context/ToastContext.jsx';
-import './TravelTimeline.css';
 
 const TravelTimeline = () => {
     const { id } = useParams();
@@ -26,19 +24,35 @@ const TravelTimeline = () => {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        if (id) {
-            fetchTripDetails();
-        }
+        fetchTravelDetails();
     }, [id]);
 
-    const fetchTripDetails = async () => {
+    const formatDate = (dateStr) => {
+        if (!dateStr) return 'N/A';
+        try {
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return dateStr;
+            return date.toLocaleString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+        } catch (e) {
+            return dateStr;
+        }
+    };
+
+    const fetchTravelDetails = async () => {
         setIsLoading(true);
         try {
             const decodedId = decodeId(id);
             const response = await api.get(`/api/travels/${decodedId}/`);
             setTrip(response.data);
         } catch (error) {
-            console.error("Failed to fetch travel details:", error);
             showToast("Failed to load travel details", "error");
         } finally {
             setIsLoading(false);
@@ -49,87 +63,116 @@ const TravelTimeline = () => {
         if (!field) return [];
         if (Array.isArray(field)) return field;
         if (typeof field === 'string') {
-            try { return JSON.parse(field); } catch (e) { return []; }
+            try {
+                return JSON.parse(field);
+            } catch (e) {
+                return [];
+            }
         }
         return [];
     };
 
     const lifecycleSteps = (() => {
         if (!trip) return [];
-        const recordedEvents = parseJsonField(trip.lifecycle_events) || [];
-        const builtSteps = [];
-        let extractedForwardTo = '';
 
-        recordedEvents.forEach((event, index) => {
-            let stepIcon = <CheckCircle2 size={20} />;
-            const titleLower = (event.title || '').toLowerCase();
+        const dates = `${trip.start_date} - ${trip.end_date}` || 'N/A';
+        const recordedEvents = parseJsonField(trip.lifecycle_events);
 
-            if (titleLower.includes('request')) stepIcon = <FileText size={20} />;
-            else if (titleLower.includes('hr')) stepIcon = <ShieldCheck size={20} />;
-            else if (titleLower.includes('finance')) stepIcon = <CreditCard size={20} />;
+        // 1. Initial Step
+        const steps = [
+            { title: 'Travel Requested', defaultDate: dates.includes(' - ') ? dates.split(' - ')[0] : 'N/A', required: true }
+        ];
 
-            const eventDate = event.date ? new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Completed';
-            let title = event.title || 'Action Approved';
+        // 2. Dynamic Approval Levels based on hierarchy_level
+        const numLevels = parseInt(trip.hierarchy_level || 0);
+        // Ensure at least 1 level is showing if it's already recorded
+        const maxLevel = Math.max(numLevels, ...recordedEvents.filter(e => e.title.includes('Level')).map(e => parseInt(e.title.match(/Level (\d+)/)?.[1] || 0)));
 
-            if (index === 0) {
-                title = 'Request Sent';
-            } else {
-                const desc = `${event.description || ''} ${event.title || ''}`.trim();
-                if (desc.toLowerCase().includes('forwarded to')) {
-                    const parts = desc.split(/forwarded to/i);
-                    if (parts.length > 1) {
-                        let leftPart = parts[0].replace(/bulk|travel|log|and|level|approval/gi, '');
-                        title = leftPart.replace(/[^a-zA-Z\s]/g, '').trim();
-                        extractedForwardTo = parts[1].replace(/level|approval/gi, '').replace(/[^a-zA-Z\s]/g, '').trim();
-                    }
-                } else if (desc.toLowerCase().includes('approved by')) {
-                    title = desc.replace(/approved by/gi, '').trim();
-                } else if (desc.toLowerCase().includes('initiated by')) {
-                    title = 'Request Sent';
-                } else if (desc.toLowerCase().includes('bulk activity') || desc.toLowerCase().includes('trip story')) {
-                    title = 'Management Approved';
-                }
-            }
-
-            builtSteps.push({
-                title: title,
-                status: 'completed',
-                date: eventDate,
-                description: '',
-                icon: stepIcon
+        for (let i = 1; i <= maxLevel; i++) {
+            steps.push({
+                title: `Level ${i} Approval`,
+                defaultDate: i === 1 ? 'Waiting...' : 'Upcoming',
+                required: i <= numLevels,
+                isApproval: true
             });
-        });
-
-        const isClosed = ['Approved', 'Settled', 'Rejected'].includes(trip.status);
-        if (!isClosed) {
-            const approverName = extractedForwardTo || trip.current_approver_name || 'Approving Manager';
-            builtSteps.push({
-                title: approverName,
-                status: 'current',
-                date: 'Action Required',
-                description: 'Currently sitting with this manager.',
-                icon: <Clock size={20} />
-            });
-            builtSteps.push({
-                title: 'Approved by Everyone',
-                status: 'pending',
-                date: 'Endpoint',
-                description: 'Awaiting intermediate signatures.',
-                icon: <CheckCircle2 size={20} />
-            });
-        } else if (trip.status === 'Approved') {
-            const lastStep = builtSteps[builtSteps.length - 1];
-            if (lastStep && lastStep.title.toLowerCase() !== 'approved by everyone') {
-                builtSteps.push({
-                    title: 'Approved by Everyone',
-                    status: 'completed',
-                    date: 'Success',
-                    description: 'Trip request approved successfully.',
-                    icon: <CheckCircle2 size={20} className="text-green-600" />
-                });
-            }
         }
-        return builtSteps;
+
+        // 3. Post-Approval Steps
+        steps.push(
+            { title: 'Ticket Booking', defaultDate: 'Waiting...', required: true },
+            { title: 'Travel Started', defaultDate: 'Waiting...', required: true },
+            { title: 'Travel Ended', defaultDate: 'Waiting...', required: true },
+            { title: 'Settlement', defaultDate: 'Waiting...', required: true }
+        );
+
+        const standardSteps = steps.filter(s => !s.hidden);
+
+        let sequenceBroken = false;
+
+        return standardSteps.map((step, index) => {
+            const matchingEvent = recordedEvents.find(e => 
+                e.title?.toLowerCase() === step.title?.toLowerCase() || 
+                (step.title === 'Travel Requested' && (e.title === 'Request Sent' || e.title === 'Travel Requested'))
+            );
+            const isActuallyCompleted = (index === 0 && (trip.status !== 'Draft' && trip.status !== 'Cancelled')) || (matchingEvent && matchingEvent.status === 'completed' && !sequenceBroken);
+
+            if (isActuallyCompleted) {
+                return {
+                    title: step.title,
+                    status: 'completed',
+                    date: matchingEvent?.date || formatDate(trip.created_at),
+                    description: matchingEvent?.description || step.title,
+                    icon: <CheckCircle2 size={24} />
+                };
+            }
+
+            if (matchingEvent && matchingEvent.status === 'in-progress' && !sequenceBroken) {
+                sequenceBroken = true;
+                return {
+                    title: step.title,
+                    status: 'in-progress',
+                    date: matchingEvent.date,
+                    description: matchingEvent.description || step.title,
+                    icon: <Clock size={24} />
+                };
+            }
+
+            if (!sequenceBroken && step.required) {
+                sequenceBroken = true;
+                let actionDescription = 'Pending action.';
+                if (step.isApproval) actionDescription = `Awaiting Level ${step.title.split(' ')[1]} approval.`;
+                if (step.title === 'Travel Started') actionDescription = 'Ready to start. Please record your travel movement.';
+                if (step.title === 'Travel Ended') actionDescription = 'Movement in progress. Please complete to finish.';
+                if (step.title === 'Settlement') actionDescription = 'Travel completed. Please submit expenses and settlement.';
+                if (step.title === 'Ticket Booking') actionDescription = 'Waiting for booking confirmation.';
+
+                return {
+                    title: step.title,
+                    status: 'current',
+                    date: matchingEvent?.date || 'Waiting...',
+                    description: actionDescription,
+                    icon: <Clock size={24} />
+                };
+            }
+
+            if (sequenceBroken) {
+                return {
+                    title: step.title,
+                    status: 'pending',
+                    date: 'Waiting...',
+                    description: 'Awaiting completion of previous steps.',
+                    icon: <Clock size={24} />
+                };
+            }
+
+            return {
+                title: step.title,
+                status: 'pending',
+                date: 'Optional',
+                description: 'Optional step.',
+                icon: <Clock size={24} />
+            };
+        });
     })();
 
     useEffect(() => {
@@ -153,8 +196,8 @@ const TravelTimeline = () => {
     if (!trip) {
         return (
             <div className="timeline-page-error">
-                <h2>Travel Not Found</h2>
-                <button onClick={() => navigate('/trips')}>Back to Trips</button>
+                <h2>Travel Plan Not Found</h2>
+                <button onClick={() => navigate('/trips')}>Back to My Trips</button>
             </div>
         );
     }
@@ -168,7 +211,7 @@ const TravelTimeline = () => {
                 </button>
                 <div className="header-main">
                     <div className="trip-id-badge">{trip.trip_id}</div>
-                    <h1>Travel Timeline</h1>
+                    <h1>Travel Plan Timeline</h1>
                     <p>{trip.purpose} • {trip.destination}</p>
                 </div>
                 <div className="header-stats">
@@ -187,9 +230,36 @@ const TravelTimeline = () => {
                 </div>
             </header>
 
-            <div className="timeline-layout" style={{ gridTemplateColumns: (trip.vehicle_type === 'Own' && trip.odometer) ? '350px 1fr' : '1fr' }}>
-                {(trip.vehicle_type === 'Own' && trip.odometer) && (
-                    <aside className="timeline-sidebar">
+            <div className="timeline-layout">
+                <aside className="timeline-sidebar">
+                    <div className="trip-card-summary premium-card">
+                        <h3>Travel Overview</h3>
+                        <div className="summary-list">
+                            <div className="s-item">
+                                <MapPin size={18} />
+                                <div>
+                                    <label>Route</label>
+                                    <p>{trip.source} → {trip.destination}</p>
+                                </div>
+                            </div>
+                            <div className="s-item">
+                                <TrendingUp size={18} />
+                                <div>
+                                    <label>Estimated Cost</label>
+                                    <p>{trip.cost_estimate}</p>
+                                </div>
+                            </div>
+                            <div className="s-item">
+                                <ShieldCheck size={18} />
+                                <div>
+                                    <label>Reporting Manager</label>
+                                    <p>{trip.reporting_manager_name || 'Assigned'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {trip.vehicle_type === 'Own' && trip.odometer && (
                         <div className="telemetry-card premium-card">
                             <div className="t-header">
                                 <Gauge size={20} />
@@ -212,78 +282,54 @@ const TravelTimeline = () => {
                                 )}
                             </div>
                         </div>
-                    </aside>
-                )}
+                    )}
+
+                    <div className="timeline-help-card">
+                        <h4>Need Help?</h4>
+                        <p>If you're stuck at any stage, please contact your tour coordinator or reporting manager.</p>
+                    </div>
+                </aside>
 
                 <main className="timeline-content-main">
-                    <div className="timeline-zigzag-wrapper">
-                        <div className="timeline-zigzag-container">
-                            <div className="zigzag-line-main"></div>
-                            {lifecycleSteps.map((step, index) => {
-                                const isEven = index % 2 === 0;
-                                const nodeColors = ['#f59e0b', '#ef4444', '#ec4899', '#84cc16', '#3b82f6', '#14b8a6', '#8b5cf6'];
-                                const themeColor = nodeColors[index % nodeColors.length];
-                                
-                                return (
-                                    <div key={index} className={`zigzag-node ${step.status}`}>
-                                        <div className="zigzag-column">
-                                            {isEven ? (
-                                                <>
-                                                    <div className="zigzag-section top-section align-bottom">
-                                                        <div className="node-text">
-                                                            <h4>{step.title}</h4>
-                                                            <p>{step.description}</p>
-                                                        </div>
-                                                        <div className="node-date-box" style={{ backgroundColor: themeColor }}>{step.date}</div>
-                                                        <div className="node-icon-circle" style={{ backgroundColor: themeColor }}>{step.icon}</div>
-                                                    </div>
-                                                    <div className="zigzag-center">
-                                                        <div className="zigzag-connector-line top-line" style={{ backgroundColor: themeColor }}></div>
-                                                        <div className="zigzag-dot" style={{ backgroundColor: step.status === 'completed' ? themeColor : 'white', borderColor: themeColor }}></div>
-                                                    </div>
-                                                    <div className="zigzag-section bottom-section align-top">
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <div className="zigzag-section top-section align-bottom">
-                                                    </div>
-                                                    <div className="zigzag-center">
-                                                        <div className="zigzag-dot" style={{ backgroundColor: step.status === 'completed' ? themeColor : 'white', borderColor: themeColor }}></div>
-                                                        <div className="zigzag-connector-line bottom-line" style={{ backgroundColor: themeColor }}></div>
-                                                    </div>
-                                                    <div className="zigzag-section bottom-section align-top">
-                                                        <div className="node-icon-circle" style={{ backgroundColor: themeColor }}>{step.icon}</div>
-                                                        <div className="node-date-box" style={{ backgroundColor: themeColor }}>{step.date}</div>
-                                                        <div className="node-text">
-                                                            <h4>{step.title}</h4>
-                                                            <p>{step.description}</p>
-                                                        </div>
-                                                    </div>
-                                                </>
-                                            )}
+                    <div className="timeline-track-v2">
+                        {lifecycleSteps.map((step, index) => (
+                            <div key={index} className={`timeline-node ${step.status}`}>
+                                <div className="node-line-container">
+                                    <div className="node-icon-wrap">
+                                        {step.icon}
+                                    </div>
+                                    {index !== lifecycleSteps.length - 1 && <div className="node-connector"></div>}
+                                </div>
+                                <div className="node-body">
+                                    <div className="node-header">
+                                        <h4>{step.title}</h4>
+                                        <div className="node-tags">
+                                            <span className="node-date">{step.date}</span>
+                                            <span className={`node-status-tag ${step.status}`}>
+                                                {step.status === 'current' ? 'Action Required' : step.status}
+                                            </span>
                                         </div>
                                     </div>
-                                );
-                            })}
-                        </div>
-                    </div>
+                                    <p className="node-description">{step.description}</p>
 
-                    {lifecycleSteps.some(step => step.status === 'current') && (
-                        <div className="active-action-box" style={{ margin: '0 2rem' }}>
-                            <div className="action-info">
-                                <Plane size={20} />
-                                <span>This is your current stage. Please complete the necessary steps to proceed.</span>
+                                    {step.status === 'current' && (
+                                        <div className="active-action-box">
+                                            <div className="action-info">
+                                                <Plane size={20} />
+                                                <span>This is your current stage. Please complete the necessary steps to proceed.</span>
+                                            </div>
+                                            <button className="btn-action-primary" onClick={() => navigate('/trips')}>
+                                                Go to Actions
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <button className="btn-action-primary" onClick={() => navigate('/trips')}>
-                                Go to Actions
-                            </button>
-                        </div>
-                    )}
+                        ))}
+                    </div>
                 </main>
-            </div >
-
-        </div >
+            </div>
+        </div>
     );
 };
 

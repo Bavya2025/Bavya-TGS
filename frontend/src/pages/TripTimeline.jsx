@@ -27,6 +27,25 @@ const TripTimeline = () => {
         fetchTripDetails();
     }, [id]);
 
+    const formatDate = (dateStr) => {
+        if (!dateStr) return 'N/A';
+        try {
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return dateStr;
+            return date.toLocaleString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+        } catch (e) {
+            return dateStr;
+        }
+    };
+
     const fetchTripDetails = async () => {
         setIsLoading(true);
         try {
@@ -56,30 +75,50 @@ const TripTimeline = () => {
         if (!trip) return [];
 
         const dates = `${trip.start_date} - ${trip.end_date}` || 'N/A';
-        const standardSteps = [
-            { title: 'Trip Requested', defaultDate: dates.includes(' - ') ? dates.split(' - ')[0] : 'N/A', required: true },
-            { title: 'Level 1 Approval', defaultDate: 'Waiting...', required: true },
-            { title: 'Level 2 Approval', defaultDate: 'Optional', required: false, hidden: trip.hierarchy_level < 2 && trip.status !== 'Forwarded' && !recordedEvents.some(e => e.title === 'Level 2 Approval') },
-            { title: 'Level 3 Approval', defaultDate: 'Optional', required: false, hidden: trip.hierarchy_level < 3 && trip.status !== 'Forwarded' && !recordedEvents.some(e => e.title === 'Level 3 Approval') },
+        const recordedEvents = parseJsonField(trip.lifecycle_events);
+
+        // 1. Initial Step
+        const steps = [
+            { title: 'Trip Requested', defaultDate: dates.includes(' - ') ? dates.split(' - ')[0] : 'N/A', required: true }
+        ];
+
+        // 2. Dynamic Approval Levels based on hierarchy_level
+        const numLevels = parseInt(trip.hierarchy_level || 0);
+        const maxLevel = Math.max(numLevels, ...recordedEvents.filter(e => e.title.includes('Level')).map(e => parseInt(e.title.match(/Level (\d+)/)?.[1] || 0)));
+
+        for (let i = 1; i <= maxLevel; i++) {
+            steps.push({
+                title: `Level ${i} Approval`,
+                defaultDate: i === 1 ? 'Waiting...' : 'Upcoming',
+                required: i <= numLevels,
+                isApproval: true
+            });
+        }
+
+        // 3. Post-Approval Steps
+        steps.push(
             { title: 'Ticket Booking', defaultDate: 'Waiting...', required: true },
             { title: 'Journey Started', defaultDate: 'Waiting...', required: true },
             { title: 'Journey Ended', defaultDate: 'Waiting...', required: true },
             { title: 'Settlement', defaultDate: 'Waiting...', required: true }
-        ].filter(s => !s.hidden);
+        );
 
-        const recordedEvents = parseJsonField(trip.lifecycle_events);
+        const standardSteps = steps.filter(s => !s.hidden);
         let sequenceBroken = false;
 
-        return standardSteps.map(step => {
-            const matchingEvent = recordedEvents.find(e => e.title === step.title);
-            const isActuallyCompleted = matchingEvent && matchingEvent.status === 'completed' && !sequenceBroken;
+        return standardSteps.map((step, index) => {
+            const matchingEvent = recordedEvents.find(e => 
+                e.title?.toLowerCase() === step.title?.toLowerCase() || 
+                (step.title === 'Trip Requested' && (e.title === 'Request Sent' || e.title === 'Trip Requested'))
+            );
+            const isActuallyCompleted = (index === 0 && (trip.status !== 'Draft' && trip.status !== 'Cancelled')) || (matchingEvent && matchingEvent.status === 'completed' && !sequenceBroken);
 
             if (isActuallyCompleted) {
                 return {
                     title: step.title,
                     status: 'completed',
-                    date: matchingEvent.date,
-                    description: matchingEvent.description || step.title,
+                    date: matchingEvent?.date || formatDate(trip.created_at),
+                    description: matchingEvent?.description || step.title,
                     icon: <CheckCircle2 size={24} />
                 };
             }
@@ -98,18 +137,17 @@ const TripTimeline = () => {
             if (!sequenceBroken && step.required) {
                 sequenceBroken = true;
                 let actionDescription = 'Pending action.';
+                if (step.isApproval) actionDescription = `Awaiting Level ${step.title.split(' ')[1]} approval.`;
                 if (step.title === 'Journey Started') actionDescription = 'Ready to start. Please record start odometer.';
                 if (step.title === 'Journey Ended') actionDescription = 'Journey in progress. Please record end odometer to finish.';
                 if (step.title === 'Settlement') actionDescription = 'Trip completed. Please submit expenses and settlement.';
                 if (step.title === 'Ticket Booking') actionDescription = 'Waiting for ticket details.';
-                if (step.title === 'Level 1 Approval') actionDescription = 'Awaiting manager approval.';
-                if (step.title === 'Level 2 Approval') actionDescription = 'Awaiting Senior Manager (L2) approval.';
-                if (step.title === 'Level 3 Approval') actionDescription = 'Awaiting Director (L3) approval.';
 
                 return {
                     title: step.title,
+                    travelMode: '',
                     status: 'current',
-                    date: 'Action Required',
+                    date: matchingEvent?.date || 'Waiting...',
                     description: actionDescription,
                     icon: <Clock size={24} />
                 };
@@ -203,13 +241,7 @@ const TripTimeline = () => {
                                     <p>{trip.source} → {trip.destination}</p>
                                 </div>
                             </div>
-                            <div className="s-item">
-                                <Briefcase size={18} />
-                                <div>
-                                    <label>Travel Mode</label>
-                                    <p>{trip.travel_mode}</p>
-                                </div>
-                            </div>
+                            {/* Travel Mode removed as per user request */}
                             <div className="s-item">
                                 <TrendingUp size={18} />
                                 <div>
@@ -221,7 +253,7 @@ const TripTimeline = () => {
                                 <ShieldCheck size={18} />
                                 <div>
                                     <label>Reporting Manager</label>
-                                    <p>{trip.reporting_manager?.name || 'Assigned'}</p>
+                                    <p>{trip.reporting_manager_name || 'Assigned'}</p>
                                 </div>
                             </div>
                         </div>
@@ -252,6 +284,10 @@ const TripTimeline = () => {
                         </div>
                     )}
 
+                    <div className="timeline-help-card">
+                        <h4>Need Help?</h4>
+                        <p>If you're stuck at any stage, please contact your travel desk or reporting manager.</p>
+                    </div>
                 </aside>
 
                 <main className="timeline-content-main">
@@ -262,6 +298,7 @@ const TripTimeline = () => {
                                     <div className="node-icon-wrap">
                                         {step.icon}
                                     </div>
+                                    {index !== lifecycleSteps.length - 1 && <div className="node-connector"></div>}
                                 </div>
                                 <div className="node-body">
                                     <div className="node-header">

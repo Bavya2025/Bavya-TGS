@@ -53,16 +53,11 @@ const UserManagement = () => {
                 const count = empResponse.value.data.count || 0;
                 const pageSize = employeeList.length || 10;
                 setTotalPages(Math.ceil(count / pageSize));
+                setApiKeyMissing(false);
             } else {
                 const status = empResponse.reason?.response?.status;
                 if (status === 400 || status === 404) {
                     setApiKeyMissing(true);
-                    setLoading(false);
-                    return;
-                } else if (!status || status >= 500) {
-                    setError('External API Connection Failed. Please check the configuration or try again later.');
-                    setLoading(false);
-                    return;
                 } else {
                     setError('External API Connection Failed. You can still manage existing users.');
                 }
@@ -218,23 +213,6 @@ const UserManagement = () => {
         return code.startsWith(searchLower) || name.startsWith(searchLower) || dept.startsWith(searchLower);
     });
 
-    if (apiKeyMissing) return (
-        <div className="dashboard-page">
-            <div className="dashboard-main-grid">
-                <div className="premium-card full-width">
-                    <div className="card-body um-api-missing-card">
-                        <AlertCircle size={48} className="text-warning um-icon-mb" />
-                        <h3>External Database Not Configured</h3>
-                        <p>The Employee Database connection is not set up or the API Key is invalid.</p>
-                        <Link to="/api-management" className="btn btn-primary um-btn-top-margin">
-                            <Briefcase size={18} />
-                            <span>Go to API Management</span>
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
 
     return (
         <div className="dashboard-page">
@@ -285,6 +263,7 @@ const UserManagement = () => {
                         <span style={{ fontSize: '14px' }}>{error}</span>
                     </div>
                 )}
+
                 <div className="content-toolbar">
                     <div className="search-box">
                         <Search size={18} />

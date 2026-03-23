@@ -25,25 +25,11 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api/api';
 
 const Sidebar = () => {
-    const { user } = useAuth();
-    const [approvalCount, setApprovalCount] = React.useState(0);
+    const { user, heartbeatData } = useAuth();
+    const approvalCount = heartbeatData?.approval_counts?.total || 0;
     const rawRole = user?.role?.toLowerCase() || 'employee';
     const userRole = rawRole === 'user' ? 'employee' : rawRole;
 
-    const fetchApprovalCount = async () => {
-        try {
-            const response = await api.get('/api/approvals/count/');
-            setApprovalCount(response.data.total);
-        } catch (error) {
-            console.error("Failed to fetch approval count:", error);
-        }
-    };
-
-    React.useEffect(() => {
-        fetchApprovalCount();
-        const interval = setInterval(fetchApprovalCount, 10000);
-        return () => clearInterval(interval);
-    }, [userRole]);
 
     const sections = [
         {
@@ -61,7 +47,7 @@ const Sidebar = () => {
                 { title: 'Trip Planner', icon: <MapPin size={18} />, path: '/planner', roles: ['employee', 'admin'] },
                 { title: 'Mileage Log', icon: <MapPin size={18} />, path: '/mileage', roles: ['employee', 'admin'] },
                 { title: 'Job Report', icon: <ClipboardList size={18} />, path: '/job-report', roles: ['employee', 'reporting_authority', 'admin'] },
-                { title: 'Guest House', icon: <Building2 size={18} />, path: '/guesthouse', roles: ['employee', 'admin'] },
+                { title: 'Guest House', icon: <Building2 size={18} />, path: '/guesthouse', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo', 'guesthousemanager'] },
                 { title: 'Fleet Management', icon: <Car size={18} />, path: '/fleet', roles: ['employee', 'admin'] },
             ]
         },
@@ -94,6 +80,13 @@ const Sidebar = () => {
                 { title: 'Route Masters', icon: <MapPin size={18} />, path: '/route-management', roles: ['admin'] },
                 { title: 'Master Management', icon: <Settings size={18} />, path: '/master-management', roles: ['admin'] },
                 { title: 'Fuel Rate Master', icon: <Fuel size={18} />, path: '/fuel-master', roles: ['admin'] },
+                { title: 'Masters', icon: <Settings size={18} />, path: '/AdminMasters', roles: ['admin'] },
+            ]
+        },
+        {
+            label: 'PERSONALIZATION',
+            items: [
+                { title: 'System Settings', icon: <Settings size={18} />, path: '/settings' },
             ]
         }
     ];

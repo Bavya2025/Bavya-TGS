@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/api';
+import { useToast } from '../context/ToastContext';
 import {
     AlertCircle,
     MessageSquare,
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 
 const Disputes = () => {
+    const { showToast } = useToast();
     const [disputes, setDisputes] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const [trips, setTrips] = useState([]);

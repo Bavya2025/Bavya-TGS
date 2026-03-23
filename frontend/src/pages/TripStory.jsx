@@ -31,8 +31,10 @@ import {
     AlertTriangle,
     FileText,
     ArrowRight,
-    Upload
+    Upload,
+    Bell
 } from 'lucide-react';
+import ReminderModal from '../components/ReminderModal';
 import { encodeId, decodeId } from '../utils/idEncoder';
 import api from '../api/api';
 import { useToast } from '../context/ToastContext.jsx';
@@ -56,7 +58,9 @@ const TripStory = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [showWalletModal, setShowWalletModal] = useState(false);
     const [isActionLoading, setIsActionLoading] = useState(false);
+    const [hasActiveReminder, setHasActiveReminder] = useState(false);
     const [auditRemarks, setAuditRemarks] = useState({});
+    const [showReminderModal, setShowReminderModal] = useState(false);
 
     // Luggage popup state
     const [showLuggagePopup, setShowLuggagePopup] = useState(false);
@@ -81,9 +85,21 @@ const TripStory = () => {
     const fetchTripStory = async () => {
         setIsLoading(true);
         try {
-            const decodedId = decodeId(id);
-            const response = await api.get(`/api/trips/${decodedId}/`);
-            setTrip(response.data);
+            // Fetch trip details - backend expects trip_id (can be encoded or raw)
+            // We use the ID from params directly (encoded)
+            const response = await api.get(`/api/trips/${id}/`);
+            const tripData = response.data;
+            setTrip(tripData);
+            
+            // Check for active reminders - we need the raw trip_id (e.g. TRP-...)
+            // which is tripData.trip_id
+            const tripIdRaw = tripData.trip_id;
+            const reminderRes = await api.get(`/api/notifications/reminders/`, {
+                params: { trip_id: tripIdRaw }
+            });
+            const reminders = reminderRes.data || [];
+            setHasActiveReminder(reminders.some(r => !r.is_sent));
+
         } catch (error) {
             showToast("Failed to load trip story", "error");
         } finally {
@@ -255,19 +271,38 @@ const TripStory = () => {
                 </div>
 
                 <div className="story-hero">
-                    <div className="hero-content">
-                        <div className="hero-branding">
-                            <img src="/bavya.png" alt="Bavya Logo" className="story-bavya-logo" />
-                            <div className="hero-divider-v"></div>
-                            <div className="trip-id-pill">{trip.trip_id}</div>
+                    <div className="hero-content" style={{ width: '100%', padding: '0 1rem' }}>
+                        <div className="hero-branding" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '15px', marginBottom: '1.5rem', width: '100%' }}>
+                            <img src="/bavya.png" alt="Bavya Logo" className="story-bavya-logo" style={{ height: '36px' }} />
+                            <div className="hero-divider-v" style={{ width: '1px', height: '24px', background: '#e2e8f0' }}></div>
+                            <div className="trip-id-pill" style={{ background: '#ecfdf5', color: '#10b981', padding: '6px 14px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 800 }}>
+                                {trip.trip_id}
+                            </div>
                         </div>
-                        <h1>Trip Story</h1>
-                        <p className="hero-subtitle">{trip.purpose}</p>
-                        <div className="hero-badges">
-                            <span className={`status-badge ${trip.status?.toLowerCase() || 'pending'}`}>
-                                {trip.status}
+                        
+                        <div className="hero-status-row" style={{ display: 'flex', justifyContent: 'center', width: '100%', marginBottom: '1.5rem', position: 'relative' }}>
+                            <span className={`status-badge ${trip.status?.toLowerCase() || 'pending'}`} style={{ 
+                                padding: '8px 16px', 
+                                borderRadius: '12px', 
+                                fontSize: '0.8rem', 
+                                fontWeight: 800, 
+                                textTransform: 'uppercase',
+                                background: trip.status?.toLowerCase() === 'approved' ? '#dcfce7' : '#fef9c3',
+                                color: trip.status?.toLowerCase() === 'approved' ? '#15803d' : '#854d0e',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                border: '1px solid currentColor',
+                                position: 'relative',
+                                top: 'auto',
+                                right: 'auto',
+                                margin: '0 auto'
+                            }}>
+                                {trip.status || 'REPORT DRAFT'}
                             </span>
                         </div>
+                        
+                        <h1 style={{ fontSize: '2.4rem', fontWeight: 900, marginBottom: '0.5rem', color: '#000', width: '100%', textAlign: 'center', lineHeight: '1.1' }}>Trip Story</h1>
+                        <p className="hero-subtitle" style={{ textAlign: 'center', width: '100%' }}>{trip.purpose}</p>
                     </div>
                     <div className="hero-stat-main">
                         <div className="hero-stat-item">
@@ -290,7 +325,18 @@ const TripStory = () => {
                 <div className="story-section span-2">
                     <div className="section-header">
                         <LayoutGrid size={20} />
-                        <h3>Trip Core Details</h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                            <h3>Trip Core Details</h3>
+                            <button 
+                                className={`reminder-trigger-btn ${hasActiveReminder ? 'disabled' : ''}`}
+                                onClick={() => !hasActiveReminder && setShowReminderModal(true)}
+                                title={hasActiveReminder ? "Reminder already set" : "Set Reminder"}
+                                disabled={hasActiveReminder}
+                                style={hasActiveReminder ? { color: '#94a3b8', cursor: 'not-allowed', opacity: 0.6 } : {}}
+                            >
+                                <Bell size={16} className={hasActiveReminder ? "" : "ringing"} />
+                            </button>
+                        </div>
                     </div>
                     <div className="details-grid-4">
                         <div className="detail-card">
@@ -384,22 +430,30 @@ const TripStory = () => {
 
                 {/* SECTION 2: Financial Grid */}
                 <div className="story-section span-3">
-                    <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="section-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <IndianRupee size={20} />
                             <h3>Financial Summary</h3>
                         </div>
-                        {['approved', 'hr approved', 'on-going'].includes(trip.status?.toLowerCase()) && (
-                            <button
-                                className="top-up-btn"
-                                onClick={() => setShowWalletModal(true)}
-                            >
-                                <Plus size={14} /> Request Top-up / Advance
-                            </button>
-                        )}
+                        <div className="header-actions-group">
+                            {['approved', 'hr approved', 'on-going'].includes(trip.status?.toLowerCase()) && (
+                                <button
+                                    className="top-up-btn"
+                                    onClick={() => setShowWalletModal(true)}
+                                >
+                                    <Plus size={14} /> Request Top-up / Advance
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <div className="finance-grid">
-                        <div className="fin-box premium">
+                    <div className="finance-grid" style={{ 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        gap: '15px', 
+                        width: '100%', 
+                        marginTop: '2rem' 
+                    }}>
+                        <div className="fin-box premium" style={{ width: '100%', padding: '1.5rem' }}>
                             <label>Approved Advance</label>
                             <div className="val-row">
                                 <CreditCard size={18} />
@@ -407,7 +461,7 @@ const TripStory = () => {
                             </div>
                             <p className="fin-desc">Funds disbursed by HQ</p>
                         </div>
-                        <div className="fin-box warning">
+                        <div className="fin-box warning" style={{ width: '100%', padding: '1.5rem' }}>
                             <label>Recorded Expenses</label>
                             <div className="val-row">
                                 <TrendingUp size={18} />
@@ -415,7 +469,7 @@ const TripStory = () => {
                             </div>
                             <p className="fin-desc">On-field spending</p>
                         </div>
-                        <div className="fin-box" style={{ background: 'var(--bg-main)' }}>
+                        <div className="fin-box" style={{ width: '100%', padding: '1.5rem', background: 'var(--bg-main)' }}>
                             <label>Wallet Balance</label>
                             <div className="val-row">
                                 <Layers size={18} />
@@ -430,13 +484,13 @@ const TripStory = () => {
 
                 {/* SECTION 4: Dynamic Expense Registry / Audit View */}
                 <div className="story-section span-3">
-                    <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="section-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <StickyNote size={20} />
                             <h3>Detailed Expense Registry</h3>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div className="header-actions-group" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <button
                                 style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600, border: 'none', background: '#db2777', color: 'white', cursor: 'pointer' }}
                                 onClick={() => setShowLuggagePopup(true)}
@@ -705,89 +759,56 @@ const TripStory = () => {
                 )}
             </div>
 
-            {/* PREMIUM EXPORT ACTIONS */}
+            {/* REPORT EXPORT ACTIONS AT BOTTOM */}
             <div className="story-footer-actions animate-fade-in" style={{
-                padding: '3rem 0',
-                borderTop: '2px dashed #e2e8f0',
-                marginTop: '3rem',
                 display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '1.5rem'
+                justifyContent: 'center',
+                gap: '1rem',
+                padding: '2rem 0',
+                borderTop: '1px solid #e2e8f0',
+                marginTop: '2rem'
             }}>
-                <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', marginBottom: '0.5rem' }}>Finalize & Export</h3>
-                    <p style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}>Download your trip expense statement in your preferred format.</p>
-                </div>
-
-                <div style={{
-                    display: 'flex',
-                    background: '#f8fafc',
-                    padding: '8px',
-                    borderRadius: '20px',
-                    border: '1px solid #e2e8f0',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                    gap: '8px',
-                    flexWrap: 'wrap',
-                    justifyContent: 'center'
-                }}>
-                    <button
-                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${isExportingPDF ? 'bg-slate-200 text-slate-400' : 'bg-white text-slate-700 hover:bg-primary/5 hover:text-primary hover:border-primary border border-transparent hover:shadow-md'}`}
-                        onClick={() => handleExport('pdf')}
-                        disabled={isExportingPDF}
-                    >
-                        <FileText size={18} className={isExportingPDF ? '' : 'text-primary'} />
-                        <span>{isExportingPDF ? 'Generating PDF...' : 'PDF Statement'}</span>
-                    </button>
-
-                    <button
-                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${isExportingExcel ? 'bg-slate-200 text-slate-400' : 'bg-white text-slate-700 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 border border-transparent hover:shadow-md'}`}
-                        onClick={() => handleExport('excel')}
-                        disabled={isExportingExcel}
-                    >
-                        <Download size={18} className={isExportingExcel ? '' : 'text-emerald-500'} />
-                        <span>{isExportingExcel ? 'Exporting...' : 'Excel Report'}</span>
-                    </button>
-
-                    <div style={{ width: '1px', background: '#e2e8f0', margin: '4px 8px' }} />
-
-                    <button
-                        className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-slate-700 bg-white hover:bg-slate-50 border border-transparent hover:border-slate-200 hover:shadow-md transition-all"
-                        onClick={() => window.print()}
-                    >
-                        <Printer size={18} className="text-slate-400" />
-                        <span>Print</span>
-                    </button>
-
-                    <button
-                        className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-slate-700 bg-white hover:bg-blue-50 hover:text-blue-600 border border-transparent hover:border-blue-200 hover:shadow-md transition-all"
-                        onClick={() => {
-                            if (navigator.share) {
-                                navigator.share({
-                                    title: `Trip Story - ${trip.trip_id}`,
-                                    text: `Check out the expense statement for ${trip.trip_id}`,
-                                    url: window.location.href
-                                }).catch(console.error);
-                            } else {
-                                navigator.clipboard.writeText(window.location.href);
-                                showToast("Link copied to clipboard!", "success");
-                            }
-                        }}
-                    >
-                        <Share2 size={18} className="text-blue-500" />
-                        <span>Share</span>
-                    </button>
-                </div>
-
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8', fontStyle: 'italic' }}>
-                    Statement generated on {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </p>
+                <button
+                    className="btn btn-secondary"
+                    style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: '700' }}
+                    onClick={() => handleExport('pdf')}
+                    disabled={isExportingPDF}
+                >
+                    <FileText size={20} />
+                    {isExportingPDF ? 'Generating PDF...' : 'Download PDF Statement'}
+                </button>
+                <button
+                    className="btn btn-secondary"
+                    style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: '700' }}
+                    onClick={() => handleExport('excel')}
+                    disabled={isExportingExcel}
+                >
+                    <Download size={20} />
+                    {isExportingExcel ? 'Generating Excel...' : 'Export to Excel'}
+                </button>
+                <button
+                    className="btn btn-outline"
+                    style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: '700', border: '1px solid #cbd5e1' }}
+                    onClick={() => window.print()}
+                >
+                    <Printer size={20} />
+                    <span>Print Summary</span>
+                </button>
             </div>
 
             <TripWalletModal
                 isOpen={showWalletModal}
                 onClose={() => setShowWalletModal(false)}
                 trip={{ id: trip.trip_id, ...trip }}
+                onUpdate={fetchTripStory}
+            />
+
+            <ReminderModal 
+                isOpen={showReminderModal}
+                onClose={() => setShowReminderModal(false)}
+                tripId={trip.trip_id}
+                defaultTitle={`Reminder for Trip ${trip.trip_id}`}
+                defaultCategory="other"
                 onUpdate={fetchTripStory}
             />
 

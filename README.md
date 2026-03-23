@@ -17,3 +17,5 @@ Updated the toll creations and other route masters pages.
 17-03-2026 -> vinay -> resolved the issue in the migration file in travel masters for extra data column in custom master value model.
 
 18-03-2026 -> vinay -> updated the finance dashboard and added the functionality to unreject the requests.
+
+24-03-2026 -> vinay -> updated the start_tgs.bat file to start the application in a single click and changed the TGS FRONTEND name to frontend for folder name of tgs application for frontend. Also added the forge password, account request and limit password reset functionality.
