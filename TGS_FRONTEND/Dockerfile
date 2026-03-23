@@ -10,7 +10,10 @@ COPY . .
 RUN npm run build
 
 # Production Stage
-FROM nginx:stable-alpine AS production-stage
+FROM nginx:alpine AS production-stage
+
+# Upgrade Alpine packages to patch base OS vulnerabilities (e.g. apk/alpine CVEs)
+RUN apk update && apk upgrade --no-cache
 
 # Copy built assets from build-stage
 COPY --from=build-stage /app/dist /usr/share/nginx/html

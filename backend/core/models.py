@@ -369,4 +369,44 @@ class PhotoUpdateRequest(models.Model):
     class Meta:
         ordering = ['-created_at']
 
+class UserSecurityAnswer(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='security_answers')
+    question_1_hash = models.CharField(max_length=255)
+    question_2_hash = models.CharField(max_length=255)
+    question_3_hash = models.CharField(max_length=255)
+    question_4_hash = models.CharField(max_length=255)
+    question_5_hash = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Security Answers for {self.user.employee_id}"
+
+class UserRegistrationRequest(models.Model):
+    STATUS_CHOICES = (
+        ('Pending', 'Pending'),
+        ('HR Approved', 'HR Approved'),
+        ('Rejected', 'Rejected'),
+        ('Account Created', 'Account Created'),
+    )
+    
+    employee_id = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=255)
+    department = models.CharField(max_length=100)
+    section = models.CharField(max_length=100)
+    project = models.CharField(max_length=100)
+    office = models.CharField(max_length=100)
+    contact_number = models.CharField(max_length=20)
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    hr_approved_at = models.DateTimeField(null=True, blank=True)
+    admin_approved_at = models.DateTimeField(null=True, blank=True)
+    remarks = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Request: {self.name} ({self.employee_id})"
+
+    class Meta:
+        ordering = ['-created_at']
 

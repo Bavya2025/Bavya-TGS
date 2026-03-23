@@ -72,7 +72,6 @@ const TravelCreation = () => {
             link.parentNode.removeChild(link);
             showToast("Template downloaded successfully", "success");
         } catch (error) {
-            console.error('Download error:', error);
             showToast("Failed to download template", "error");
         }
     };
@@ -133,7 +132,6 @@ const TravelCreation = () => {
                     setReportingInfo({ name: "Routing Automatically", id: null });
                 }
             } catch (error) {
-                console.error("Manager detection failed", error);
                 setReportingInfo({ name: 'Assigned Manager', id: null });
             }
         };
@@ -231,7 +229,6 @@ const TravelCreation = () => {
                 )
             });
         } catch (error) {
-            console.error("Submission failed", error);
             // display server validation details if available
             const errData = error.response?.data;
             let msg = "Failed to create tour plan request";

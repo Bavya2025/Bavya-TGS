@@ -31,7 +31,6 @@ const MileageCapture = () => {
                 });
                 setTrips(vehicleTrips);
             } catch (error) {
-                console.error("Failed to fetch trips:", error);
                 showToast("Failed to load journeys", "error");
             } finally {
                 setIsLoadingTrips(false);

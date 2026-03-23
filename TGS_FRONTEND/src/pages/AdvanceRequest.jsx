@@ -37,7 +37,6 @@ const AdvanceRequest = () => {
             );
             setTrips(filtered);
         } catch (error) {
-            console.error("Failed to fetch trips:", error);
             showToast("Failed to load active trips", "error");
         } finally {
             setIsLoadingTrips(false);
@@ -49,7 +48,6 @@ const AdvanceRequest = () => {
             const response = await api.get('/api/advances/');
             setAdvances(response.data);
         } catch (error) {
-            console.error("Failed to fetch advances:", error);
             showToast("Failed to load past advances", "error");
         } finally {
             setIsLoadingAdvances(false);
@@ -86,7 +84,6 @@ const AdvanceRequest = () => {
             setReason('');
             setSelectedTripId('');
         } catch (error) {
-            console.error("Failed to submit advance request:", error);
             showToast("Failed to submit request", "error");
         } finally {
             setIsSaving(false);

@@ -7,7 +7,8 @@ import {
     MoreVertical,
     UserCheck,
     AlertCircle,
-    Briefcase
+    Briefcase,
+    ClipboardList
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../api/api';
@@ -58,7 +59,6 @@ const UserManagement = () => {
                 if (status === 400 || status === 404) {
                     setApiKeyMissing(true);
                 } else {
-                    console.error("Error fetching employees:", empResponse.reason);
                     setError('External API Connection Failed. You can still manage existing users.');
                 }
             }
@@ -68,11 +68,21 @@ const UserManagement = () => {
             } else {
                 const status = usersResponse.reason?.response?.status;
                 if (status === 403) {
-                    console.warn("User is not authorized to fetch users list. Proceeding with empty list.");
                     userList = [];
                 } else {
-                    console.warn("Could not fetch existing users list:", usersResponse.reason);
+                    showToast("Could not fetch existing users list", "error");
                 }
+            }
+
+            // Fallback: If external API failed, show the local users in the table
+            if (error && employeeList.length === 0 && userList.length > 0) {
+                employeeList = userList.map(u => ({
+                    employee_code: u.employee_id || u.username,
+                    name: u.name || u.username,
+                    department: 'N/A (API offline)',
+                    role: 'User'
+                }));
+                setTotalPages(1); // Only 1 page for local fallback dump
             }
 
             const processedEmployees = employeeList.map(emp => {
@@ -93,7 +103,6 @@ const UserManagement = () => {
             setEmployees(sortedEmployees);
 
         } catch (err) {
-            console.error("Unexpected error:", err);
             setError('An unexpected error occurred.');
         } finally {
             setLoading(false);
@@ -133,7 +142,6 @@ const UserManagement = () => {
                 }));
             }
         } catch (err) {
-            console.error("Error creating user:", err);
             const errMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to create user. It might already exist.';
             showToast(`Error: ${errMsg}`, 'error');
         } finally {
@@ -174,8 +182,7 @@ const UserManagement = () => {
                         current: Math.min(processedCount, totalEmployees)
                     }));
                 } catch (pageErr) {
-                    console.error(`Error syncing page ${page}:`, pageErr);
-                    // Continue to next page instead of failing entirely
+                    showToast(`Error syncing page ${page}`, "error");
                 }
             }
 
@@ -189,7 +196,6 @@ const UserManagement = () => {
             
             return; // Exit early so finally doesn't reset state too quickly
         } catch (err) {
-            console.error("Error syncing users:", err);
             const errMsg = err.response?.data?.error || 'Failed to sync users.';
             showToast(`Error: ${errMsg}`, 'error');
             setIsSyncingAll(false);
@@ -215,18 +221,25 @@ const UserManagement = () => {
                     <h1 className="welcome-text">User Management</h1>
                     <p className="header-subtitle">Manage system access for employees.</p>
                 </div>
-                <button 
-                    className="btn btn-primary" 
-                    onClick={() => setShowSyncModal(true)}
-                    disabled={isSyncingAll || loading}
-                >
-                    {isSyncingAll ? 'Syncing...' : (
-                        <>
-                            <Users size={18} />
-                            <span>Make All Employees As Users</span>
-                        </>
-                    )}
-                </button>
+                <div style={{ display: 'flex', gap: '15px' }}>
+                    <Link to="/registration-requests" className="btn" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#fff', border: '1px solid #d81b60', color: '#d81b60', borderRadius: '8px', fontWeight: 'bold', textDecoration: 'none' }}>
+                        <ClipboardList size={18} />
+                        <span>Registration Requests</span>
+                    </Link>
+                    <button 
+                        className="btn btn-primary" 
+                        onClick={() => setShowSyncModal(true)}
+                        disabled={isSyncingAll || loading}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px' }}
+                    >
+                        {isSyncingAll ? 'Syncing...' : (
+                            <>
+                                <Users size={18} />
+                                <span>Sync All Employees</span>
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
 
 
@@ -243,6 +256,14 @@ const UserManagement = () => {
                         </Link>
                     </div>
                 )}
+                
+                {error && !apiKeyMissing && (
+                    <div style={{ padding: '15px', backgroundColor: '#fef2f2', borderLeft: '4px solid #ef4444', marginBottom: '15px', borderRadius: '4px', display: 'flex', alignItems: 'center', color: '#991b1b' }}>
+                        <AlertCircle size={20} style={{ marginRight: '10px' }} />
+                        <span style={{ fontSize: '14px' }}>{error}</span>
+                    </div>
+                )}
+
                 <div className="content-toolbar">
                     <div className="search-box">
                         <Search size={18} />
@@ -258,8 +279,6 @@ const UserManagement = () => {
 
                 {loading ? (
                     <div className="um-loading-spinner">Loading Employees...</div>
-                ) : error ? (
-                    <div className="um-text-danger">{error}</div>
                 ) : (
                     <div className="table-wrapper">
                         <table className="admin-table">
@@ -324,7 +343,7 @@ const UserManagement = () => {
                         </table>
                         
                         {/* Pagination Controls */}
-                        {!loading && !error && totalPages > 1 && (
+                        {!loading && totalPages > 1 && (
                             <div className="pagination-controls" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', padding: '20px 0' }}>
                                 <button 
                                     className="btn btn-secondary" 

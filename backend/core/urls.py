@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import login_view, logout_view, me_view, LoginHistoryViewSet, AuditLogViewSet, profile_view, AuditLogView, LoginHistoryView, enroll_face_view, verify_face_view, get_face_registration_requests_view, handle_face_registration_request_view, get_pending_frs_approvals_view, handle_frs_approval_view, clear_frs_notifications_view, request_photo_update_view, get_photo_update_requests_view, handle_photo_update_request_view, health_check, heartbeat_view, update_theme_view
+from .views import login_view, logout_view, me_view, LoginHistoryViewSet, AuditLogViewSet, profile_view, AuditLogView, LoginHistoryView, enroll_face_view, verify_face_view, get_face_registration_requests_view, handle_face_registration_request_view, get_pending_frs_approvals_view, handle_frs_approval_view, clear_frs_notifications_view, request_photo_update_view, get_photo_update_requests_view, handle_photo_update_request_view, health_check, heartbeat_view, update_theme_view, setup_security_questions_view, verify_user_for_reset_view, verify_security_answers_view, reset_password_view, setup_security_unauthenticated_view, submit_registration_request_view, manage_registration_requests_view
 
 app_name = 'core'
 
@@ -34,6 +34,14 @@ urlpatterns = [
     path('frs/request-update', request_photo_update_view, name='request-photo-update'),
     path('frs/update-requests', get_photo_update_requests_view, name='get-photo-update-requests'),
     path('frs/handle-request', handle_photo_update_request_view, name='handle-photo-update-request'),
+    path('session-history', LoginHistoryView.as_view(), name='session-history'),
     
+    path('auth/security-questions', setup_security_questions_view, name='security-questions'),
+    path('auth/forgot-password/verify-user', verify_user_for_reset_view, name='verify-user-reset'),
+    path('auth/forgot-password/verify-answers', verify_security_answers_view, name='verify-answers-reset'),
+    path('auth/forgot-password/setup-manual', setup_security_unauthenticated_view, name='setup-manual-reset'),
+    path('auth/forgot-password/reset', reset_password_view, name='reset-password'),
+    path('auth/registration-request', submit_registration_request_view, name='submit-registration-request'),
+    path('auth/manage-registrations', manage_registration_requests_view, name='manage-registrations'),
     path('', include(router.urls)),
 ]

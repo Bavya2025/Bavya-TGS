@@ -62,7 +62,7 @@ const AuditLogs = () => {
                 });
             }
         } catch (error) {
-            console.error("Failed to fetch audit logs:", error);
+            showToast("Failed to load audit logs", "error");
         } finally {
             setIsLoading(false);
         }
@@ -94,7 +94,6 @@ const AuditLogs = () => {
             link.click();
             link.remove();
         } catch (error) {
-            console.error("Export failed:", error);
             showToast("Failed to export logs. Please try again.", "error");
         } finally {
             setIsExporting(false);

@@ -95,7 +95,6 @@ const AdminMasters = () => {
             const response = await api.get('/api/masters/jurisdictions/');
             setJurisdictions(response.data || []);
         } catch (error) {
-            console.error("Failed to fetch jurisdictions", error);
             showToast("Failed to load jurisdictions", "error");
         } finally {
             setLoading(false);
@@ -107,7 +106,7 @@ const AdminMasters = () => {
             const response = await api.get('/api/masters/jurisdictions/projects/');
             setProjects(response.data || []);
         } catch (error) {
-            console.error("Failed to fetch projects", error);
+            showToast("Failed to load projects", "error");
         }
     };
 
@@ -116,7 +115,7 @@ const AdminMasters = () => {
             const response = await api.get('/api/masters/locations/?type=State');
             setStates(response.data || []);
         } catch (error) {
-            console.error("Failed to fetch states", error);
+            showToast("Failed to load states", "error");
         }
     };
 
@@ -126,7 +125,7 @@ const AdminMasters = () => {
             const response = await api.get(`/api/masters/circles/?state=${stateId}`);
             setCircles(response.data || []);
         } catch (error) {
-            console.error("Failed to fetch circles", error);
+            showToast("Failed to load circles", "error");
         }
     };
 
@@ -136,7 +135,7 @@ const AdminMasters = () => {
             const response = await api.get(`/api/masters/locations/?type=District&parent=${stateExtId}`);
             setDistricts(response.data || []);
         } catch (error) {
-            console.error("Failed to fetch districts", error);
+            showToast("Failed to load districts", "error");
         }
     };
     const fetchCadres = async () => {
@@ -144,7 +143,7 @@ const AdminMasters = () => {
             const response = await api.get('/api/masters/cadres/');
             setCadres(response.data || []);
         } catch (error) {
-            console.error("Failed to fetch cadres", error);
+            showToast("Failed to load cadres", "error");
         }
     };
 
@@ -154,7 +153,6 @@ const AdminMasters = () => {
             const response = await api.get('/api/masters/eligibility-rules/');
             setRules(response.data || []);
         } catch (error) {
-            console.error("Failed to fetch rules", error);
             showToast("Failed to load eligibility rules", "error");
         } finally {
             setLoading(false);
@@ -169,7 +167,6 @@ const AdminMasters = () => {
             showToast(`Synced ${result.created} new cadres out of ${result.total} total roles.`, "success");
             fetchCadres(); // Reload the dropdown options
         } catch (error) {
-            console.error("Failed to sync cadres", error);
             showToast("Failed to sync cadres from HR system", "error");
         } finally {
             setSyncing(false);
@@ -391,7 +388,6 @@ const AdminMasters = () => {
             closeModal();
             fetchRules();
         } catch (error) {
-            console.error("Failed to save rules", error);
             const errMsg = error.response?.data?.non_field_errors?.[0] || error.response?.data?.detail || "Failed to save rules. Some rules may overlap.";
             showToast(errMsg, "error");
         }
@@ -405,7 +401,6 @@ const AdminMasters = () => {
             showToast("Rule deleted successfully", "success");
             fetchRules();
         } catch (error) {
-            console.error("Failed to delete rule", error);
             showToast("Failed to delete rule", "error");
         }
     };
@@ -460,7 +455,6 @@ const AdminMasters = () => {
             closeModal();
             fetchJurisdictions();
         } catch (error) {
-            console.error("Failed to save jurisdictions", error);
             showToast("Failed to save jurisdictions. Check for duplicates or connectivity issues.", "error");
         } finally {
             setLoading(false);
@@ -474,7 +468,6 @@ const AdminMasters = () => {
             showToast("Jurisdiction deleted successfully", "success");
             fetchJurisdictions();
         } catch (error) {
-            console.error("Failed to delete jurisdiction", error);
             showToast("Failed to delete jurisdiction", "error");
         }
     };

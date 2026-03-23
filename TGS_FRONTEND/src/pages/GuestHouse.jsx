@@ -144,7 +144,6 @@ const GuestHouse = () => {
             const normalized = response.data.map(normalizeGuestHouse);
             setGuestHouses(normalized);
         } catch (err) {
-            console.error("Failed to fetch guesthouses:", err);
             showToast("Failed to load guest houses", "error");
         } finally {
             setIsLoading(false);
@@ -159,7 +158,7 @@ const GuestHouse = () => {
             setGuestHouses(prev => prev.map(gh => gh.id === guestHouseId ? normalized : gh));
             setSelectedGuestHouse(normalized);
         } catch (err) {
-            console.error("Refresh failed:", err);
+            showToast("Refresh failed", "error");
         }
     };
 
@@ -197,7 +196,7 @@ const GuestHouse = () => {
             );
             setRoomRequests(requests);
         } catch (err) {
-            console.error("Failed to fetch room requests:", err);
+            showToast("Failed to fetch room requests", "error");
         }
     };
 
@@ -331,7 +330,7 @@ const GuestHouse = () => {
                 }));
                 setTrips(mapped);
             } catch (err) {
-                console.error("Fetch trips error:", err);
+                showToast("Failed to fetch trips", "error");
             } finally {
                 setIsLoadingTrips(false);
             }
@@ -355,7 +354,6 @@ const GuestHouse = () => {
             if (res.data.error) throw new Error(res.data.error);
             setFullHierarchy(Array.isArray(data) ? data : []);
         } catch (err) {
-            console.error("Error fetching full hierarchy:", err);
             setGeoError(err.message || "Unable to connect to Geocoding Server.");
         } finally {
             setGeoLoading(false);
@@ -794,7 +792,7 @@ const GuestHouse = () => {
                         });
                         setActiveBookingRequest(null);
                     } catch (nErr) {
-                        console.error("Auto-notify failed:", nErr);
+                        showToast("Auto-notify failed", "error");
                     }
                 }
 

@@ -39,7 +39,7 @@ const Dashboard = () => {
                 const response = await api.get('/api/dashboard-stats/');
                 setStats(response.data);
             } catch (error) {
-                console.error("Failed to fetch dashboard stats:", error);
+                showToast("Failed to fetch dashboard stats", "error");
             } finally {
                 setIsLoading(false);
             }

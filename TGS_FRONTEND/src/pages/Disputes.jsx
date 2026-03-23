@@ -42,7 +42,7 @@ const Disputes = () => {
             const response = await api.get('/api/disputes/');
             setDisputes(response.data);
         } catch (error) {
-            console.error("Error fetching disputes:", error);
+            showToast("Error fetching disputes", "error");
         }
     };
 
@@ -51,7 +51,7 @@ const Disputes = () => {
             const response = await api.get('/api/trips/');
             setTrips(response.data);
         } catch (error) {
-            console.error("Error fetching trips:", error);
+            showToast("Error fetching trips", "error");
         }
     };
 
@@ -63,7 +63,7 @@ const fetchExpenses = async (tripId) => {
             const response = await api.get(`/api/expenses/?trip_id=${encodedId}`);
             setExpenses(response.data);
         } catch (error) {
-            console.error("Error fetching expenses:", error);
+            showToast("Error fetching expenses", "error");
         } finally {
             setLoadingExpenses(false);
         }
@@ -89,7 +89,6 @@ const fetchExpenses = async (tripId) => {
             fetchDisputes();
             setFormData({ trip: '', expense: '', category: 'Mileage', reason: '' });
         } catch (error) {
-            console.error("Error raising dispute:", error);
             showToast("Failed to raise dispute. Please try again.", "error");
         }
     };

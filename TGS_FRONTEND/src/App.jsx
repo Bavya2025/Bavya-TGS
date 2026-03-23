@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext.jsx';
 import Layout from './components/Layout';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ContactHR from './pages/ContactHR';
 import Dashboard from './pages/Dashboard';
 import CreateTrip from './pages/CreateTrip';
 import ExpenseEntry from './pages/ExpenseEntry';
@@ -15,6 +17,7 @@ import Inbox from './pages/Inbox';
 import Outbox from './pages/Outbox';
 import AdvanceRequest from './pages/AdvanceRequest';
 import GuestHouse from './pages/GuestHouse';
+import RegistrationRequests from './pages/RegistrationRequests';
 import TripPlanner from './pages/TripPlanner';
 import ClaimReview from './pages/ClaimReview';
 import Settlement from './pages/Settlement';
@@ -44,6 +47,7 @@ import AdminMasters from './pages/AdminMasters';
 import NotificationsPage from './pages/NotificationsPage';
 import Settings from './pages/Settings';
 import SupportBot from './components/SupportBot';
+import TravelTimeline from './pages/TravelTimeline';
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
@@ -304,6 +308,8 @@ function App() {
             <SupportBotWrapper />
             <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/contact-hr" element={<ContactHR />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/trips" element={<ProtectedRoute><MyTrips /></ProtectedRoute>} />
             <Route path="/my-requests" element={<ProtectedRoute><MyRequests /></ProtectedRoute>} />
@@ -325,6 +331,7 @@ function App() {
             <Route path="/location-codes" element={<ProtectedRoute><LocationCodes /></ProtectedRoute>} />
             <Route path="/finance" element={<ProtectedRoute><FinanceDashboard /></ProtectedRoute>} />
             <Route path="/employees" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+            <Route path="/registration-requests" element={<ProtectedRoute><RegistrationRequests /></ProtectedRoute>} />
             <Route path="/policy" element={<ProtectedRoute><PolicyCenter /></ProtectedRoute>} />
             <Route path="/cfo-war-room" element={<ProtectedRoute><CFOWarRoom /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />

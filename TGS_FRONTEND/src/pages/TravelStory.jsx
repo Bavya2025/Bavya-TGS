@@ -118,7 +118,6 @@ const TravelStory = () => {
             const response = await api.get(`/api/trips/${decodedId}/`);
             setTravel(response.data);
         } catch (error) {
-            console.error("Failed to fetch travel story:", error);
             showToast("Failed to load travel story", "error");
         } finally {
             setIsLoading(false);
@@ -218,7 +217,6 @@ const TravelStory = () => {
 
             showToast(`${format.toUpperCase()} downloaded successfully`, "success");
         } catch (error) {
-            console.error(`${format.toUpperCase()} export failed:`, error);
             showToast(`Failed to generate ${format.toUpperCase()}`, "error");
         } finally {
             setter(false);
@@ -260,7 +258,6 @@ const TravelStory = () => {
             setJobReportFiles([]);
             fetchTravelStory();
         } catch (error) {
-            console.error("Failed to save job report:", error);
             showToast("Failed to save job report", "error");
         } finally {
             setIsSubmittingJobReport(false);
@@ -587,7 +584,6 @@ const TravelStory = () => {
                                                                         }
                                                                     }
                                                                 } catch (e) { 
-                                                                    console.error("Error parsing receipts:", e);
                                                                     bills = [exp.receipt_image]; 
                                                                 }
 

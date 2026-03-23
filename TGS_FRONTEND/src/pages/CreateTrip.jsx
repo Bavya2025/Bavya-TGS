@@ -155,7 +155,6 @@ const CreateTrip = () => {
                 const data = res.data.results || res.data.data || res.data;
                 setFullHierarchy(Array.isArray(data) ? data : []);
             } catch (error) {
-                console.error("Failed to fetch full hierarchy", error);
                 setGeoError("Failed to load locations from external API.");
             }
         };
@@ -329,7 +328,6 @@ const CreateTrip = () => {
                         setFormData(prev => ({ ...prev, enRoute: '', routePathId: '', distance: '' }));
                     }
                 } catch (e) {
-                    console.error("Failed to fetch paths", e);
                     setAvailablePaths([]);
                 }
             } else {
@@ -415,7 +413,6 @@ const CreateTrip = () => {
                 });
             }
         } catch (error) {
-            console.error("Failed to detect reporting manager:", error);
             setReportingInfo({ name: 'Error detecting manager', id: null });
         }
     }, [user]);
@@ -484,7 +481,6 @@ const CreateTrip = () => {
             setEmployeeHasMore(!!data.next);
             setEmployeePage(page);
         } catch (error) {
-            console.error("Failed to fetch employees:", error);
             setEmployeeError("Service unavailable. Please try again later.");
         } finally {
             setLoadingEmployees(false);
@@ -600,7 +596,6 @@ const CreateTrip = () => {
                 showToast("No active policy document found.", "info");
             }
         } catch (e) {
-            console.error("Failed to fetch policy", e);
             showToast("Failed to load policy document. Please contact admin.", "error");
         }
     };
@@ -689,7 +684,6 @@ const CreateTrip = () => {
             });
 
         } catch (error) {
-            console.error("Error creating trip:", error);
             const errorMessage = error.response?.data?.detail || 'Failed to submit trip request. Please try again.';
             showToast(errorMessage, 'error');
             setModalState({

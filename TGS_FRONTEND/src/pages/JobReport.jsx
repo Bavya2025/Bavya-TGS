@@ -79,7 +79,7 @@ const JobReport = () => {
             });
             setTeamBatchHistory(history);
         } catch (e) {
-            console.error("Failed to fetch batches", e);
+            showToast("Failed to fetch batches", "error");
         }
     };
 
@@ -91,7 +91,7 @@ const JobReport = () => {
             const response = await api.get('/api/users/?all_pages=true');
             setUsers(response.data || []);
         } catch (error) {
-            console.error("Failed to fetch users:", error);
+            showToast("Failed to fetch users", "error");
         }
     };
 
@@ -115,7 +115,6 @@ const JobReport = () => {
             filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
             setReports(filtered);
         } catch (error) {
-            console.error("Failed to fetch reports:", error);
             showToast("Error loading reports", "error");
         } finally {
             setLoading(false);

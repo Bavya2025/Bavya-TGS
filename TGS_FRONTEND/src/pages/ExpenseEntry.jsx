@@ -42,7 +42,6 @@ const ExpenseEntry = () => {
                 );
                 setTrips(filtered);
             } catch (error) {
-                console.error("Failed to fetch trips:", error);
                 showToast("Failed to load active trips", "error");
             } finally {
                 setIsLoadingTrips(false);
@@ -65,7 +64,6 @@ const ExpenseEntry = () => {
             const response = await api.get(`/api/expenses/?trip_id=${encodeId(tripId)}`);
             setExpenses(response.data);
         } catch (error) {
-            console.error("Failed to fetch expenses:", error);
             showToast("Failed to load expenses for this trip", "error");
         } finally {
             setIsLoadingExpenses(false);
@@ -123,7 +121,6 @@ const ExpenseEntry = () => {
             });
             showToast("Expense recorded successfully", "success");
         } catch (error) {
-            console.error("Failed to add expense:", error);
             showToast("Failed to save expense record", "error");
         }
     };
@@ -144,7 +141,6 @@ const ExpenseEntry = () => {
             setExpenses([]);
             setSelectedTripId('');
         } catch (error) {
-            console.error("Failed to submit claim:", error);
             showToast("Failed to submit claiming request", "error");
         }
     };

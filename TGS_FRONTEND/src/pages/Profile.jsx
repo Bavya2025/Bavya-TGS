@@ -40,7 +40,7 @@ const Profile = () => {
                 if (matchedEmployee) {
                     setProfileData(matchedEmployee);
                 } else {
-                    console.warn("User not found in employee list for code:", user?.username);
+                    showToast("User not found in employee list for code:", "error");
                 }
             } catch (err) {
                 setError('Failed to load detailed profile data.');

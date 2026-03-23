@@ -55,7 +55,6 @@ const PolicyCenter = () => {
                         : [];
             setPolicies(list);
         } catch (error) {
-            console.error("Failed to fetch policies:", error);
             showToast("Failed to load policies", "error");
         } finally {
             setIsLoading(false);
@@ -131,7 +130,6 @@ const PolicyCenter = () => {
             });
             fetchPolicies();
         } catch (error) {
-            console.error("Operation failed:", error);
             showToast(editingPolicyId ? "Failed to update policy" : "Failed to upload policy", "error");
         } finally {
             setIsUploading(false);

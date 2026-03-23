@@ -44,7 +44,6 @@ const HelpSupport = () => {
             link.parentNode.removeChild(link);
             showToast("Template downloaded successfully", "success");
         } catch (error) {
-            console.error('Download error:', error);
             showToast("Failed to download template", "error");
         }
     };

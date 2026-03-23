@@ -31,7 +31,6 @@ const CFOWarRoom = () => {
             const resp = await api.get('/api/war-room/');
             setData(resp.data);
         } catch (e) {
-            console.error("Failed to fetch CFO insights:", e);
             showToast("Failed to load war-room data", "error");
         } finally {
             setLoading(false);

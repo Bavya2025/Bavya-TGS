@@ -230,7 +230,7 @@ const RouteManagement = () => {
                 totalPages: Math.ceil((res.data.count || 0) / 10) || 1
             });
         } catch (error) {
-            console.error("Error fetching routes:", error);
+            showToast("Failed to load routes", "error");
         } finally {
             setLoading(false);
         }
@@ -247,7 +247,7 @@ const RouteManagement = () => {
                 totalPages: Math.ceil((res.data.count || 0) / 10) || 1
             });
         } catch (error) {
-            console.error("Error fetching tolls:", error);
+            showToast("Failed to load tolls", "error");
         } finally {
             setLoading(false);
         }
@@ -260,7 +260,7 @@ const RouteManagement = () => {
             const locsRes = await api.get('/api/masters/locations/?type=City');
             setLocations(locsRes.data.results || locsRes.data);
         } catch (error) {
-            console.error("Error fetching locations:", error);
+            showToast("Failed to load locations", "error");
         } finally {
             setLoading(false);
         }
@@ -281,7 +281,7 @@ const RouteManagement = () => {
         try {
             const res = await api.get(`/api/masters/locations/?parent=${parentId}`);
             setOptions(res.data.results || res.data);
-        } catch (err) { console.error(`Error fetching ${type}:`, err); }
+        } catch (err) { showToast(`Error fetching ${type}`, "error"); }
     };
 
     const fetchFullHierarchy = async (forceRefetch = false) => {
@@ -298,7 +298,7 @@ const RouteManagement = () => {
             if (res.data.error) throw new Error(res.data.error);
             setFullHierarchy(Array.isArray(data) ? data : []);
         } catch (err) {
-            console.error("Error fetching full hierarchy:", err);
+            showToast("Unable to connect to Geocoding Server.", "error");
             setFetchError(err.message || "Unable to connect to Geocoding Server.");
         } finally {
             setLoading(false);
@@ -473,7 +473,7 @@ const RouteManagement = () => {
                     }));
                     setSourcePool(formatted);
                     setDestPool(formatted);
-                } catch (err) { console.error("Error fetching global locations:", err); }
+                } catch (err) { showToast("Error fetching global locations", "error"); }
             }
         };
         updatePools();
@@ -504,7 +504,7 @@ const RouteManagement = () => {
                         const landmarks = landmarksRes.data.results || landmarksRes.data;
                         setLocations([...sites, ...landmarks]);
                     }
-                } catch (err) { console.error("Error fetching global enroute points:", err); }
+                } catch (err) { showToast("Error fetching global enroute points", "error"); }
             };
             fetchEnroutePoints();
         }
@@ -641,7 +641,7 @@ const RouteManagement = () => {
             });
             setDiscoveryNodes(mappedNodes);
         } catch (err) {
-            console.error('[Geo Hierarchy] Error updating nodes:', err);
+            showToast("Error updating nodes", "error");
             setDiscoveryNodes([]); // Graceful empty state, no crash
         }
         };
@@ -855,7 +855,6 @@ const RouteManagement = () => {
             setHierarchicalFilter({ continent: '', country: '', state: '', district: '', mandal: '', cluster: '', local: '' });
             await fetchFullHierarchy(true); // Force refetch immediately after sync
         } catch (error) {
-            console.error("Sync failed:", error);
             showToast("Location sync failed. Please check the API connection.", "error");
         } finally {
             setLoading(false);
@@ -912,7 +911,6 @@ const RouteManagement = () => {
             fetchData();
             showToast(editingId ? "Route updated successfully!" : "Route created successfully!", "success");
         } catch (error) {
-            console.error("Failed to save route:", error.response?.data || error.message);
             const errData = error.response?.data;
             let errMsg = "Failed to save route.";
             
@@ -1065,7 +1063,6 @@ const RouteManagement = () => {
             handleManageTolls(selectedPath, selectedRoute);
             showToast("Toll assigned successfully!", "success");
         } catch (error) {
-            console.error("Failed to assign toll:", error.response?.data || error.message);
             showToast("Failed to assign toll to path.", "error");
         }
     };
@@ -1117,7 +1114,6 @@ const RouteManagement = () => {
 
             handleManagePaths(selectedRoute);
         } catch (error) {
-            console.error("Error saving path:", error.response?.data || error.message);
             const errData = error.response?.data;
             let errMsg = `Failed to ${editingPathId ? 'update' : 'create'} enroute path`;
             
@@ -1261,7 +1257,7 @@ const RouteManagement = () => {
                                                                 showToast("Please configure a Path Variant (Config Via) before assigning tolls.", "error");
                                                             }
                                                         } catch (e) {
-                                                            console.error(e);
+                                                            showToast("Failed to load path variants", "error");
                                                         }
                                                     }}
                                                 >

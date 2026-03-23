@@ -62,7 +62,7 @@ const LoginHistory = () => {
                 });
             }
         } catch (error) {
-            console.error("Failed to fetch login history:", error);
+            showToast("Failed to fetch login history", "error");
         } finally {
             setIsLoading(false);
         }
@@ -76,7 +76,7 @@ const LoginHistory = () => {
             const response = await api.get(`/api/login-history/${historyId}/activities/`);
             setRowActivities(prev => ({ ...prev, [historyId]: response.data }));
         } catch (error) {
-            console.error("Failed to fetch activities:", error);
+            showToast("Failed to fetch activities", "error");
         } finally {
             setLoadingActivities(prev => ({ ...prev, [historyId]: false }));
         }
@@ -115,7 +115,6 @@ const LoginHistory = () => {
             link.click();
             link.remove();
         } catch (error) {
-            console.error("Export failed:", error);
             showToast("Failed to export logs. Please try again.", "error");
         } finally {
             setIsExporting(false);

@@ -81,7 +81,7 @@ const ApiManagement = () => {
             if (data.external_api_key) setApiKey(data.external_api_key);
             if (data.geo_api_key) setGeoApiKey(data.geo_api_key);
         } catch (error) {
-            console.error("Error fetching config:", error);
+            showToast("Failed to load API configuration", "error");
         }
     };
 
@@ -95,7 +95,7 @@ const ApiManagement = () => {
                 setLogs(response.data.logs);
             }
         } catch (error) {
-            console.error("Error fetching dashboard stats:", error);
+            showToast("Error fetching dashboard stats", "error");
         }
     };
 
@@ -106,7 +106,7 @@ const ApiManagement = () => {
             const data = response.data.results || response.data;
             setGeneratedKeys(Array.isArray(data) ? data : []);
         } catch (error) {
-            console.error("Error fetching keys:", error);
+            showToast("Error fetching keys", "error");
             setGeneratedKeys([]);
         } finally {
             setLoadingKeys(false);
@@ -143,7 +143,6 @@ const ApiManagement = () => {
                 setTimeout(() => setSaved(false), 3000);
             }
         } catch (err) {
-            console.error("Failed to save API key:", err);
             setError(`Failed to save ${isGeo ? 'Geo' : 'Employee'} configuration.`);
         } finally {
             if (isGeo) setIsGeoSaving(false);
@@ -205,7 +204,6 @@ const ApiManagement = () => {
             fetchDashboardData();
             fetchEndpoints();
         } catch (error) {
-            console.error("Error generating key:", error);
             setError("Failed to generate API key.");
         }
     };
@@ -216,7 +214,7 @@ const ApiManagement = () => {
             const data = response.data.results || response.data;
             setCustomEndpoints(Array.isArray(data) ? data : []);
         } catch (error) {
-            console.error("Error fetching endpoints:", error);
+            showToast("Error fetching endpoints", "error");
             setCustomEndpoints([]);
         }
     };
@@ -248,7 +246,6 @@ const ApiManagement = () => {
             setIsEndpointModalOpen(false);
             fetchEndpoints();
         } catch (error) {
-            console.error("Error creating endpoint", error);
             setError("Failed to create endpoint. Path might be duplicate.");
         }
     };
@@ -262,7 +259,7 @@ const ApiManagement = () => {
             const data = response.data.results || response.data;
             setSubmissions(Array.isArray(data) ? data : []);
         } catch (error) {
-            console.error("Error fetching submissions", error);
+            showToast("Error fetching submissions", "error");
             setSubmissions([]);
         }
     };
@@ -277,7 +274,6 @@ const ApiManagement = () => {
                 fetchDashboardData();
                 showToast("API key revoked successfully.", "success");
             } catch (error) {
-                console.error("Error revoking key:", error);
                 showToast("Failed to revoke API key.", "error");
             }
     };

@@ -63,6 +63,15 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUser = (updates) => {
+    setUser(prev => {
+      if (!prev) return null;
+      const updated = { ...prev, ...updates };
+      sessionStorage.setItem('tgs_user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   useEffect(() => {
     const initAuth = async () => {
       const savedUser = sessionStorage.getItem('tgs_user');
@@ -117,7 +126,7 @@ export const AuthProvider = ({ children }) => {
   }, [user]);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, heartbeatData, fetchHeartbeat }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, heartbeatData, fetchHeartbeat, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

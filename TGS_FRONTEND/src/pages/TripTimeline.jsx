@@ -33,7 +33,6 @@ const TripTimeline = () => {
             const response = await api.get(`/api/trips/${id}/`);
             setTrip(response.data);
         } catch (error) {
-            console.error("Failed to fetch trip details:", error);
             showToast("Failed to load trip details", "error");
         } finally {
             setIsLoading(false);

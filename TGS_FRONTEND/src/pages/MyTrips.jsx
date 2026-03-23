@@ -144,7 +144,6 @@ const MyTrips = () => {
             URL.revokeObjectURL(url);
             showToast(`${format.toUpperCase()} downloaded successfully!`, 'success');
         } catch (e) {
-            console.error('Export error:', e);
             showToast(`Failed to download ${format.toUpperCase()}: ${e.message}`, 'error');
         } finally {
             setExportingId(null);
@@ -168,7 +167,6 @@ const MyTrips = () => {
                     try {
                         return JSON.parse(field);
                     } catch (e) {
-                        console.warn("Failed to parse JSON field:", field);
                         return [];
                     }
                 }
@@ -176,7 +174,6 @@ const MyTrips = () => {
             };
 
             if (!Array.isArray(allData)) {
-                console.warn("Expected array from APIs, got:", allData);
                 setTrips([]);
                 return;
             }
@@ -211,7 +208,6 @@ const MyTrips = () => {
             }));
             setTrips(mappedTrips);
         } catch (error) {
-            console.error("Failed to fetch trips:", error);
             showToast(`Failed to load trips: ${error.message || 'Unknown error'}`, "error");
         } finally {
             setIsLoading(false);

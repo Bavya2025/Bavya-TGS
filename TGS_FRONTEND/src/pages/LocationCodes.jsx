@@ -60,7 +60,6 @@ const LocationCodes = () => {
                     setContinents([]);
                 }
             } catch (error) {
-                console.error("Failed to fetch full hierarchy map:", error);
                 setFetchError(true);
             } finally {
                 setIsLoading(false);
@@ -369,7 +368,6 @@ const LocationCodes = () => {
             setFullHierarchy(Array.isArray(data) ? data : []);
             showToast("Hierarchy map successfully synchronized via API", "success");
         } catch (error) {
-            console.error("Sync Error:", error);
             setFetchError(true);
             showToast("Failed to verify endpoints. Internal Server Error.", "error");
         } finally {

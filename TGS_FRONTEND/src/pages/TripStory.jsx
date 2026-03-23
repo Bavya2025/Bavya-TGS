@@ -101,7 +101,6 @@ const TripStory = () => {
             setHasActiveReminder(reminders.some(r => !r.is_sent));
 
         } catch (error) {
-            console.error("Failed to fetch trip story:", error);
             showToast("Failed to load trip story", "error");
         } finally {
             setIsLoading(false);
@@ -174,7 +173,6 @@ const TripStory = () => {
 
             showToast(`${format.toUpperCase()} downloaded successfully`, "success");
         } catch (error) {
-            console.error(`${format.toUpperCase()} export failed:`, error);
             showToast(`Failed to generate ${format.toUpperCase()}`, "error");
         } finally {
             setter(false);
@@ -219,7 +217,6 @@ const TripStory = () => {
             setJobReportFile(null);
             fetchTripStory(); // Refresh to show in grid
         } catch (error) {
-            console.error("Failed to save job report:", error);
             showToast("Failed to save job report", "error");
         } finally {
             setIsSubmittingJobReport(false);

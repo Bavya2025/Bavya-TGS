@@ -95,7 +95,6 @@ const MyRequests = ({ enforceView = null }) => {
             setClaims(claimsList);
 
         } catch (error) {
-            console.error("Error fetching requests data:", error);
             showToast("Failed to load request boards", "error");
         } finally {
             setIsLoading(false);

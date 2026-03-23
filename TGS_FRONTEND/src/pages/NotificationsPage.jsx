@@ -137,7 +137,6 @@ const NotificationsPage = () => {
             const response = await api.get('/api/notifications/');
             setNotifications(response.data);
         } catch (error) {
-            console.error("Failed to fetch notifications:", error);
             showToast("Failed to load notifications", "error");
         } finally {
             setIsLoading(false);
@@ -154,7 +153,7 @@ const NotificationsPage = () => {
             setNotifications(notifications.map(n => ({ ...n, unread: false })));
             showToast("All notifications marked as read", "success");
         } catch (error) {
-            console.error("Failed to mark all as read:", error);
+            showToast("Failed to mark all as read", "error");
         }
     };
 
@@ -163,7 +162,7 @@ const NotificationsPage = () => {
             await api.patch(`/api/notifications/${id}/`, { unread: false });
             setNotifications(notifications.map(n => n.id === id ? { ...n, unread: false } : n));
         } catch (error) {
-            console.error("Failed to mark notification as read:", error);
+            showToast("Failed to mark notification as read", "error");
         }
     };
 

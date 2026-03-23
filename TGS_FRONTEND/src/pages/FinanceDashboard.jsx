@@ -74,7 +74,6 @@ const FinanceDashboard = () => {
                 });
             }
         } catch (e) {
-            console.error("Failed to fetch finance records:", e);
             showToast("Failed to load records", "error");
         } finally {
             setLoading(false);

@@ -74,11 +74,9 @@ const FuelMaster = () => {
                 setStates(locationStates);
             } else {
                 // Fallback: use simple string list of Indian states
-                console.warn("Location API returned no states. Using fallback list.");
                 setStates(INDIA_STATES_FALLBACK);
             }
         } catch (error) {
-            console.error("Failed to fetch states, using fallback list.", error);
             setStates(INDIA_STATES_FALLBACK);
         }
     };

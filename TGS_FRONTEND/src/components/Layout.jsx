@@ -1,6 +1,8 @@
 import React from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import SecurityQuestionsSetupModal from './SecurityQuestionsSetupModal';
+
 const Layout = ({ children }) => {
     return (
         <div className="layout">
@@ -10,6 +12,7 @@ const Layout = ({ children }) => {
                     {children}
                 </div>
             </main>
+            <SecurityQuestionsSetupModal />
         </div>
     );
 };

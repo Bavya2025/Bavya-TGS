@@ -38,7 +38,6 @@ const Settlement = () => {
             setData(resp.data);
             setIsSettled(resp.data.summary.status === 'Settled');
         } catch (e) {
-            console.error("Failed to fetch settlement data:", e);
             showToast("Failed to load settlement details", "error");
         } finally {
             setLoading(false);
@@ -51,7 +50,7 @@ const Settlement = () => {
             const resp = await api.get('/api/settlement/');
             setAllTrips(resp.data);
         } catch (e) {
-            console.error("Failed to fetch trips for settlement:", e);
+            showToast("Failed to fetch trips for settlement", "error");
         } finally {
             setLoading(false);
         }
@@ -74,7 +73,6 @@ const Settlement = () => {
             showToast("Trip accounts finalized and settled successfully", "success");
             fetchSettlementData(tripId);
         } catch (e) {
-            console.error("Settlement failed:", e);
             showToast("Settlement failed. Please try again.", "error");
         } finally {
             setIsSettling(false);

@@ -109,7 +109,8 @@ def login_view(request):
                 'designation': getattr(user, 'designation', 'N/A'),
                 'office_level': getattr(user, 'office_level', 3),
                 'email': getattr(user, 'email', ''),
-                'theme': getattr(user, 'theme', 'classic')
+                'theme': getattr(user, 'theme', 'classic'),
+                'has_setup_security': hasattr(user, 'security_answers')
             }
         })
         
@@ -133,7 +134,8 @@ def me_view(request):
             'designation': getattr(user, 'designation', 'N/A'),
             'office_level': getattr(user, 'office_level', 3),
             'email': getattr(user, 'email', ''),
-            'theme': getattr(user, 'theme', 'classic')
+            'theme': getattr(user, 'theme', 'classic'),
+            'has_setup_security': hasattr(user, 'security_answers')
         })
     except Exception as e:
         import traceback
@@ -872,3 +874,322 @@ def update_theme_view(request):
     )
     
     return Response({'message': 'Theme updated successfully', 'theme': theme})
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsCustomAuthenticated])
+def setup_security_questions_view(request):
+    user = request.custom_user
+    from .models import UserSecurityAnswer
+    
+    if request.method == 'GET':
+        has_setup = UserSecurityAnswer.objects.filter(user=user).exists()
+        return Response({'has_setup': has_setup})
+        
+    if request.method == 'POST':
+        answers = request.data.get('answers', [])
+        if not answers or len(answers) != 5:
+            return Response({'error': 'You must provide exactly 5 answers.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        for ans in answers:
+            if len(str(ans).strip()) < 5:
+                return Response({'error': 'Each answer must be at least 5 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Uniqueness check
+        unique_answers = {str(ans).lower().strip() for ans in answers}
+        if len(unique_answers) < 5:
+            return Response({'error': 'All five security answers must be different.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        UserSecurityAnswer.objects.filter(user=user).delete() # Reset
+        
+        UserSecurityAnswer.objects.create(
+            user=user,
+            question_1_hash=hash_password(answers[0].lower().strip()),
+            question_2_hash=hash_password(answers[1].lower().strip()),
+            question_3_hash=hash_password(answers[2].lower().strip()),
+            question_4_hash=hash_password(answers[3].lower().strip()),
+            question_5_hash=hash_password(answers[4].lower().strip())
+        )
+        return Response({'message': 'Security questions saved successfully.'})
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_user_for_reset_view(request):
+    employee_id = (request.data.get('employee_id') or '').strip()
+    if not employee_id:
+        return Response({'error': 'Employee ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    user = User.objects.filter(employee_id__iexact=employee_id).first()
+    if not user:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+    if not user.is_active:
+        return Response({'error': 'Your account is currently inactive.'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+    # Rate limit check: max 3 resets per month
+    month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    reset_count = AuditLog.objects.filter(
+        user=user, 
+        action='PASSWORD_RESET', 
+        timestamp__gte=month_start
+    ).count()
+    
+    if reset_count >= 3:
+        return Response({
+            'error': 'Security policy limit: You have already reset your password 3 times this month. Please contact HR or IT for further assistance.'
+        }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        
+    from .models import UserSecurityAnswer
+    has_setup = UserSecurityAnswer.objects.filter(user=user).exists()
+    
+    if not has_setup:
+        return Response({
+            'error': 'You have not set up your security questions. Would you like to set them up now to reset your password?',
+            'code': 'NO_SECURITY_SETUP',
+            'employee_id': user.employee_id
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+    import random
+    indices = random.sample(range(5), 2)
+    
+    return Response({
+        'message': 'User verified',
+        'employee_id': user.employee_id,
+        'indices': indices
+    })
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_security_answers_view(request):
+    employee_id = request.data.get('employee_id')
+    # Use a dictionary mapping index to answer { "0": "answer1", "2": "answer2" }
+    provided_answers = request.data.get('answers', {})
+    
+    if len(provided_answers) != 2:
+        return Response({'error': 'You must provide exactly two answers.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    user = User.objects.filter(employee_id__iexact=employee_id).first()
+    if not user:
+        return Response({'error': 'Invalid user.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    from .models import UserSecurityAnswer
+    sec_answer = UserSecurityAnswer.objects.filter(user=user).first()
+    if not sec_answer:
+        return Response({'error': 'No security questions setup found.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    # Mapping indices back to their respective fields
+    hash_fields = [
+        sec_answer.question_1_hash,
+        sec_answer.question_2_hash,
+        sec_answer.question_3_hash,
+        sec_answer.question_4_hash,
+        sec_answer.question_5_hash
+    ]
+    
+    for idx_str, ans in provided_answers.items():
+        try:
+            idx = int(idx_str)
+            if idx < 0 or idx > 4:
+                return Response({'error': 'Invalid question index.'}, status=status.HTTP_400_BAD_REQUEST)
+                
+            ans_clean = ans.lower().strip()
+            ans_hash = hash_password(ans_clean)
+            if ans_hash != hash_fields[idx]:
+                return Response({'error': 'One or more security answers are incorrect.'}, status=status.HTTP_401_UNAUTHORIZED)
+        except ValueError:
+             return Response({'error': 'Invalid question index mapping.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+    # Success, generate a short-lived reset token
+    expiration = timezone.now() + datetime.timedelta(minutes=15)
+    payload = {
+        'reset_user_id': user.id,
+        'exp': expiration,
+        'intent': 'password_reset'
+    }
+    reset_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+    
+    return Response({'reset_token': reset_token})
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password_view(request):
+    reset_token = request.data.get('reset_token')
+    new_password = request.data.get('new_password')
+    
+    if not reset_token or not new_password:
+        return Response({'error': 'Missing required fields.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    try:
+        decoded = jwt.decode(reset_token, settings.SECRET_KEY, algorithms=['HS256'])
+        if decoded.get('intent') != 'password_reset':
+            return Response({'error': 'Invalid token intent.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user_id = decoded.get('reset_user_id')
+        user = User.objects.filter(id=user_id).first()
+        
+        if not user:
+            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            
+        # Optional: Validate password complexity rules on backend too
+        if len(new_password) < 8 or len(new_password) > 12:
+            return Response({'error': 'Password must be between 8 and 12 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Final rate limit check
+        month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        reset_count = AuditLog.objects.filter(
+            user=user, 
+            action='PASSWORD_RESET', 
+            timestamp__gte=month_start
+        ).count()
+        if reset_count >= 3:
+            return Response({'error': 'Monthly reset limit reached.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            
+        user.password_hash = hash_password(new_password)
+        user.save()
+        
+        # Invalidate all active sessions for security
+        Session.objects.filter(user=user, is_active=True).update(is_active=False)
+        
+        AuditLog.objects.create(
+            user=user,
+            action='PASSWORD_RESET',
+            model_name='User',
+            object_repr=str(user),
+            ip_address=request.META.get('REMOTE_ADDR'),
+            details={'method': 'Security Questions'}
+        )
+        
+        return Response({'message': 'Password has been successfully reset.'})
+        
+    except jwt.ExpiredSignatureError:
+        return Response({'error': 'Reset session has expired. Please try again.'}, status=status.HTTP_401_UNAUTHORIZED)
+    except jwt.InvalidTokenError:
+        return Response({'error': 'Invalid reset session.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def submit_registration_request_view(request):
+    data = request.data
+    required_fields = ['employee_id', 'name', 'department', 'section', 'project', 'office', 'contact_number']
+    
+    for f in required_fields:
+        if not data.get(f):
+            return Response({'error': f'{f.replace("_", " ").title()} is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+    from .models import UserRegistrationRequest
+    if UserRegistrationRequest.objects.filter(employee_id__iexact=data['employee_id'], status__in=['Pending', 'HR Approved']).exists():
+        return Response({'error': 'A pending or approved request already exists for this Employee ID.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    UserRegistrationRequest.objects.create(
+        employee_id=data['employee_id'],
+        name=data['name'],
+        department=data['department'],
+        section=data['section'],
+        project=data['project'],
+        office=data['office'],
+        contact_number=data['contact_number']
+    )
+    return Response({'message': 'Your registration request has been submitted. It will be sent to HR for approval, then to Admin for account creation.'})
+
+@api_view(['GET', 'POST'])
+def manage_registration_requests_view(request):
+    user = request.custom_user
+    role = user.role.name.lower()
+    
+    if 'hr' not in role and 'admin' not in role:
+        return Response({'error': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+        
+    from .models import UserRegistrationRequest
+    if request.method == 'GET':
+        # HR sees everything, Admin sees HR Approved or all
+        reqs = UserRegistrationRequest.objects.all()
+        return Response([{
+            'id': r.id,
+            'employee_id': r.employee_id,
+            'name': r.name,
+            'department': r.department,
+            'section': r.section,
+            'project': r.project,
+            'office': r.office,
+            'contact_number': r.contact_number,
+            'status': r.status,
+            'created_at': r.created_at,
+            'remarks': r.remarks
+        } for r in reqs])
+        
+    if request.method == 'POST':
+        req_id = request.data.get('id')
+        action = request.data.get('action') # 'approve', 'reject', 'created'
+        remarks = request.data.get('remarks', '')
+        
+        try:
+            req = UserRegistrationRequest.objects.get(id=req_id)
+            if action == 'approve' and 'hr' in role:
+                req.status = 'HR Approved'
+                req.hr_approved_at = timezone.now()
+            elif action == 'created' and 'admin' in role:
+                if req.status != 'HR Approved':
+                    return Response({'error': 'Request must be HR Approved first.'}, status=status.HTTP_400_BAD_REQUEST)
+                req.status = 'Account Created'
+                req.admin_approved_at = timezone.now()
+            elif action == 'reject':
+                req.status = 'Rejected'
+            else:
+                return Response({'error': 'Invalid action or insufficient permissions.'}, status=status.HTTP_400_BAD_REQUEST)
+                
+            req.remarks = remarks
+            req.save()
+            return Response({'message': f'Request status updated to {req.status}'})
+        except UserRegistrationRequest.DoesNotExist:
+            return Response({'error': 'Request not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def setup_security_unauthenticated_view(request):
+    employee_id = (request.data.get('employee_id') or '').strip()
+    answers = request.data.get('answers', [])
+    
+    if not employee_id or len(answers) != 5:
+        return Response({'error': 'Missing required fields.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    for ans in answers:
+        if len(str(ans).strip()) < 5:
+            return Response({'error': 'Each answer must be at least 5 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+    # Uniqueness check
+    unique_answers = {str(ans).lower().strip() for ans in answers}
+    if len(unique_answers) < 5:
+        return Response({'error': 'All five security answers must be different.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    user = User.objects.filter(employee_id__iexact=employee_id).first()
+    if not user:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+    from .models import UserSecurityAnswer
+    if UserSecurityAnswer.objects.filter(user=user).exists():
+        return Response({'error': 'Security questions already set. Please verify them.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    # Setup for first time
+    UserSecurityAnswer.objects.create(
+        user=user,
+        question_1_hash=hash_password(answers[0].lower().strip()),
+        question_2_hash=hash_password(answers[1].lower().strip()),
+        question_3_hash=hash_password(answers[2].lower().strip()),
+        question_4_hash=hash_password(answers[3].lower().strip()),
+        question_5_hash=hash_password(answers[4].lower().strip())
+    )
+    
+    # Also generate a reset token since we verified user by this manual setting up
+    expiration = timezone.now() + datetime.timedelta(minutes=15)
+    payload = {
+        'reset_user_id': user.id,
+        'exp': expiration,
+        'intent': 'password_reset'
+    }
+    reset_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+    
+    return Response({
+        'message': 'Security questions set successfully. You can now reset your password.',
+        'reset_token': reset_token
+    })
+
+

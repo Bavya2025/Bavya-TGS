@@ -79,7 +79,6 @@ const ApprovalInbox = ({ enforceTab = null }) => {
     const isFinanceExec = isFinance && !isFinanceHead;
 
     useEffect(() => {
-        console.log("Current User Role:", rawRole, "Dept:", dept, "Desig:", desig);
     }, [user, rawRole, dept, desig]);
 
     const fetchCounts = async () => {
@@ -87,7 +86,7 @@ const ApprovalInbox = ({ enforceTab = null }) => {
             const resp = await api.get('/api/approvals/count/');
             setCounts(resp.data);
         } catch (e) {
-            console.error("Failed to fetch counts");
+            showToast("Failed to load approval counts", "error");
         }
     };
 
@@ -110,7 +109,6 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                 setSelectedTask(null);
             }
         } catch (error) {
-            console.error("Failed to fetch approvals:", error);
             showToast("Failed to load approval tasks", "error");
         } finally {
             setLoading(false);
@@ -142,7 +140,7 @@ const ApprovalInbox = ({ enforceTab = null }) => {
             );
             setBatches(pendingForMe);
         } catch (e) {
-            console.error('Failed to fetch batches', e);
+            showToast("Failed to load approval batches", "error");
         }
     };
 
@@ -225,7 +223,6 @@ const ApprovalInbox = ({ enforceTab = null }) => {
             fetchTasks(activeTab);
             fetchCounts();
         } catch (error) {
-            console.error(`Failed to ${action} task:`, error);
             showToast(error.response?.data?.error || `Failed to ${action} request`, "error");
         }
     };

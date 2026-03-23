@@ -116,7 +116,6 @@ export default function AdminMasterManagement() {
                 }
             }
         } catch (error) {
-            console.error("Failed to load master structure", error);
             showToast("Failed to load master data structure", "error");
         }
     };
@@ -134,7 +133,6 @@ export default function AdminMasterManagement() {
             const res = await api.get(url);
             setData(res.data);
         } catch (error) {
-            console.error("Fetch failed", error);
             showToast("Failed to load table data", "error");
         } finally {
             setLoading(false);
@@ -295,7 +293,6 @@ export default function AdminMasterManagement() {
                                     {data.length > 0 ? data.map(item => (
                                         <tr key={item.id}>
                                             <td><span className="id-badge">{item.id}</span></td>
-                                            {(() => { console.log("Rendering Item Row:", item); return null; })()}
                                             {visibleFields.map(f => (
                                                 <td key={f}>
                                                     {f === 'module_ref' ? (

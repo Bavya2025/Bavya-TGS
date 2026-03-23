@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../api/api';
@@ -71,7 +71,6 @@ const Login = () => {
                     navigate('/');
             }
         } catch (err) {
-            console.error('Login error detail:', err);
             if (err.message === 'CORRUPT_RESPONSE' || err.code === 'ERR_NOT_JSON') {
                 setError('Server configuration error. Received invalid response from backend.');
             } else if (!err.response) {
@@ -166,8 +165,8 @@ const Login = () => {
                             </div>
                         </div>
 
-                        <div className="login-options">
-                            <a href="#" className="forgot-pwd">Forgot password?</a>
+                        <div className="login-options" style={{ marginTop: '10px' }}>
+                            <Link to="/forgot-password" className="forgot-pwd" style={{ color: '#d81b60', fontWeight: '500', textDecoration: 'none', fontSize: '14px' }}>Forgot password?</Link>
                         </div>
 
                         <button type="submit" className="login-btn" disabled={isLoading}>
@@ -176,7 +175,7 @@ const Login = () => {
                     </form>
 
                     <div className="login-footer">
-                        <p className="login-contact-text">Don't have an account? <a href="#">Contact HR</a></p>
+                        <p className="login-contact-text">Don't have an account? <Link to="/contact-hr" style={{ color: '#d81b60', fontWeight: 'bold' }}>Contact HR</Link></p>
                     </div>
                 </div>
             </div>
