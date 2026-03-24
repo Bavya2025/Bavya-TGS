@@ -29,11 +29,42 @@ class EmployeeListView(APIView):
         )
         
         if "error" in data:
-            # If it's just a 404/not found for a specific employee filter, return empty
+            # FALLBACK LOGIC: If external API is down, try to show the users we already have in our local DB
+            # This allows management to continue for existing accounts
+            
+            # Map statuses that aren't 404 to an "API Partial Error" response with local fallback
+            if data.get("status_code") != 404:
+                # Search locally if search term provided
+                local_users = User.objects.all().order_by('-id')
+                if search:
+                    from django.db.models import Q
+                    local_users = local_users.filter(employee_id__icontains=search)
+                
+                # Fetch only basic info needed for management list
+                results = []
+                for u in local_users:
+                    results.append({
+                        "employee_code": u.employee_id,
+                        "name": u.name,
+                        "department": "N/A (Local)",
+                        "role_name": u.role.name if u.role else "Pending",
+                        "is_user": True,
+                        "source": "local"
+                    })
+                
+                # Return local data with the error flag so frontend can show the warning banner
+                return Response({
+                    "results": results, 
+                    "count": local_users.count(), 
+                    "error": data["error"],
+                    "is_fallback": True
+                })
+
+            # If it's just a 404/not found for a specific employee filter, return clean empty
             if data.get("status_code") == 404:
                 return Response({"count": 0, "next": None, "previous": None, "results": []})
             
-            # For timeouts and other errors, return the clean error message
+            # Generic error
             status_code = data.get("status_code", status.HTTP_500_INTERNAL_SERVER_ERROR)
             return Response({"error": data["error"]}, status=status_code)
             

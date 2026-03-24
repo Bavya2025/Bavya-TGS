@@ -51,15 +51,19 @@ const UserManagement = () => {
             if (empResponse.status === 'fulfilled') {
                 employeeList = empResponse.value.data.results || [];
                 const count = empResponse.value.data.count || 0;
-                const pageSize = employeeList.length || 10;
-                setTotalPages(Math.ceil(count / pageSize));
-                setApiKeyMissing(false);
+                setTotalPages(Math.ceil(count / 20));
+                
+                // If it's a backend fallback, set the error manually for the banner
+                if (empResponse.value.data.is_fallback) {
+                    setError('External API Connection Failed. You can still manage existing users.');
+                }
             } else {
                 const status = empResponse.reason?.response?.status;
                 if (status === 400 || status === 404) {
                     setApiKeyMissing(true);
                 } else {
-                    setError('External API Connection Failed. You can still manage existing users.');
+                    const errMsg = empResponse.reason?.response?.data?.error || 'External API Connection Failed. Showing local users only.';
+                    setError(errMsg);
                 }
             }
 
@@ -74,16 +78,7 @@ const UserManagement = () => {
                 }
             }
 
-            // Fallback: If external API failed, show the local users in the table
-            if (error && employeeList.length === 0 && userList.length > 0) {
-                employeeList = userList.map(u => ({
-                    employee_code: u.employee_id || u.username,
-                    name: u.name || u.username,
-                    department: 'N/A (API offline)',
-                    role: 'User'
-                }));
-                setTotalPages(1); // Only 1 page for local fallback dump
-            }
+
 
             const processedEmployees = employeeList.map(emp => {
                 const code = String(emp.employee_code || emp.employee?.employee_code || '').toLowerCase();
