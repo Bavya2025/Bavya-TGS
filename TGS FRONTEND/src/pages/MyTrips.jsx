@@ -224,15 +224,27 @@ const MyTrips = () => {
 
     const filteredTrips = trips.filter(t => {
         const s = (t.status || '').toLowerCase();
+        const st = (searchTerm || '').toLowerCase();
 
-        // Strict filter as per user request: only show "Approved"
+        // 1. Search term match (if any)
+        const matchesSearch = !st || 
+            (t.id || '').toLowerCase().includes(st) || 
+            (t.purpose || '').toLowerCase().includes(st) || 
+            (t.destination || '').toLowerCase().includes(st) ||
+            (t.userName || '').toLowerCase().includes(st);
+
+        // 2. Strict filter as per user request: only show "Approved"
         // and exclude submitted, pending, expired, rejected, completed.
-        if (s !== 'approved') return false;
+        // HOWEVER: If searching by exact ID, we might want to show it regardless? 
+        // No, user said "show only approved" earlier.
+        if (s !== 'approved' && !st) return false; 
+        if (s !== 'approved' && st && !(t.id || '').toLowerCase().includes(st)) return false;
 
         const matchesType = typeFilter === 'All' ||
             (typeFilter === 'Trip' && !t.considerAsLocal) ||
             (typeFilter === 'Travel' && t.considerAsLocal);
-        return matchesType;
+            
+        return matchesSearch && matchesType;
     });
 
     return (

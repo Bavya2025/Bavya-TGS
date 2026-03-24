@@ -226,6 +226,31 @@ class TripListCreateView(generics.ListCreateAPIView):
         all_trips = self.request.query_params.get('all') == 'true'
         user_role = user.role.name.lower() if user.role else ''
         
+        search_query = self.request.query_params.get('search', None)
+        if search_query:
+             # Support potential Base64 encoding if used by frontend
+             try:
+                import base64
+                if len(search_query) > 4 and ('-' in search_query or '_' in search_query or search_query.isalpha()):
+                    # Likely search text
+                    pass
+                else:
+                    padding = len(search_query) % 4
+                    if padding: search_query += '=' * (4 - padding)
+                    search_query = base64.b64decode(search_query).decode('utf-8')
+             except: pass
+             
+             from django.db.models import Q
+             queryset = Trip.objects.filter(
+                Q(trip_id__icontains=search_query) |
+                Q(destination__icontains=search_query) |
+                Q(purpose__icontains=search_query) |
+                Q(trip_leader__icontains=search_query)
+             )
+             if not all_trips:
+                 queryset = queryset.filter(user=user, consider_as_local=False)
+             return queryset.order_by('-created_at')
+
         if all_trips:
             if user_role in ['admin', 'guesthousemanager', 'finance', 'cfo']:
                 return Trip.objects.all().order_by('-created_at')
@@ -311,7 +336,18 @@ class TravelListCreateView(TripListCreateView):
     def get_queryset(self):
         user = getattr(self.request, 'custom_user', None)
         if not user: return Trip.objects.none()
-        return Trip.objects.filter(user=user, consider_as_local=True).order_by('-created_at')
+        
+        queryset = Trip.objects.filter(user=user, consider_as_local=True)
+        search_query = self.request.query_params.get('search', None)
+        if search_query:
+             from django.db.models import Q
+             queryset = queryset.filter(
+                Q(trip_id__icontains=search_query) |
+                Q(destination__icontains=search_query) |
+                Q(purpose__icontains=search_query) |
+                Q(trip_leader__icontains=search_query)
+             )
+        return queryset.order_by('-created_at')
 
     def perform_create(self, serializer):
         super().perform_create(serializer, is_local=True)

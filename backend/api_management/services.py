@@ -8,8 +8,13 @@ from core.models import User, Role
 
 # Global in-memory cache for dynamic data to avoid N+1 API calls
 # In a production environment, this should be replaced with Redis/Memcached.
+# Global in-memory cache for dynamic data to avoid N+1 API calls
+# In a production environment, this should be replaced with Redis/Memcached.
 CACHE_EMPLOYEE_DATA = {}
 CACHE_TIMEOUT = 300 # 5 minutes
+
+# CIRCUIT BREAKER: If API is down, skip for a while to avoid blocking workers
+CIRCUIT_BREAKER = {'is_open': False, 'last_failure': 0, 'retry_after': 60}
 
 # HR ID to Employee Code mapping
 HR_ID_TO_CODE_CACHE = {}
@@ -48,6 +53,13 @@ def get_dynamic_employee_data(employee_code):
     import time
     now = time.time()
     
+    # CIRCUIT BREAKER check
+    if CIRCUIT_BREAKER['is_open']:
+        if now - CIRCUIT_BREAKER['last_failure'] < CIRCUIT_BREAKER['retry_after']:
+             return None
+        else:
+             CIRCUIT_BREAKER['is_open'] = False
+            
     # Check cache
     if employee_code in CACHE_EMPLOYEE_DATA:
         entry = CACHE_EMPLOYEE_DATA[employee_code]
@@ -56,6 +68,13 @@ def get_dynamic_employee_data(employee_code):
             
     # Fetch from API
     data = fetch_employee_data(employee_id_filter=employee_code)
+    
+    if data and "error" in data and data.get("status_code") == 408:
+        # TIMEOUT occurred, open circuit breaker
+        CIRCUIT_BREAKER['is_open'] = True
+        CIRCUIT_BREAKER['last_failure'] = now
+        return None
+
     if data and not data.get('error') and data.get('results'):
         emp_data = data['results'][0]
         CACHE_EMPLOYEE_DATA[employee_code] = {
@@ -124,7 +143,8 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
         # Fetch the first page to get metadata
         try:
             start_time = time.time()
-            response = requests.get(api_url, params=params, headers=headers, timeout=30)
+            # REDUCED TIMEOUT for performance: 3 seconds (was 30)
+            response = requests.get(api_url, params=params, headers=headers, timeout=3)
             latency = (time.time() - start_time) * 1000
 
             try:
@@ -153,7 +173,8 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
             current_external_page = start_external_page
             while len(page_results) < int(page_size) and next_url:
                 try:
-                    next_resp = requests.get(next_url, headers=headers, timeout=30)
+                    # REDUCED TIMEOUT: 3 seconds (was 30)
+                    next_resp = requests.get(next_url, headers=headers, timeout=3)
                     next_resp.raise_for_status()
                     next_data = next_resp.json() or {}
                     page_results.extend(next_data.get('results', []))
@@ -164,11 +185,12 @@ def fetch_employee_data(employee_id_filter=None, page=1, search=None, api_key_ov
             
             # Slice to exact page_size in case we fetched too many
             page_results = page_results[:int(page_size)]
-
+ 
             if fetch_all_pages:
                 while next_url:
                     try:
-                        next_resp = requests.get(next_url, headers=headers, timeout=30)
+                        # REDUCED TIMEOUT: 3 seconds (was 30)
+                        next_resp = requests.get(next_url, headers=headers, timeout=3)
                         next_resp.raise_for_status()
                         next_data = next_resp.json() or {}
                         page_results.extend(next_data.get('results', []))
