@@ -52,8 +52,10 @@ api.interceptors.response.use((response) => {
             traceback: err.stack || 'No stack trace available',
             path: window.location.pathname
         };
-        // Use raw axios to avoid interceptor loops
-        axios.post(`${BASE_URL}/api/system-logs/report-frontend/`, payload).catch(() => {});
+        // Use raw axios with a secret header for security (since this endpoint is AllowAny)
+        axios.post(`${BASE_URL}/api/system-logs/report-frontend/`, payload, {
+            headers: { 'X-TGS-Reporter-Secret': 'TGS-DEBUG-INTERNAL-2026' }
+        }).catch(() => {});
     };
 
     // Handle specific status codes

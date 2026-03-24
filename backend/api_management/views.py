@@ -608,6 +608,11 @@ class FrontendErrorLoggingView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        # Security: Check for static secret header if user is not authenticated
+        secret = request.headers.get('X-TGS-Reporter-Secret')
+        if secret != 'TGS-DEBUG-INTERNAL-2026':
+            return Response({'error': 'Unauthorized reporter'}, status=status.HTTP_403_FORBIDDEN)
+            
         try:
             data = request.data if isinstance(request.data, dict) else {}
             user = getattr(request, 'custom_user', None)
