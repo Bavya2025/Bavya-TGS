@@ -46,8 +46,23 @@ api.interceptors.response.use((response) => {
     }
     return response;
 }, (error) => {
+    // 2. Report Error to Backend for Admin Review
+    const reportError = (err) => {
+        const payload = {
+            level: 'ERROR',
+            message: err.message || 'Frontend Network/Response Error',
+            traceback: err.stack || 'No stack trace available',
+            path: window.location.pathname
+        };
+        // Use raw axios to avoid interceptor loops
+        axios.post(`${BASE_URL}/api/system-logs/report-frontend/`, payload).catch(() => {});
+    };
+
     // Handle specific status codes
     if (error.response) {
+        if (error.response.status >= 500) {
+            reportError(error);
+        }
         if ((error.response.status === 401 || error.response.status === 403)) {
             if (!error.config.url.includes('/auth/login')) {
                 console.warn("Session expired or unauthorized. Logging out...");
@@ -62,6 +77,7 @@ api.interceptors.response.use((response) => {
         const msg = "Network Error: Backend server is unreachable.";
         console.error(msg);
         if (toastHandler) toastHandler(msg, 'error');
+        reportError(new Error(msg));
     }
     return Promise.reject(error);
 });

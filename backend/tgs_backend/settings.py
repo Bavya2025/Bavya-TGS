@@ -42,6 +42,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "api_management.middleware.APILoggingMiddleware",
+    "api_management.middleware.GlobalExceptionMiddleware",
     "core.middleware.CustomAuthMiddleware",
     "core.middleware.ThreadLocalMiddleware",
     "travel.middleware.PageAccessMiddleware",

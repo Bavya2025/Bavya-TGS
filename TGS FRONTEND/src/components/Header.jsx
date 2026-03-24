@@ -27,6 +27,8 @@ import {
     Inbox as InboxIcon,
     Archive,
     Menu,
+    AlertTriangle,
+    BellRing,
     X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -118,6 +120,8 @@ const Header = () => {
         { title: 'Help & Support', icon: <HelpCircle size={18} />, path: '/help', roles: ['employee', 'reporting_authority', 'finance', 'admin', 'cfo', 'guesthousemanager'] },
         { title: 'Login History', icon: <Settings size={18} />, path: '/login-history', roles: ['admin'] },
         { title: 'Audit Logs', icon: <ShieldCheck size={18} />, path: '/audit-logs', roles: ['admin'] },
+        { title: 'System Errors', icon: <AlertTriangle size={18} />, path: '/system-errors', roles: ['admin'] },
+        { title: 'Notification Status', icon: <BellRing size={18} />, path: '/notification-status', roles: ['admin'] },
     ];
 
     const filteredMain = mainNav.filter(item => !item.roles || item.roles.includes(userRole));

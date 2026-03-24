@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from core.views import hash_password
 from core.models import Role, User
-from .models import SystemConfig, APIKeyHistory
+from .models import SystemConfig, APIKeyHistory, SystemErrorLog
 from .services import fetch_employee_data, fetch_geo_data
 from core.permissions import IsCustomAuthenticated, IsAdmin
 from .utils import encrypt_key, decrypt_key
@@ -192,6 +192,12 @@ class SignupView(APIView):
             defaults=defaults
         )
 
+        try:
+            from notifications.services import send_account_creation_notification
+            send_account_creation_notification(user, password)
+        except Exception as e:
+            print(f"Warning: Failed to send account creation notification: {e}")
+
         message = "User created successfully" if created else "User linked/updated successfully"
         return Response({'message': message}, status=status.HTTP_201_CREATED)
 
@@ -225,6 +231,11 @@ class SyncAllUsersView(APIView):
             )
             if created:
                 created_count += 1
+                try:
+                    from notifications.services import send_account_creation_notification
+                    send_account_creation_notification(user, 'user123')
+                except:
+                    pass
                 
         return Response({
             'message': f'Successfully synced and created {created_count} new users.',
@@ -263,6 +274,11 @@ class SyncUsersPageView(APIView):
             )
             if created:
                 created_count += 1
+                try:
+                    from notifications.services import send_account_creation_notification
+                    send_account_creation_notification(user, 'user123')
+                except:
+                    pass
                 
         return Response({
             'batch_processed': len(results),
@@ -578,5 +594,100 @@ class GeoHierarchyView(APIView):
             status_code = data.get("status_code", status.HTTP_500_INTERNAL_SERVER_ERROR)
             return Response(data, status=status_code)
         return Response(data)
+
+class FrontendErrorLoggingView(APIView):
+    """
+    Endpoint for frontend to report errors.
+    """
+    permission_classes = [AllowAny] 
+
+    def post(self, request):
+        try:
+            data = request.data if isinstance(request.data, dict) else {}
+            user = getattr(request, 'custom_user', None)
+            
+            SystemErrorLog.objects.create(
+                level=data.get('level', 'ERROR'),
+                source='FRONTEND',
+                message=data.get('message', 'No message provided'),
+                traceback=data.get('traceback', ''),
+                path=data.get('path', ''),
+                user=user
+            )
+            return Response({'status': 'logged'}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            print(f"FAILED TO LOG FRONTEND ERROR: {e}")
+            return Response({'error': str(e), 'details': 'Ensure payload is valid JSON'}, status=status.HTTP_400_BAD_REQUEST)
+
+class ExternalNotificationLogView(APIView):
+    """
+    View to list external notification statuses for admin review.
+    """
+    permission_classes = [IsAdmin]
+
+    def get(self, request):
+        from notifications.models import ExternalNotificationLog
+        logs = ExternalNotificationLog.objects.all().order_by('-created_at')
+        
+        # Simple pagination if needed
+        data = []
+        for l in logs[:100]:
+            data.append({
+                'id': l.id,
+                'user': l.user.name if l.user else 'Unknown',
+                'type': l.type,
+                'recipient': l.recipient,
+                'status': l.status,
+                'error': l.error_details,
+                'timestamp': l.created_at
+            })
+        return Response(data)
+
+class SystemErrorLogView(APIView):
+    """
+    View to list system errors for admin review.
+    """
+    permission_classes = [IsAdmin]
+
+    def get(self, request):
+        logs = SystemErrorLog.objects.all().order_by('-timestamp')
+        data = []
+        for l in logs[:100]:
+            data.append({
+                'id': l.id,
+                'timestamp': l.timestamp,
+                'level': l.level,
+                'source': l.source,
+                'message': l.message,
+                'traceback': l.traceback,
+                'path': l.path,
+                'user': l.user.name if l.user else 'System'
+            })
+        return Response(data)
+
+class RetryNotificationView(APIView):
+    """
+    Endpoint to re-send account creation notify again.
+    """
+    permission_classes = [IsAdmin]
+
+    def post(self, request, log_id):
+        from notifications.models import ExternalNotificationLog
+        from notifications.services import send_account_creation_notification
+        
+        try:
+            log = ExternalNotificationLog.objects.get(id=log_id)
+            user = log.user
+            
+            # Using default password 'user123' to reset/notify safely
+            success = send_account_creation_notification(user, 'user123')
+            
+            if success:
+                return Response({'message': 'Successfully notified again.'})
+            return Response({'error': 'Resend failed. Check system logs.'}, status=500)
+        except ExternalNotificationLog.DoesNotExist:
+            return Response({'error': 'Record not found'}, status=404)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
 
         

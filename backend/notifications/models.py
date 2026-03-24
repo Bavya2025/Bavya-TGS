@@ -53,3 +53,17 @@ class PushSubscription(models.Model):
 
     def __str__(self):
         return f"Push Sub for {self.user.employee_id} ({self.browser})"
+
+class ExternalNotificationLog(models.Model):
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='external_logs')
+    type = models.CharField(max_length=10, choices=[('EMAIL', 'Email'), ('SMS', 'SMS')])
+    recipient = models.CharField(max_length=255)
+    status = models.CharField(max_length=20, default='SENT') # SENT, FAILED, RETRYING
+    error_details = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.type} to {self.recipient} - {self.status}"
+
+    class Meta:
+        ordering = ['-created_at']

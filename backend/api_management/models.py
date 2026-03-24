@@ -95,3 +95,21 @@ class APILog(models.Model):
         verbose_name = "API Log"
         verbose_name_plural = "API Logs"
         ordering = ['-timestamp']
+
+class SystemErrorLog(models.Model):
+    LEVEL_CHOICES = [('ERROR', 'Error'), ('WARNING', 'Warning'), ('INFO', 'Info')]
+    SOURCE_CHOICES = [('FRONTEND', 'Frontend'), ('BACKEND', 'Backend')]
+    
+    timestamp = models.DateTimeField(auto_now_add=True)
+    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='ERROR')
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='BACKEND')
+    message = models.TextField()
+    traceback = models.TextField(blank=True, null=True)
+    path = models.CharField(max_length=255, blank=True, null=True)
+    user = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True)
+    
+    def __str__(self):
+        return f"[{self.level}] {self.source}: {self.message[:50]}"
+
+    class Meta:
+        ordering = ['-timestamp']

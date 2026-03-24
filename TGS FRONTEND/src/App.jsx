@@ -29,6 +29,8 @@ import FinanceDashboard from './pages/FinanceDashboard';
 import UserManagement from './pages/UserManagement';
 import Profile from './pages/Profile';
 import ApiManagement from './pages/ApiManagement';
+import SystemErrors from './pages/SystemErrors';
+import NotificationStatus from './pages/NotificationStatus';
 import TripTimeline from './pages/TripTimeline';
 import TripStory from './pages/TripStory';
 import TravelStory from './pages/TravelStory';
@@ -336,6 +338,8 @@ function App() {
             <Route path="/cfo-war-room" element={<ProtectedRoute><CFOWarRoom /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/api-management" element={<ProtectedRoute><ApiManagement /></ProtectedRoute>} />
+            <Route path="/system-errors" element={<AdminRoute><SystemErrors /></AdminRoute>} />
+            <Route path="/notification-status" element={<AdminRoute><NotificationStatus /></AdminRoute>} />
             <Route path="/trip-timeline/:id" element={<ProtectedRoute><TripTimeline /></ProtectedRoute>} />
             <Route path="/trip-story/:id" element={<ProtectedRoute><TripStory /></ProtectedRoute>} />
             <Route path="/travel-story/:id" element={<ProtectedRoute><TravelStory /></ProtectedRoute>} />
