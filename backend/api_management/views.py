@@ -591,20 +591,28 @@ class GeoHierarchyView(APIView):
     def get(self, request):
         data = fetch_geo_data()
         if "error" in data:
-            status_code = data.get("status_code", status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # Ensure status_code is a valid integer for DRF Response
+            status_code = data.get("status_code", 500)
+            try:
+                status_code = int(status_code)
+            except (ValueError, TypeError):
+                status_code = 500
             return Response(data, status=status_code)
         return Response(data)
 
 class FrontendErrorLoggingView(APIView):
     """
-    Endpoint for frontend to report errors.
+    Endpoint for frontend to report errors. Open to any to ensure logs are captured
+    even if session is broken, but we log the user if available.
     """
-    permission_classes = [AllowAny] 
+    permission_classes = [AllowAny]
 
     def post(self, request):
         try:
             data = request.data if isinstance(request.data, dict) else {}
             user = getattr(request, 'custom_user', None)
+            if user and not user.is_authenticated:
+                user = None
             
             SystemErrorLog.objects.create(
                 level=data.get('level', 'ERROR'),

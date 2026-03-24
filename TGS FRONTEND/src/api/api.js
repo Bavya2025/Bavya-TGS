@@ -1,9 +1,7 @@
 import axios from 'axios';
 
-
 // Use the current origin if deployed on the same server, or an environment variable
 const BASE_URL = import.meta.env.VITE_API_URL || window.location.origin;
-
 
 const api = axios.create({
     baseURL: BASE_URL,
@@ -60,9 +58,13 @@ api.interceptors.response.use((response) => {
 
     // Handle specific status codes
     if (error.response) {
+        // Log critical server errors to backend, but do NOT redirect
         if (error.response.status >= 500) {
             reportError(error);
+            const msg = "System error occurred. Administrators have been notified.";
+            if (toastHandler) toastHandler(msg, 'error');
         }
+
         if ((error.response.status === 401 || error.response.status === 403)) {
             if (!error.config.url.includes('/auth/login')) {
                 console.warn("Session expired or unauthorized. Logging out...");
@@ -73,7 +75,7 @@ api.interceptors.response.use((response) => {
             }
         }
     } else if (error.request) {
-        // The request was made but no response was received
+        // The request was made but no response was received (Offline/Network Error)
         const msg = "Network Error: Backend server is unreachable.";
         console.error(msg);
         if (toastHandler) toastHandler(msg, 'error');

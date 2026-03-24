@@ -6,6 +6,8 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ContactHR from './pages/ContactHR';
+import Error404 from './pages/Error404';
+import Error500 from './pages/Error500';
 import Dashboard from './pages/Dashboard';
 import CreateTrip from './pages/CreateTrip';
 import ExpenseEntry from './pages/ExpenseEntry';
@@ -308,57 +310,61 @@ function App() {
           <ReminderHandler />
           <Router>
             <SupportBotWrapper />
-            <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/contact-hr" element={<ContactHR />} />
-            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/trips" element={<ProtectedRoute><MyTrips /></ProtectedRoute>} />
-            <Route path="/my-requests" element={<ProtectedRoute><MyRequests /></ProtectedRoute>} />
-            <Route path="/inbox" element={<ProtectedRoute><Inbox /></ProtectedRoute>} />
-            <Route path="/outbox" element={<ProtectedRoute><Outbox /></ProtectedRoute>} />
-            <Route path="/documents" element={<ProtectedRoute><DocumentOrganizerPage /></ProtectedRoute>} />
-            <Route path="/planner" element={<ProtectedRoute><TripPlanner /></ProtectedRoute>} />
-            <Route path="/create-trip" element={<ProtectedRoute><CreateTrip /></ProtectedRoute>} />
-            <Route path="/approvals" element={<ProtectedRoute><ApprovalInbox /></ProtectedRoute>} />
-            <Route path="/expenses" element={<ProtectedRoute><ExpenseEntry /></ProtectedRoute>} />
-            <Route path="/mileage" element={<ProtectedRoute><MileageCapture /></ProtectedRoute>} />
-            <Route path="/advance" element={<ProtectedRoute><AdvanceRequest /></ProtectedRoute>} />
-            <Route path="/guesthouse" element={<ProtectedRoute><GuestHouse /></ProtectedRoute>} />
-            <Route path="/fleet" element={<ProtectedRoute><Fleet /></ProtectedRoute>} />
-            <Route path="/claim-review" element={<ProtectedRoute><ClaimReview /></ProtectedRoute>} />
-            <Route path="/settlement" element={<ProtectedRoute><Settlement /></ProtectedRoute>} />
-            <Route path="/disputes" element={<ProtectedRoute><Disputes /></ProtectedRoute>} />
-            <Route path="/vendors" element={<ProtectedRoute><VendorSelection /></ProtectedRoute>} />
-            <Route path="/location-codes" element={<ProtectedRoute><LocationCodes /></ProtectedRoute>} />
-            <Route path="/finance" element={<ProtectedRoute><FinanceDashboard /></ProtectedRoute>} />
-            <Route path="/employees" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
-            <Route path="/registration-requests" element={<ProtectedRoute><RegistrationRequests /></ProtectedRoute>} />
-            <Route path="/policy" element={<ProtectedRoute><PolicyCenter /></ProtectedRoute>} />
-            <Route path="/cfo-war-room" element={<ProtectedRoute><CFOWarRoom /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/api-management" element={<ProtectedRoute><ApiManagement /></ProtectedRoute>} />
-            <Route path="/system-errors" element={<AdminRoute><SystemErrors /></AdminRoute>} />
-            <Route path="/notification-status" element={<AdminRoute><NotificationStatus /></AdminRoute>} />
-            <Route path="/trip-timeline/:id" element={<ProtectedRoute><TripTimeline /></ProtectedRoute>} />
-            <Route path="/trip-story/:id" element={<ProtectedRoute><TripStory /></ProtectedRoute>} />
-            <Route path="/travel-story/:id" element={<ProtectedRoute><TravelStory /></ProtectedRoute>} />
-            <Route path="/login-history" element={<ProtectedRoute><LoginHistory /></ProtectedRoute>} />
-            <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
-            <Route path="/help" element={<ProtectedRoute><HelpSupport /></ProtectedRoute>} />
-            <Route path="/route-management" element={<ProtectedRoute><RouteManagement /></ProtectedRoute>} />
-            <Route path="/master-management" element={<ProtectedRoute><AdminMasterManagement /></ProtectedRoute>} />
-            <Route path="/job-report" element={<ProtectedRoute><JobReport /></ProtectedRoute>} />
-            <Route path="/fuel-master" element={<ProtectedRoute><FuelMaster /></ProtectedRoute>} />
-            <Route path="/travel-creation" element={<ProtectedRoute><TravelCreation /></ProtectedRoute>} />
-            <Route path="/AdminMasters" element={<ProtectedRoute><AdminMasters /></ProtectedRoute>} />
-            <Route path="/travel-timeline/:id" element={<ProtectedRoute><TravelTimeline /></ProtectedRoute>} />
-            <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-          </Routes>
-        </Router>
-      </ThemeProvider>
-    </AuthProvider>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/contact-hr" element={<ContactHR />} />
+                
+                <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                <Route path="/trips" element={<ProtectedRoute><MyTrips /></ProtectedRoute>} />
+                <Route path="/my-requests" element={<ProtectedRoute><MyRequests /></ProtectedRoute>} />
+                <Route path="/inbox" element={<ProtectedRoute><Inbox /></ProtectedRoute>} />
+                <Route path="/outbox" element={<ProtectedRoute><Outbox /></ProtectedRoute>} />
+                <Route path="/documents" element={<ProtectedRoute><DocumentOrganizerPage /></ProtectedRoute>} />
+                <Route path="/planner" element={<ProtectedRoute><TripPlanner /></ProtectedRoute>} />
+                <Route path="/create-trip" element={<ProtectedRoute><CreateTrip /></ProtectedRoute>} />
+                <Route path="/approvals" element={<ProtectedRoute><ApprovalInbox /></ProtectedRoute>} />
+                <Route path="/expenses" element={<ProtectedRoute><ExpenseEntry /></ProtectedRoute>} />
+                <Route path="/mileage" element={<ProtectedRoute><MileageCapture /></ProtectedRoute>} />
+                <Route path="/advance" element={<ProtectedRoute><AdvanceRequest /></ProtectedRoute>} />
+                <Route path="/guesthouse" element={<ProtectedRoute><GuestHouse /></ProtectedRoute>} />
+                <Route path="/fleet" element={<ProtectedRoute><Fleet /></ProtectedRoute>} />
+                <Route path="/claim-review" element={<ProtectedRoute><ClaimReview /></ProtectedRoute>} />
+                <Route path="/settlement" element={<ProtectedRoute><Settlement /></ProtectedRoute>} />
+                <Route path="/disputes" element={<ProtectedRoute><Disputes /></ProtectedRoute>} />
+                <Route path="/vendors" element={<ProtectedRoute><VendorSelection /></ProtectedRoute>} />
+                <Route path="/location-codes" element={<ProtectedRoute><LocationCodes /></ProtectedRoute>} />
+                <Route path="/finance" element={<ProtectedRoute><FinanceDashboard /></ProtectedRoute>} />
+                <Route path="/employees" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+                <Route path="/registration-requests" element={<ProtectedRoute><RegistrationRequests /></ProtectedRoute>} />
+                <Route path="/policy" element={<ProtectedRoute><PolicyCenter /></ProtectedRoute>} />
+                <Route path="/cfo-war-room" element={<ProtectedRoute><CFOWarRoom /></ProtectedRoute>} />
+                <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                <Route path="/api-management" element={<ProtectedRoute><ApiManagement /></ProtectedRoute>} />
+                <Route path="/system-errors" element={<AdminRoute><SystemErrors /></AdminRoute>} />
+                <Route path="/notification-status" element={<AdminRoute><NotificationStatus /></AdminRoute>} />
+                <Route path="/trip-timeline/:id" element={<ProtectedRoute><TripTimeline /></ProtectedRoute>} />
+                <Route path="/trip-story/:id" element={<ProtectedRoute><TripStory /></ProtectedRoute>} />
+                <Route path="/travel-story/:id" element={<ProtectedRoute><TravelStory /></ProtectedRoute>} />
+                <Route path="/login-history" element={<ProtectedRoute><LoginHistory /></ProtectedRoute>} />
+                <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
+                <Route path="/help" element={<ProtectedRoute><HelpSupport /></ProtectedRoute>} />
+                <Route path="/route-management" element={<ProtectedRoute><RouteManagement /></ProtectedRoute>} />
+                <Route path="/master-management" element={<ProtectedRoute><AdminMasterManagement /></ProtectedRoute>} />
+                <Route path="/job-report" element={<ProtectedRoute><JobReport /></ProtectedRoute>} />
+                <Route path="/fuel-master" element={<ProtectedRoute><FuelMaster /></ProtectedRoute>} />
+                <Route path="/travel-creation" element={<ProtectedRoute><TravelCreation /></ProtectedRoute>} />
+                <Route path="/AdminMasters" element={<ProtectedRoute><AdminMasters /></ProtectedRoute>} />
+                <Route path="/travel-timeline/:id" element={<ProtectedRoute><TravelTimeline /></ProtectedRoute>} />
+                <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+                <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                
+                {/* Catch-all 404 Route */}
+                <Route path="*" element={<Error404 />} />
+              </Routes>
+          </Router>
+        </ThemeProvider>
+      </AuthProvider>
 </ToastProvider>
   );
 }
