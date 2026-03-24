@@ -13,23 +13,32 @@ const Login = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [isIntro, setIsIntro] = useState(true);
     const [isBackendDown, setIsBackendDown] = useState(false);
+    const [isCheckingConnection, setIsCheckingConnection] = useState(true);
     const { login } = useAuth();
     const { showToast } = useToast();
     const navigate = useNavigate();
 
     const checkConnection = async (silent = false) => {
+        if (!silent) setIsCheckingConnection(true);
         try {
             await api.get('/api/health');
             setIsBackendDown(false);
             if (!silent) showToast('Backend connected successfully', 'success');
         } catch (err) {
             setIsBackendDown(true);
-            showToast('Backend server is unreachable. Please ensure the backend is running.', 'error');
+            if (!silent) showToast('Backend server is unreachable. Please ensure the backend is running.', 'error');
+        } finally {
+            setIsCheckingConnection(false);
         }
     };
 
     useEffect(() => {
         checkConnection(true); // check on mount
+
+        // Poll connection status every 30 seconds to stay accurate
+        const pollInterval = setInterval(() => {
+            checkConnection(true);
+        }, 30000);
 
         const startTimer = setTimeout(() => {
             const timer = setTimeout(() => {
@@ -38,7 +47,10 @@ const Login = () => {
             return () => clearTimeout(timer);
         }, 100);
 
-        return () => clearTimeout(startTimer);
+        return () => {
+            clearTimeout(startTimer);
+            clearInterval(pollInterval);
+        };
     }, []);
 
     const handleSubmit = async (e) => {
@@ -111,7 +123,12 @@ const Login = () => {
                             <img src="/bavya.png" alt="Logo" className="login-logo-img" />
                         </div>
                         <div className="connection-status-area" style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
-                            {isBackendDown ? (
+                            {isCheckingConnection ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', backgroundColor: '#fef9c3', color: '#854d0e', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' }}>
+                                    <div className="status-animate-pulse" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#eab308' }}></div>
+                                    <span>Checking Backend Presence...</span>
+                                </div>
+                            ) : isBackendDown ? (
                                 <div onClick={() => checkConnection()} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' }}>
                                     <WifiOff size={16} />
                                     <span>Backend Offline - Click to Retry</span>

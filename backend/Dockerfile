@@ -30,11 +30,7 @@ COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install gunicorn
 
-# Copy project
-COPY . /app/
-
-# Copy and set entrypoint
-COPY entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
+# Copy project with permissions
+COPY --chmod=755 . /app/
 
 ENTRYPOINT ["/app/entrypoint.sh"]
