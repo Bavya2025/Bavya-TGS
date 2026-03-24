@@ -18,4 +18,6 @@ Updated the toll creations and other route masters pages.
 
 18-03-2026 -> vinay -> updated the finance dashboard and added the functionality to unreject the requests.
 
-24-03-2026 -> vinay -> updated the start_tgs.bat file to start the application in a single click and changed the TGS FRONTEND name to frontend for folder name of tgs application for frontend. Also added the forge password, account request and limit password reset functionality.
+23-03-2026 -> vinay -> updated the start_tgs.bat file to start the application in a single click and changed the TGS FRONTEND name to frontend for folder name of tgs application for frontend. Also added the forge password, account request and limit password reset functionality.
+
+24-03-2026 -> Vinay -> added models for system log erros and user creation notifications fails in backend. Also added the functionality to send notifications to user for account creation and records the system error logs. added models names SystemErrorLog and ExternalNotificationLog.
