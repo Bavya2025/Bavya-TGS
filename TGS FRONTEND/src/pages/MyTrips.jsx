@@ -178,34 +178,45 @@ const MyTrips = () => {
                 return;
             }
 
-            const mappedTrips = allData.filter(t => t !== null && t !== undefined).map(trip => ({
-                id: trip.trip_id,
-                userName: trip.user_name || 'N/A',
-                userEmpId: trip.user_emp_id || 'N/A',
-                purpose: trip.purpose || 'No Purpose Specified',
-                destination: trip.destination || 'TBD',
-                dates: `${trip.start_date || 'N/A'} - ${trip.end_date || 'N/A'}`,
-                status: trip.status || 'Pending',
-                cost: trip.cost_estimate ? `₹${Number(trip.cost_estimate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0.00',
-                from: trip.source || 'N/A',
-                to: trip.destination || 'N/A',
-                travelMode: '',
-                composition: trip.composition,
-                tripLeader: trip.trip_leader,
-                enRoute: trip.en_route,
-                project: trip.project_code || 'General',
-                considerAsLocal: trip.consider_as_local,
-                accommodationRequests: parseJsonField(trip.accommodation_requests),
-                vehicleType: trip.vehicle_type,
-                members: parseJsonField(trip.members),
-                lifecycleEvents: parseJsonField(trip.lifecycle_events),
-                advances: trip.advances || [],
-                odometer: trip.odometer,
-                totalApprovedAdvance: trip.total_approved_advance || 0,
-                totalExpenses: trip.total_expenses || 0,
-                walletBalance: trip.wallet_balance || 0,
-                reportingManager: trip.reporting_manager_name || 'N/A'
-            }));
+            const cleanNumeric = (val) => {
+                if (val === null || val === undefined) return 0;
+                if (typeof val === 'number') return val;
+                const cleaned = String(val).replace(/[^0-9.]/g, '');
+                const parsed = parseFloat(cleaned);
+                return isNaN(parsed) ? 0 : parsed;
+            };
+
+            const mappedTrips = allData.filter(t => t !== null && t !== undefined).map(trip => {
+                const numericCost = cleanNumeric(trip.cost_estimate);
+                return {
+                    id: trip.trip_id,
+                    userName: trip.user_name || 'N/A',
+                    userEmpId: trip.user_emp_id || 'N/A',
+                    purpose: trip.purpose || 'No Purpose Specified',
+                    destination: trip.destination || 'TBD',
+                    dates: `${trip.start_date || 'N/A'} - ${trip.end_date || 'N/A'}`,
+                    status: trip.status || 'Pending',
+                    cost: `₹${numericCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    from: trip.source || 'N/A',
+                    to: trip.destination || 'N/A',
+                    travelMode: '',
+                    composition: trip.composition,
+                    tripLeader: trip.trip_leader,
+                    enRoute: trip.en_route,
+                    project: trip.project_code || 'General',
+                    considerAsLocal: trip.consider_as_local,
+                    accommodationRequests: parseJsonField(trip.accommodation_requests),
+                    vehicleType: trip.vehicle_type,
+                    members: parseJsonField(trip.members),
+                    lifecycleEvents: parseJsonField(trip.lifecycle_events),
+                    advances: trip.advances || [],
+                    odometer: trip.odometer,
+                    totalApprovedAdvance: trip.total_approved_advance || 0,
+                    totalExpenses: trip.total_expenses || 0,
+                    walletBalance: trip.wallet_balance || 0,
+                    reportingManager: trip.reporting_manager_name || 'N/A'
+                };
+            });
             setTrips(mappedTrips);
         } catch (error) {
             showToast(`Failed to load trips: ${error.message || 'Unknown error'}`, "error");

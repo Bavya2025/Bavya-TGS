@@ -220,9 +220,9 @@ const Header = () => {
                                                             const t = (n.title || '').toLowerCase();
                                                             const m = (n.message || '').toLowerCase();
                                                             if (t.includes('hr') || t.includes('verification') || m.includes('hr verif')) {
-                                                                navigate('/approvals');
+                                                                navigate('/inbox');
                                                             } else if (t.includes('approval') || t.includes('approve') || t.includes('pending') || m.includes('approval') || m.includes('awaits your')) {
-                                                                navigate('/approvals');
+                                                                navigate('/inbox');
                                                             } else if (t.includes('finance') || t.includes('settlement') || m.includes('finance')) {
                                                                 navigate('/finance');
                                                             } else if (t.includes('room') || t.includes('guesthouse') || m.includes('room') || m.includes('guesthouse')) {
@@ -232,7 +232,7 @@ const Header = () => {
                                                             } else if (t.includes('trip') || m.includes('trip')) {
                                                                 navigate('/trips');
                                                             } else if (t.includes('tour plan') || t.includes('bulk') || m.includes('tour plan') || m.includes('management-approved')) {
-                                                                navigate('/approvals');
+                                                                navigate('/inbox');
                                                             } else {
                                                                 navigate('/notifications');
                                                             }

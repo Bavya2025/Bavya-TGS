@@ -26,7 +26,8 @@ import {
     Mail,
     Paperclip,
     Download,
-    X
+    X,
+    Briefcase
 } from 'lucide-react';
 import api from '../api/api';
 import { useToast } from '../context/ToastContext';
@@ -100,15 +101,22 @@ const ApprovalInbox = ({ enforceTab = null }) => {
             const response = await api.get(url);
             setTasks(response.data);
             if (response.data.length > 0) {
-                const firstTask = response.data[0];
+                const allTasks = response.data;
+                setTasks(allTasks);
+                
+                const visibleTasks = viewType === 'special' 
+                    ? allTasks.filter(t => t.type !== 'Monthly Tour Plan' && !(t.trip_id && t.trip_id.startsWith('ITS-')))
+                    : allTasks.filter(t => t.type === 'Monthly Tour Plan' || (t.trip_id && t.trip_id.startsWith('ITS-')));
+                const firstTask = visibleTasks[0];
                 setSelectedTask(firstTask);
-                // Pre-fill amount for editing if exec
+                
                 if (firstTask.details?.executive_approved_amount && parseFloat(firstTask.details.executive_approved_amount) > 0) {
                     setExecAmount(firstTask.details.executive_approved_amount);
                 } else {
-                    setExecAmount(firstTask.details?.requested_amount || firstTask.cost?.replace('₹', '') || '');
+                    setExecAmount(firstTask.details?.requested_amount || firstTask.details?.amount || firstTask.cost?.replace('₹', '') || '');
                 }
             } else {
+                setTasks([]);
                 setSelectedTask(null);
             }
         } catch (error) {
@@ -130,7 +138,7 @@ const ApprovalInbox = ({ enforceTab = null }) => {
         fetchBatches();
         // Show breakdown by default for claims
         setShowBreakdown(true);
-    }, [activeTab, filterType]);
+    }, [activeTab, filterType, viewType]);
 
     // Unified fetching now includes batches in tasks
     const fetchBatches = async () => {
@@ -316,7 +324,19 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                     <div className="requester-profile">
                         <div className="avatar"> {task.requester?.charAt(0) || '?'} </div>
                         <div>
-                            <h3>{task.requester || 'Unknown'}</h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <h3>{task.requester || 'Unknown'}</h3>
+                                {task.trip_id && (
+                                    <span style={{ 
+                                        fontSize: '0.75rem', 
+                                        color: (task.type === 'Monthly Tour Plan' || task.trip_id.startsWith('ITS-')) ? '#92400e' : '#4f46e5', 
+                                        background: (task.type === 'Monthly Tour Plan' || task.trip_id.startsWith('ITS-')) ? '#fef3c7' : '#e0e7ff', 
+                                        padding: '2px 8px', borderRadius: '4px', fontWeight: 600 
+                                    }}>
+                                        {(task.type === 'Monthly Tour Plan' || task.trip_id.startsWith('ITS-')) ? 'Travel ID: ' : 'Trip ID: '}{task.trip_id}
+                                    </span>
+                                )}
+                            </div>
                             <p>{task.type} Request</p>
                         </div>
                     </div>
@@ -399,6 +419,11 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                         </table>
                                     </div>
                                 </details>
+                                {task.details.remarks && (
+                                    <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                                        <strong>Rejection Reason:</strong> {task.details.remarks}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -954,10 +979,9 @@ const ApprovalInbox = ({ enforceTab = null }) => {
         );
     };
 
-    const tourPlanTasks = tasks.filter(t => t.is_local);
-    const specialRequestTasks = tasks.filter(t => t.type !== 'Monthly Tour Plan');
-    const monthlyBatchTasks = tasks.filter(t => t.type === 'Monthly Tour Plan');
-    const tourPlanClaims = []; // Handled within monthlyBatchTasks logic or moved to special if they are claims
+    const monthlyBatchTasks = tasks.filter(t => t.type === 'Monthly Tour Plan' || (t.trip_id && t.trip_id.startsWith('ITS-')));
+    const specialRequestTasks = tasks.filter(t => t.type !== 'Monthly Tour Plan' && !(t.trip_id && t.trip_id.startsWith('ITS-')));
+    const tourPlanClaims = []; 
 
     return (
         <div className="approvals-page">
@@ -965,7 +989,7 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                 {!enforceTab && (
                     <div className="header-row">
                         <div>
-                            <h1>Approval Inbox</h1>
+                            <h1>Inbox</h1>
                             <p>Review and act on pending requests from your team.</p>
                         </div>
                         <div className="tabs">
@@ -987,7 +1011,7 @@ const ApprovalInbox = ({ enforceTab = null }) => {
 
                 <div className="filter-container" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                     <div className="relative-position">
-                        <span className="filter-label" style={{ marginRight: '8px' }}>Inbox View:</span>
+                        <span className="filter-label" style={{ marginRight: '8px' }}>{activeTab === 'history' ? 'Outbox View:' : 'Inbox View:'}</span>
                         <button
                             onClick={() => setIsViewTypeOpen(!isViewTypeOpen)}
                             className="filter-btn"
@@ -1100,7 +1124,7 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                     className="hover:shadow-md"
                                 >
                                     <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <Upload size={22} className="text-indigo-600" /> Monthly Tour Plan
+                                        <Briefcase size={22} className="text-indigo-600" /> Monthly Tour Plan
                                         <span style={{ fontSize: '0.8rem', background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: '12px' }}>{monthlyBatchTasks.length}</span>
                                     </h2>
                                     {isTourPlanOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
@@ -1109,13 +1133,34 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                 {isTourPlanOpen && (
                                     <div className="animate-fade-in">
                                         {monthlyBatchTasks.length > 0 ? (
-                                            <div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                                 {/* Existing Bulk Batches */}
                                         {monthlyBatchTasks.map(batch => (
                                                     <React.Fragment key={batch.id}>
                                                         <div style={{ background: '#fffbeb', border: '1px solid #fbbf24', borderRadius: '10px', padding: '16px', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                                                             <div>
-                                                                <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{batch.user_name || 'Employee'}</div>
+                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                         <span style={{ fontSize: '0.75rem', color: '#64748b' }}>User:</span>
+                                                                         <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{batch.user_name || 'Employee'}</div>
+                                                                     </div>
+                                                                     <div style={{ display: 'flex', gap: '6px' }}>
+                                                                         {batch.trip_id && (batch.trip_id !== 'N/A' && batch.trip_id !== '') ? (
+                                                                             <span style={{ 
+                                                                                 fontSize: '0.7rem', 
+                                                                                 color: '#92400e', 
+                                                                                 background: '#fef3c7', 
+                                                                                 padding: '1px 6px', borderRadius: '4px', fontWeight: 600 
+                                                                             }}>
+                                                                                 Travel ID: {batch.trip_id}
+                                                                             </span>
+                                                                         ) : (
+                                                                             <span style={{ fontSize: '0.7rem', color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                                                                 Batch ID: {batch.id}
+                                                                             </span>
+                                                                         )}
+                                                                     </div>
+                                                                 </div>
                                                                 <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '2px' }}>File: {batch.file_name}</div>
                                                                 <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>{(batch.data_json || []).length} daily entries &bull; Submitted for approval</div>
                                                             </div>
@@ -1133,18 +1178,22 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                                                 >
                                                                     {expandedBatch === batch.id ? 'Hide Data' : 'View Data'}
                                                                 </button>
-                                                                <button
-                                                                    onClick={() => handleBatchAction(batch.id, 'approve')}
-                                                                    style={{ padding: '8px 18px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
-                                                                >
-                                                                    ✓ Approve
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleBatchAction(batch.id, 'reject')}
-                                                                    style={{ padding: '8px 18px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
-                                                                >
-                                                                    ✕ Reject
-                                                                </button>
+                                                                {activeTab !== 'history' && (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={() => handleBatchAction(batch.id, 'approve')}
+                                                                            style={{ padding: '8px 18px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+                                                                        >
+                                                                            ✓ Approve
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleBatchAction(batch.id, 'reject')}
+                                                                            style={{ padding: '8px 18px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+                                                                        >
+                                                                            ✕ Reject
+                                                                        </button>
+                                                                    </>
+                                                                )}
                                                             </div>
                                                         </div>
                                                         {expandedBatch === batch.id && (
@@ -1197,30 +1246,34 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                                                                     )}
                                                                                 </td>
                                                                                 <td className="p-2 border text-center">
-                                                                                    <button 
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            const isRejected = itemEdit.status === 'Rejected';
-                                                                                            setBatchItemEdits(prev => ({
-                                                                                                ...prev,
-                                                                                                [batch.id]: {
-                                                                                                    ...(prev[batch.id] || {}),
-                                                                                                    [originalIdx]: {
-                                                                                                        ...((prev[batch.id] || {})[originalIdx] || {}),
-                                                                                                        status: isRejected ? 'Pending' : 'Rejected'
+                                                                                    {row._status === 'Rejected' ? (
+                                                                                        <div className="text-slate-400 italic text-[10px]">Already Rejected</div>
+                                                                                    ) : (
+                                                                                        <button 
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                const isRejected = itemEdit.status === 'Rejected';
+                                                                                                setBatchItemEdits(prev => ({
+                                                                                                    ...prev,
+                                                                                                    [batch.id]: {
+                                                                                                        ...(prev[batch.id] || {}),
+                                                                                                        [originalIdx]: {
+                                                                                                            ...((prev[batch.id] || {})[originalIdx] || {}),
+                                                                                                            status: isRejected ? 'Pending' : 'Rejected'
+                                                                                                        }
                                                                                                     }
-                                                                                                }
-                                                                                            }));
-                                                                                        }}
-                                                                                        style={{ 
-                                                                                            padding: '4px 8px', borderRadius: '4px', border: '1px solid', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer',
-                                                                                            backgroundColor: itemEdit.status === 'Rejected' ? '#fee2e2' : 'white',
-                                                                                            borderColor: itemEdit.status === 'Rejected' ? '#ef4444' : '#cbd5e1',
-                                                                                            color: itemEdit.status === 'Rejected' ? '#ef4444' : '#64748b'
-                                                                                        }}
-                                                                                    >
-                                                                                        {itemEdit.status === 'Rejected' ? 'Undo Reject' : 'Reject'}
-                                                                                    </button>
+                                                                                                }));
+                                                                                            }}
+                                                                                            style={{ 
+                                                                                                padding: '4px 8px', borderRadius: '4px', border: '1px solid', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer',
+                                                                                                backgroundColor: itemEdit.status === 'Rejected' ? '#fee2e2' : 'white',
+                                                                                                borderColor: itemEdit.status === 'Rejected' ? '#ef4444' : '#cbd5e1',
+                                                                                                color: itemEdit.status === 'Rejected' ? '#ef4444' : '#64748b'
+                                                                                            }}
+                                                                                        >
+                                                                                            {itemEdit.status === 'Rejected' ? 'Undo Reject' : 'Reject'}
+                                                                                        </button>
+                                                                                    )}
                                                                                 </td>
                                                                                 <td className="p-2 border" onClick={e => e.stopPropagation()}>
                                                                                     <input 
@@ -1263,7 +1316,7 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                         ) : (
                                             <div className="premium-card" style={{ padding: '24px', textAlign: 'center', color: '#64748b', background: '#f8fafc', border: '1px dashed #cbd5e1' }}>
                                                 <CheckCircle size={28} color="#10b981" style={{ margin: '0 auto 8px' }} />
-                                                <p>No pending Monthly Tour Plans.</p>
+                                                <p>{activeTab === 'history' ? 'No history for Monthly Tour Plans.' : 'No pending Monthly Tour Plans.'}</p>
                                             </div>
                                         )}
                                     </div>
@@ -1336,6 +1389,16 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                                                     <div className="task-meta">
                                                                         <span className="task-requester">{task.requester}</span>
                                                                         <span className="task-date">• {task.date}</span>
+                                                                        {task.trip_id && (
+                                                                            <span style={{ 
+                                                                                 fontSize: '0.7rem', 
+                                                                                 color: '#4f46e5', 
+                                                                                 background: '#e0e7ff', 
+                                                                                 padding: '2px 8px', borderRadius: '4px', fontWeight: 600, marginLeft: '8px' 
+                                                                             }}>
+                                                                                Trip ID: {task.trip_id}
+                                                                            </span>
+                                                                        )}
                                                                         <div className="task-current-approver" style={{ fontSize: '0.75rem', color: '#6366f1', marginTop: '4px', fontWeight: 600 }}>
                                                                             Currently with: {task.current_approver_name || (activeTab === 'pending' ? 'You' : 'N/A')}
                                                                         </div>

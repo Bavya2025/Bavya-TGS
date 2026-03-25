@@ -66,7 +66,8 @@ def decode_id(encoded_id):
 def _is_admin(user):
     """Checks if a user has administrative privileges."""
     user_role = (user.role.name.lower() if user.role else '')
-    return user_role in ['admin', 'it-admin', 'superuser']
+    desig = (user.designation.lower() if user.designation else '')
+    return user_role in ['admin', 'it-admin', 'superuser'] or 'director' in desig or 'head' in desig
 
 def _is_finance_head(user):
     """Checks if a user is the Finance Head."""
@@ -581,33 +582,37 @@ class ApprovalsView(APIView):
         if tab == 'history':
             from core.models import AuditLog
             # Include 'UPDATE' to capture older approvals or edits made by managers
-            involved_logs = AuditLog.objects.filter(user=user, action__in=['APPROVE', 'FORWARD', 'REJECT', 'UPDATE'])
-            
-            trip_pks = involved_logs.filter(model_name='Trip').values_list('object_id', flat=True)
-            advance_pks_raw = involved_logs.filter(model_name='TravelAdvance').values_list('object_id', flat=True)
-            claim_pks_raw = involved_logs.filter(model_name='TravelClaim').values_list('object_id', flat=True)
-            
-            # Convert string IDs to integers for numeric primary keys
-            advance_pks = [int(pk) for pk in advance_pks_raw if pk and pk.isdigit()]
-            claim_pks = [int(pk) for pk in claim_pks_raw if pk and pk.isdigit()]
-            
-            batch_pks_raw = involved_logs.filter(model_name='BulkActivityBatch').values_list('object_id', flat=True)
-            batch_pks = [int(pk) for pk in batch_pks_raw if pk and pk.isdigit()]
-
             # --- EXTENDED HISTORY: Also include user's own finished requests ---
             history_statuses = ['Approved', 'Rejected', 'Resolved', 'Paid', 'HR Approved', 'Manager Approved', 'COMPLETED', 'Settled']
-            
-            trips = Trip.objects.filter(Q(trip_id__in=trip_pks) | Q(user=user, status__in=history_statuses))
-            advances = TravelAdvance.objects.filter(Q(id__in=advance_pks) | Q(trip__user=user, status__in=history_statuses))
-            claims = TravelClaim.objects.filter(Q(id__in=claim_pks) | Q(trip__user=user, status__in=history_statuses))
-            batches = BulkActivityBatch.objects.filter(Q(id__in=batch_pks) | Q(user=user, status__in=history_statuses))
-            
-            # Admins see everything in history
-            if is_admin:
+            # For high-level users (Admins, Directors, HODs, HR, Finance), show all history
+            if is_admin or is_hr or _is_finance_executive(user) or _is_finance_head(user):
                 trips = Trip.objects.filter(status__in=history_statuses)
                 advances = TravelAdvance.objects.filter(status__in=history_statuses)
                 claims = TravelClaim.objects.filter(status__in=history_statuses)
+                disputes = Dispute.objects.filter(status__in=history_statuses)
                 batches = BulkActivityBatch.objects.filter(status__in=history_statuses)
+            else:
+                # For others, show only what they personally touched or requested
+                involved_logs = AuditLog.objects.filter(user=user, action__in=['APPROVE', 'FORWARD', 'REJECT', 'UPDATE'])
+                
+                trip_pks = involved_logs.filter(model_name='Trip').values_list('object_id', flat=True)
+                adv_pks = involved_logs.filter(model_name='TravelAdvance').values_list('object_id', flat=True)
+                claim_pks = involved_logs.filter(model_name='TravelClaim').values_list('object_id', flat=True)
+                dispute_pks = involved_logs.filter(model_name='Dispute').values_list('object_id', flat=True)
+                batch_pks_raw = involved_logs.filter(model_name='BulkActivityBatch').values_list('object_id', flat=True)
+                batch_pks = [int(pk) for pk in batch_pks_raw if pk and pk.isdigit()]
+
+                trips = Trip.objects.filter(Q(trip_id__in=trip_pks) | Q(user=user, status__in=history_statuses))
+                advances = TravelAdvance.objects.filter(Q(id__in=adv_pks) | Q(trip__user=user, status__in=history_statuses))
+                claims = TravelClaim.objects.filter(Q(id__in=claim_pks) | Q(trip__user=user, status__in=history_statuses))
+                disputes = Dispute.objects.filter(Q(id__in=dispute_pks) | Q(raised_by=user, status__in=history_statuses))
+                # Fallback for old batches: check manager names if no AuditLog exists
+                batches = BulkActivityBatch.objects.filter(
+                    Q(id__in=batch_pks) | 
+                    Q(user=user, status__in=history_statuses) |
+                    Q(trip__reporting_manager_name=user.name, status__in=history_statuses) |
+                    Q(trip__senior_manager_name=user.name, status__in=history_statuses)
+                ).distinct()
         else:
             # Pending Tab
             if is_admin:
@@ -652,7 +657,7 @@ class ApprovalsView(APIView):
                 tasks.append({
                     "id": f"TRIP-{t.trip_id}", "db_id": t.trip_id, "type": "Trip",
                     "requester": t.user.name if t.user else "Unknown", "purpose": t.purpose,
-                    "status": t.status, "date": t.created_at.strftime("%b %d, %Y"),
+                    "status": t.status, "date": t.created_at.strftime("%b %d, %Y") if t.created_at else "N/A",
                     "hierarchy_level": t.hierarchy_level,
                     "current_approver_name": t.current_approver.name if t.current_approver else (t.status if t.status in ['Approved', 'Rejected'] else "N/A"),
                     "trip_id": t.trip_id,
@@ -660,8 +665,8 @@ class ApprovalsView(APIView):
                     "cost": t.cost_estimate,
                     "details": {
                         "source": t.source, "destination": t.destination, 
-                        "start_date": t.start_date.strftime("%b %d, %Y"),
-                        "end_date": t.end_date.strftime("%b %d, %Y"),
+                        "start_date": t.start_date.strftime("%b %d, %Y") if t.start_date else "N/A",
+                        "end_date": t.end_date.strftime("%b %d, %Y") if t.end_date else "N/A",
                         "travel_mode": t.travel_mode,
                         "composition": t.composition,
                         "vehicle_type": t.vehicle_type,
@@ -670,7 +675,7 @@ class ApprovalsView(APIView):
                         "job_reports": [
                             {
                                 "id": jr.id,
-                                "created_at": jr.created_at.strftime("%b %d, %Y"),
+                                "created_at": jr.created_at.strftime("%b %d, %Y") if jr.created_at else "N/A",
                                 "user_name": jr.user.name if jr.user else "N/A",
                                 "description": jr.description,
                                 "attachment": jr.attachment,
@@ -692,7 +697,7 @@ class ApprovalsView(APIView):
                     "id": f"ADV-{a.id}", "db_id": a.id, "type": "Money Top-up / Advance",
                     "requester": a.trip.user.name if a.trip.user else "Unknown",
                     "purpose": f"Advance: {a.purpose}", "cost": f"₹{a.requested_amount}",
-                    "status": a.status, "date": a.created_at.strftime("%b %d, %Y"),
+                    "status": a.status, "date": a.created_at.strftime("%b %d, %Y") if a.created_at else "N/A",
                     "hierarchy_level": a.hierarchy_level,
                     "current_approver_name": a.current_approver.name if a.current_approver else (a.status if a.status in ['Approved', 'Rejected'] else "N/A"),
                     "trip_id": a.trip.trip_id,
@@ -718,7 +723,7 @@ class ApprovalsView(APIView):
                     "id": f"CLAIM-{c.id}", "db_id": c.id, "type": "Expense Claim",
                     "requester": c.trip.user.name if c.trip.user else "Unknown",
                     "purpose": f"Claim for {c.trip.destination}", "cost": f"₹{c.total_amount}",
-                    "status": c.status, "date": c.created_at.strftime("%b %d, %Y"),
+                    "status": c.status, "date": c.created_at.strftime("%b %d, %Y") if c.created_at else "N/A",
                     "hierarchy_level": c.hierarchy_level,
                     "current_approver_name": c.current_approver.name if c.current_approver else (c.status if c.status in ['Approved', 'Rejected'] else "N/A"),
                     "trip_id": c.trip.trip_id,
@@ -739,7 +744,7 @@ class ApprovalsView(APIView):
                             {
                                 "id": e.id,
                                 "category": e.category,
-                                "date": e.date.strftime("%b %d, %Y"),
+                                "date": e.date.strftime("%b %d, %Y") if e.date else "N/A",
                                 "amount": str(e.amount),
                                 "description": e.description,
                                 "status": e.status,
@@ -752,7 +757,7 @@ class ApprovalsView(APIView):
                         "job_reports": [
                             {
                                 "id": jr.id,
-                                "created_at": jr.created_at.strftime("%b %d, %Y"),
+                                "created_at": jr.created_at.strftime("%b %d, %Y") if jr.created_at else "N/A",
                                 "user_name": jr.user.name if jr.user else "N/A",
                                 "description": jr.description,
                                 "attachment": jr.attachment,
@@ -775,7 +780,7 @@ class ApprovalsView(APIView):
                     "requester": b.user.name if b.user else "Unknown",
                     "user_name": b.user.name if b.user else "Unknown",
                     "purpose": f"Tour Plan: {b.file_name}", "status": b.status,
-                    "date": b.created_at.strftime("%b %d, %Y"),
+                    "date": b.created_at.strftime("%b %d, %Y") if b.created_at else "N/A",
                     "hierarchy_level": b.hierarchy_level,
                     "file_name": b.file_name,
                     "data_json": b.data_json,
@@ -839,6 +844,8 @@ class ApprovalsView(APIView):
                 obj = TravelClaim.objects.get(id=task_id.replace('CLAIM-', ''))
             elif task_id.startswith('DISPUTE-'):
                 obj = Dispute.objects.get(id=task_id.replace('DISPUTE-', ''))
+            elif task_id.startswith('BATCH-'):
+                obj = BulkActivityBatch.objects.get(id=task_id.replace('BATCH-', ''))
             else:
                 return Response({"error": "Invalid task ID"}, status=400)
             
@@ -2449,191 +2456,156 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
     def approve_batch(self, request, pk=None):
         batch = self.get_object()
         user = getattr(request, 'custom_user', None)
-        
-        if batch.status not in ['Submitted', 'Manager Approved']:
-            return Response({"error": "Batch is not in a valid status for approval"}, status=400)
+
+        # 0. Save row-level edits (Crucial for rejection persistence)
+        if 'data_json' in request.data and request.data['data_json'] is not None:
+             batch.data_json = request.data['data_json']
+
+        # 1. Basic Validity Checks
+        if batch.status in ['Approved', 'Rejected']:
+            return Response({"error": "Batch already finalized"}, status=400)
             
-        if batch.current_approver != user:
+        if batch.current_approver and batch.current_approver != user:
              return Response({"error": "Unauthorized: You are not the designated approver."}, status=403)
             
         is_hr = _is_hr(user)
+        is_finance_head = _is_finance_head(user)
         requester = batch.user
-        
-        # If the approver is not HR, do management chain logic
-        if not is_hr:
-            # Try explicit snapshots first (as like in trip approval)
+
+        # 2. Stage-Based Workflow Logic
+        # Case A: Management Chain (RM/SM)
+        if not is_hr and not is_finance_head:
+            next_approver = None
+            # Use hierarchy snapshots if they exist
             if batch.hierarchy_level == 1:
                 next_approver = batch.senior_manager or batch.hod_director
             elif batch.hierarchy_level == 2:
                 next_approver = batch.hod_director
             
-            # DYNAMIC FALLBACK: If no snapshot level matches, try relative to current approver
+            # Dynamic fallback
             if not next_approver:
                 potential_manager = user.reporting_manager
                 if potential_manager and potential_manager != user and potential_manager != requester:
                     next_approver = potential_manager
 
             if next_approver:
-                # Move to next manager in chain
+                # Move to next manager
                 batch.current_approver = next_approver
                 batch.hierarchy_level += 1
                 batch.save()
                 
+                # Notify
                 Notification.objects.create(
                     user=next_approver,
-                    title=f"Pending Tour Plan Approval [{batch.id}]",
-                    message=f"{requester.name}'s Tour Plan {batch.file_name} (ID: {batch.id}) requires your review (Forwarded from {user.name}).",
+                    title=f"Tour Plan Approval Required [{batch.id}]",
+                    message=f"{requester.name}'s Tour Plan {batch.file_name} requires your review (Forwarded from {user.name}).",
                     type='info'
                 )
-                Notification.objects.create(
-                    user=requester,
-                    title=f"Approved by {user.name} [{batch.id}]",
-                    message=f"Your Tour Plan {batch.file_name} has been approved by {user.name} and forwarded to {next_approver.name} for review.",
-                    type='success'
+                # Audit Log
+                from core.models import AuditLog
+                AuditLog.objects.create(
+                    user=user,
+                    action='APPROVE',
+                    model_name='BulkActivityBatch',
+                    object_id=str(batch.id),
+                    details=f"Batch forwarded to {next_approver.name}. Status: {batch.status}",
+                    ip_address=request.META.get('REMOTE_ADDR')
                 )
-                return Response({"message": f"Batch approved and forwarded to {next_approver.name}."})
+                return Response({"message": f"Approved and forwarded to {next_approver.name}."})
             else:
-                # End of Management Chain -> Move to HR Approval
-                hr_head = get_hr_head(requester)
+                # End of management -> HR
+                hr_users = _get_hr_users()
                 batch.status = 'Manager Approved'
-                batch.current_approver = hr_head
+                batch.current_approver = hr_users[0] if hr_users else None
                 batch.save()
-                
-                Notification.objects.create(
-                    user=requester,
-                    title=f"Management Approved [{batch.id}]",
-                    message=f"Your Tour Plan {batch.file_name} has been approved by management and sent to HR for verification.",
-                    type='success'
+                # Audit Log
+                from core.models import AuditLog
+                AuditLog.objects.create(
+                    user=user,
+                    action='APPROVE',
+                    model_name='BulkActivityBatch',
+                    object_id=str(batch.id),
+                    details=f"Batch management approved. Sent to HR. Status: {batch.status}",
+                    ip_address=request.META.get('REMOTE_ADDR')
                 )
-                
-                if hr_head:
-                    Notification.objects.create(
-                        user=hr_head,
-                        title=f"HR Verification Required [{batch.id}]",
-                        message=f"{requester.name}'s Tour Plan {batch.file_name} is management-approved and awaits your verification.",
-                        type='info'
-                    )
-                return Response({"message": "Sent to HR for verification"})
+                return Response({"message": "Management approved. Sent to HR for verification."})
 
-        # --- STAGE 2: HR Approval ---
-        # If we reach here, it's the final approval (HR)
-        # --- Final Approval Side Effects ---
-        # Activate Trip Story
-        if batch.trip:
-            update_trip_lifecycle(batch.trip, "Trip Story Activated", "Bulk activity log approved. Trip story and claims are now active.")
-            # If there's a status that signifies 'Ready for Claim', we could set it here.
-            # Usually 'Approved' or 'Completed' works.
-            if batch.trip.consider_as_local:
-                batch.trip.status = 'Approved' # Active for local
-                batch.trip.save()
-        # Create Expenses (Activities) for each row only when the final manager approves
-        created_ids = []
-        for row in batch.data_json:
-            # 1. Get Origin and Destination from JSON
-            origin = str(row.get('origin_route', '')).strip()
-            destination = str(row.get('destination_route', '')).strip()
-
-            # 2. Map mode and subType to match DynamicExpenseGrid's expected options
-            # Since mode is not provided in the bulk template, we default to Car/Own Car
-            excel_mode = str(row.get('mode', '')).lower()
-            excel_vehicle = str(row.get('vehicle', '')).lower()
-            
-            mapped_mode = "Car / Cab"
-            mapped_subType = "Own Car"
-            
-            if 'bike' in excel_mode or '2 wheeler' in excel_mode:
-                mapped_mode = "Bike"
-                mapped_subType = "Own Bike" if 'own' in excel_vehicle else "Ride Bike"
-            elif 'bus' in excel_mode or 'metro' in excel_mode or 'public' in excel_mode:
-                mapped_mode = "Public Transport"
-                if 'metro' in excel_mode: mapped_subType = "Metro"
-                elif 'bus' in excel_mode: mapped_subType = "Local Bus"
-                else: mapped_subType = "Auto" # Default for PT
-            elif excel_mode: # Only if provided
-                if 'own' in excel_vehicle: mapped_subType = "Own Car"
-                elif 'company' in excel_vehicle: mapped_subType = "Company Car"
-                elif 'ride' in excel_vehicle or 'uber' in excel_vehicle or 'ola' in excel_vehicle or 'taxi' in excel_mode: 
-                    mapped_subType = "Ride Hailing"
-
-            # Pull and normalise the date. skip any bogus rows (e.g. the
-            # instruction/sample line that sneaked in from earlier uploads).
-            clean_date = str(row.get('date', '')).strip()
-            if not clean_date or 'instruc' in clean_date.lower():
-                # invalid/empty date – skip this row entirely
-                continue
-            # ensure format is YYYY-MM-DD; try parsing to detect bad values
-            try:
-                # this will raise ValueError for non‑ISO strings like "?  Instruc"
-                datetime.date.fromisoformat(clean_date)
-            except Exception:
-                continue
-
-            if len(clean_date) > 10:
-                clean_date = clean_date[:10]
-
-            desc_json = {
-                "natureOfVisit": row.get('visit_intent'), # Updated to use visit_intent as purpose was removed
-                "remarks": row.get('remarks'),
-                "from_bulk_upload": True,
-                "origin": origin,
-                "destination": destination,
-                "mode": mapped_mode,
-                "subType": mapped_subType,
-                "odoStart": row.get('odo_start', 0),
-                "odoEnd": row.get('odo_end', 0),
-                "time": {
-                    "boardingDate": clean_date,
-                    "boardingTime": "09:00",
-                    "actualTime": "18:00"
-                }
-            }
-            
-            def safe_float(val):
-                try: 
-                    return float(val) if val not in [None, '', '-'] else 0.0
-                except: 
-                    return 0.0
-
-            odo_s = safe_float(row.get('odo_start', 0))
-            odo_e = safe_float(row.get('odo_end', 0))
-
-            expense = Expense.objects.create(
-                trip=batch.trip,
-                date=clean_date,
-                category='Fuel', 
-                amount=0,       
-                paid_by='Self (Out of Pocket)',
-                description=json.dumps(desc_json),
-                status='Approved', 
-                odo_start=odo_s,
-                odo_end=odo_e,
-                distance=max(0, odo_e - odo_s),
-                travel_mode=mapped_mode,
-                vehicle_type=mapped_subType,
-                latitude=0, longitude=0
+        # Case B: HR Verification
+        elif is_hr:
+            # HR approves, move to Finance for final release
+            batch.status = 'HR Approved'
+            finance_users = _get_finance_users()
+            batch.current_approver = finance_users[0] if finance_users else None
+            batch.save()
+            # Audit Log
+            from core.models import AuditLog
+            AuditLog.objects.create(
+                user=user,
+                action='APPROVE',
+                model_name='BulkActivityBatch',
+                object_id=str(batch.id),
+                details=f"Batch HR verified. Sent to Finance. Status: {batch.status}",
+                ip_address=request.META.get('REMOTE_ADDR')
             )
-            created_ids.append(expense.id)
-            
-        batch.status = 'Approved'
-        batch.created_expenses = created_ids
-        batch.save()
-        
-        # Notify user
-        Notification.objects.create(
-            user=batch.user,
-            title=f"Tour Plan Approved [{batch.id}]",
-            message=f"Your Tour Plan {batch.file_name} has been final-approved and added to your report.",
-            type='success'
+            return Response({"message": "HR Verified. Sent to Finance for final release."})
+
+        # Case C: Finance Final Release
+        elif is_finance_head or _is_finance_executive(user):
+            batch.status = 'Approved'
+            batch.current_approver = None
+            batch.save()
+
+        # 3. Finalization Side Effects (Only when status is 'Approved' or 'HR Approved')
+        if batch.status in ['HR Approved', 'Approved']:
+            # Create Expenses (Activities) for each row
+            for row in batch.data_json:
+                # SKIP REJECTED ROWS
+                if row.get('_status') == 'Rejected':
+                    continue
+
+                Expense.objects.create(
+                    trip=batch.trip,
+                    category=row.get('mode', 'Allowance'),
+                    date=row.get('date'),
+                    amount=float(row.get('amount', 0)) if row.get('amount') else 0,
+                    description=json.dumps(row),
+                    status='Approved'
+                )
+
+            # Update Trip Lifecycle
+            if batch.trip:
+                update_trip_lifecycle(batch.trip, "Tour Plan Finalized", f"Monthly tour plan {batch.id} has been fully approved.")
+                if batch.trip.consider_as_local:
+                    batch.trip.status = 'Approved'
+                    batch.trip.save()
+
+            # Final Notification to Requester
+            Notification.objects.create(
+                user=requester,
+                title=f"Tour Plan Final Approved [{batch.id}]",
+                message=f"Your Tour Plan {batch.file_name} has been fully approved and expenses created.",
+                type='success'
+            )
+
+        # Audit Log
+        from core.models import AuditLog
+        AuditLog.objects.create(
+            user=user,
+            action='APPROVE',
+            model_name='BulkActivityBatch',
+            object_id=str(batch.id),
+            details=f"Batch processed. Current Status: {batch.status}",
+            ip_address=request.META.get('REMOTE_ADDR')
         )
-        
-        return Response({"message": "Batch approved and activities created"})
+
+        return Response({"message": f"Action completed. Status: {batch.status}"})
 
     @action(detail=True, methods=['post'], url_path='reject')
     def reject_batch(self, request, pk=None):
         batch = self.get_object()
         user = getattr(request, 'custom_user', None)
-        
-        if batch.current_approver != user:
+
+        if batch.current_approver and batch.current_approver != user:
              return Response({"error": "Unauthorized"}, status=403)
              
         if 'data_json' in request.data and request.data['data_json'] is not None:
@@ -2646,6 +2618,17 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
             
         batch.save()
         
+        # Audit Log
+        from core.models import AuditLog
+        AuditLog.objects.create(
+            user=user,
+            action='REJECT',
+            model_name='BulkActivityBatch',
+            object_id=str(batch.id),
+            details=f"Batch rejected. Remarks: {batch.remarks}",
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+
         # Notify user
         Notification.objects.create(
             user=batch.user,

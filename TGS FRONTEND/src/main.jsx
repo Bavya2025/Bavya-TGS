@@ -3,8 +3,12 @@ import './index.css?v=force'
 import App from './App.jsx'
 import GlobalErrorBoundary from './components/ErrorBoundary.jsx'
 
+import { BrowserRouter as Router } from 'react-router-dom'
+
 createRoot(document.getElementById('root')).render(
-    <GlobalErrorBoundary>
-        <App />
-    </GlobalErrorBoundary>
+    <Router>
+        <GlobalErrorBoundary>
+            <App />
+        </GlobalErrorBoundary>
+    </Router>
 )

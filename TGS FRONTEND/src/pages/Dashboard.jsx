@@ -34,18 +34,29 @@ const Dashboard = () => {
     });
 
     useEffect(() => {
+        // Redirect HR users to Approvals page as they don't use the standard traveler dashboard
+        const rawRole = user?.role?.toLowerCase() || 'employee';
+        const dept = user?.department?.toLowerCase() || '';
+        const desig = user?.designation?.toLowerCase() || '';
+        const isHR = dept.includes('hr') || desig.includes('hr') || rawRole === 'hr';
+        
+        if (isHR) {
+            navigate('/approvals');
+            return;
+        }
+
         const fetchStats = async () => {
             try {
                 const response = await api.get('/api/dashboard-stats/');
                 setStats(response.data);
             } catch (error) {
-                showToast("Failed to fetch dashboard stats", "error");
+                // Toast handled by API interceptor
             } finally {
                 setIsLoading(false);
             }
         };
         fetchStats();
-    }, []);
+    }, [user, navigate]);
 
     const getIcon = (iconName) => {
         const icons = {

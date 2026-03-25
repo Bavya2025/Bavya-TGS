@@ -27,9 +27,11 @@ class GlobalErrorBoundary extends React.Component {
             };
             
             // Sending directly via our api.js report method logic
-            // Note: If user isn't logged in, this view will 403 because we set it to IsCustomAuthenticated
-            // but for UI crashes inside the app, it will work.
-            api.post('/api/system-logs/report-frontend/', payload).catch(() => {});
+            api.post('/api/system-logs/report-frontend/', payload, {
+                headers: {
+                    'X-TGS-Reporter-Secret': 'TGS-DEBUG-INTERNAL-2026'
+                }
+            }).catch(() => {});
         } catch (e) {}
     }
 

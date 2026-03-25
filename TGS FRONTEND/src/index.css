@@ -29479,3 +29479,23 @@ table.data-table,
         opacity: .5;
     }
 }
+
+/* Task Item Selection Highlight */
+.task-item.active {
+    background: #f0f4ff !important;
+    border-left: 4px solid #6366f1 !important;
+    position: relative;
+    box-shadow: inset 2px 0 8px rgba(99, 102, 241, 0.1) !important;
+}
+
+.task-item.active::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 60%;
+    background: #6366f1;
+    border-radius: 3px 0 0 3px;
+}
