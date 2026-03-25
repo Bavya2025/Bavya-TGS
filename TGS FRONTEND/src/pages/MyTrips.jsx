@@ -186,7 +186,7 @@ const MyTrips = () => {
                 destination: trip.destination || 'TBD',
                 dates: `${trip.start_date || 'N/A'} - ${trip.end_date || 'N/A'}`,
                 status: trip.status || 'Pending',
-                cost: trip.cost_estimate || '0',
+                cost: trip.cost_estimate ? `₹${Number(trip.cost_estimate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0.00',
                 from: trip.source || 'N/A',
                 to: trip.destination || 'N/A',
                 travelMode: '',
@@ -233,12 +233,12 @@ const MyTrips = () => {
             (t.destination || '').toLowerCase().includes(st) ||
             (t.userName || '').toLowerCase().includes(st);
 
-        // 2. Strict filter as per user request: only show "Approved"
-        // and exclude submitted, pending, expired, rejected, completed.
-        // HOWEVER: If searching by exact ID, we might want to show it regardless? 
-        // No, user said "show only approved" earlier.
-        if (s !== 'approved' && !st) return false; 
-        if (s !== 'approved' && st && !(t.id || '').toLowerCase().includes(st)) return false;
+        // 2. Status visibility filter: Include active and historically relevant statuses
+        // We exclude rejected or cancelled if not explicitly searched
+        const visibleStatuses = ['approved', 'ready', 'journey ongoing', 'on-going', 'paid', 'resolved', 'settled', 'completed'];
+        
+        if (!st && !visibleStatuses.includes(s)) return false; 
+        if (st && !visibleStatuses.includes(s) && !(t.id || '').toLowerCase().includes(st)) return false;
 
         const matchesType = typeFilter === 'All' ||
             (typeFilter === 'Trip' && !t.considerAsLocal) ||

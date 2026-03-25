@@ -63,6 +63,11 @@ def decode_id(encoded_id):
     except (binascii.Error, UnicodeDecodeError, ValueError):
         return encoded_id
 
+def _is_admin(user):
+    """Checks if a user has administrative privileges."""
+    user_role = (user.role.name.lower() if user.role else '')
+    return user_role in ['admin', 'it-admin', 'superuser']
+
 def _is_finance_head(user):
     """Checks if a user is the Finance Head."""
     user_role = (user.role.name.lower() if user.role else '')
@@ -316,8 +321,24 @@ class TripListCreateView(generics.ListCreateAPIView):
             Notification.objects.create(
                 user=current_approver,
                 title=f"New {label} Request",
-                message=f"{user.name} has submitted a new {label.lower()} request to {trip.destination}.",
+                message=f"{user.name} has submitted a new {label.lower()} request to {trip.destination} (ID: {trip.trip_id}).",
                 type='info'
+            )
+            
+            # NOTIFY USER: Sent for approval
+            Notification.objects.create(
+                user=user,
+                title=f"{label} Request Sent",
+                message=f"Your {label.lower()} request {trip.trip_id} has been created and sent to {current_approver.name} for approval.",
+                type='success'
+            )
+        else:
+            # Auto-approved or no approver
+            Notification.objects.create(
+                user=user,
+                title=f"{label} Request Created",
+                message=f"Your {label.lower()} request {trip.trip_id} has been successfully created.",
+                type='success'
             )
         
         if trip.accommodation_requests and any('Room' in r for r in trip.accommodation_requests):
@@ -487,39 +508,50 @@ class ApprovalCountView(APIView):
     def get(self, request):
         user = getattr(request, 'custom_user', None)
         if not user:
-            return Response({"count": 0})
+            return Response({"total": 0, "trips": 0, "advances": 0, "claims": 0, "batches": 0})
         
-        user_role = (user.role.name.lower() if user.role else '')
-        is_admin = user_role in ['admin', 'it-admin', 'superuser']
-        is_finance = 'finance' in user_role
+        is_admin = _is_admin(user)
+        is_finance_head = _is_finance_head(user)
+        is_finance_exec = _is_finance_executive(user)
+        is_hr = _is_hr(user)
         
+        trip_count = 0
+        advance_count = 0
+        claim_count = 0
+        batch_count = 0
+
+        pending_money_statuses = ['PENDING_EXECUTIVE', 'REJECTED_BY_HEAD', 'PENDING_FINAL_RELEASE']
+        finance_pending = pending_money_statuses + ['PENDING_HEAD']
+
         if is_admin:
-            trip_count = Trip.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded']).count()
-            advance_count = TravelAdvance.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded']).count()
-            claim_count = TravelClaim.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded']).count()
-        elif is_finance:
-            if user.office_level == 1:
-                # Finance Head counts
-                trip_count = 0
-                advance_count = TravelAdvance.objects.filter(status='PENDING_HEAD').count()
-                claim_count = TravelClaim.objects.filter(status='PENDING_HEAD').count()
-            else:
-                # Finance Executive counts
-                trip_count = 0
-                pending_money_statuses = ['PENDING_EXECUTIVE', 'HR Approved', 'REJECTED_BY_HEAD', 'PENDING_FINAL_RELEASE', 'Approved', 'Under Process']
-                advance_count = TravelAdvance.objects.filter(status__in=pending_money_statuses).count()
-                claim_count = TravelClaim.objects.filter(status__in=pending_money_statuses).count()
+            trip_count = Trip.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved']).count()
+            advance_count = TravelAdvance.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending).count()
+            claim_count = TravelClaim.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending).count()
+            batch_count = BulkActivityBatch.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved']).count()
+        elif is_finance_head:
+            advance_count = TravelAdvance.objects.filter(status='PENDING_HEAD').count()
+            claim_count = TravelClaim.objects.filter(status='PENDING_HEAD').count()
+        elif is_finance_exec:
+            advance_count = TravelAdvance.objects.filter(status__in=pending_money_statuses).count()
+            claim_count = TravelClaim.objects.filter(status__in=pending_money_statuses).count()
+        elif is_hr:
+            trip_count = Trip.objects.filter(status='Manager Approved').count()
+            advance_count = TravelAdvance.objects.filter(status='Manager Approved').count()
+            claim_count = TravelClaim.objects.filter(status='Manager Approved').count()
+            batch_count = BulkActivityBatch.objects.filter(status='Manager Approved').count()
         else:
-            # Manager counts
-            trip_count = Trip.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved']).count()
-            advance_count = TravelAdvance.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved']).count()
-            claim_count = TravelClaim.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved']).count()
+            # Manager/Approver
+            trip_count = Trip.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded']).count()
+            advance_count = TravelAdvance.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded']).count()
+            claim_count = TravelClaim.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded']).count()
+            batch_count = BulkActivityBatch.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded']).count()
             
         return Response({
-            "total": trip_count + advance_count + claim_count,
+            "total": trip_count + advance_count + claim_count + batch_count,
             "trips": trip_count,
             "advances": advance_count,
-            "claims": claim_count
+            "claims": claim_count,
+            "batches": batch_count
         })
 
 
@@ -543,6 +575,7 @@ class ApprovalsView(APIView):
         trips = Trip.objects.none()
         advances = TravelAdvance.objects.none()
         claims = TravelClaim.objects.none()
+        batches = BulkActivityBatch.objects.none()
         disputes = Dispute.objects.none()
 
         if tab == 'history':
@@ -558,16 +591,23 @@ class ApprovalsView(APIView):
             advance_pks = [int(pk) for pk in advance_pks_raw if pk and pk.isdigit()]
             claim_pks = [int(pk) for pk in claim_pks_raw if pk and pk.isdigit()]
             
-            trips = Trip.objects.filter(trip_id__in=trip_pks)
-            advances = TravelAdvance.objects.filter(id__in=advance_pks)
-            claims = TravelClaim.objects.filter(id__in=claim_pks)
+            batch_pks_raw = involved_logs.filter(model_name='BulkActivityBatch').values_list('object_id', flat=True)
+            batch_pks = [int(pk) for pk in batch_pks_raw if pk and pk.isdigit()]
+
+            # --- EXTENDED HISTORY: Also include user's own finished requests ---
+            history_statuses = ['Approved', 'Rejected', 'Resolved', 'Paid', 'HR Approved', 'Manager Approved', 'COMPLETED', 'Settled']
+            
+            trips = Trip.objects.filter(Q(trip_id__in=trip_pks) | Q(user=user, status__in=history_statuses))
+            advances = TravelAdvance.objects.filter(Q(id__in=advance_pks) | Q(trip__user=user, status__in=history_statuses))
+            claims = TravelClaim.objects.filter(Q(id__in=claim_pks) | Q(trip__user=user, status__in=history_statuses))
+            batches = BulkActivityBatch.objects.filter(Q(id__in=batch_pks) | Q(user=user, status__in=history_statuses))
             
             # Admins see everything in history
             if is_admin:
-                history_statuses = ['Approved', 'Rejected', 'Resolved', 'Paid', 'HR Approved', 'Manager Approved', 'COMPLETED']
                 trips = Trip.objects.filter(status__in=history_statuses)
                 advances = TravelAdvance.objects.filter(status__in=history_statuses)
                 claims = TravelClaim.objects.filter(status__in=history_statuses)
+                batches = BulkActivityBatch.objects.filter(status__in=history_statuses)
         else:
             # Pending Tab
             if is_admin:
@@ -575,6 +615,7 @@ class ApprovalsView(APIView):
                 trips = Trip.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
                 advances = TravelAdvance.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
                 claims = TravelClaim.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
+                batches = BulkActivityBatch.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'])
             elif is_finance:
                 if is_finance_head:
                     advances = TravelAdvance.objects.filter(status='PENDING_HEAD')
@@ -583,6 +624,8 @@ class ApprovalsView(APIView):
                     pending_money_statuses = ['PENDING_EXECUTIVE', 'REJECTED_BY_HEAD', 'PENDING_FINAL_RELEASE']
                     advances = TravelAdvance.objects.filter(status__in=pending_money_statuses)
                     claims = TravelClaim.objects.filter(status__in=pending_money_statuses)
+                    # Finance usually doesn't approve tour plans unless they have costing
+                    batches = BulkActivityBatch.objects.none()
                 
                 # Filter by project/dept if needed
                 finance_dept = user.department
@@ -594,11 +637,13 @@ class ApprovalsView(APIView):
                 trips = Trip.objects.filter(status='Manager Approved')
                 advances = TravelAdvance.objects.filter(status='Manager Approved')
                 claims = TravelClaim.objects.filter(status='Manager Approved')
+                batches = BulkActivityBatch.objects.filter(status='Manager Approved')
             else:
                 # Regular hierarchy
                 trips = Trip.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
                 advances = TravelAdvance.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
                 claims = TravelClaim.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
+                batches = BulkActivityBatch.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
         
         tasks = []
         # Support filtering by type if specified
@@ -609,6 +654,7 @@ class ApprovalsView(APIView):
                     "requester": t.user.name if t.user else "Unknown", "purpose": t.purpose,
                     "status": t.status, "date": t.created_at.strftime("%b %d, %Y"),
                     "hierarchy_level": t.hierarchy_level,
+                    "current_approver_name": t.current_approver.name if t.current_approver else (t.status if t.status in ['Approved', 'Rejected'] else "N/A"),
                     "trip_id": t.trip_id,
                     "is_local": t.consider_as_local,
                     "cost": t.cost_estimate,
@@ -648,6 +694,7 @@ class ApprovalsView(APIView):
                     "purpose": f"Advance: {a.purpose}", "cost": f"₹{a.requested_amount}",
                     "status": a.status, "date": a.created_at.strftime("%b %d, %Y"),
                     "hierarchy_level": a.hierarchy_level,
+                    "current_approver_name": a.current_approver.name if a.current_approver else (a.status if a.status in ['Approved', 'Rejected'] else "N/A"),
                     "trip_id": a.trip.trip_id,
                     "is_local": a.trip.consider_as_local,
                     "details": {
@@ -673,6 +720,7 @@ class ApprovalsView(APIView):
                     "purpose": f"Claim for {c.trip.destination}", "cost": f"₹{c.total_amount}",
                     "status": c.status, "date": c.created_at.strftime("%b %d, %Y"),
                     "hierarchy_level": c.hierarchy_level,
+                    "current_approver_name": c.current_approver.name if c.current_approver else (c.status if c.status in ['Approved', 'Rejected'] else "N/A"),
                     "trip_id": c.trip.trip_id,
                     "is_local": c.trip.consider_as_local,
                     "details": {
@@ -717,6 +765,28 @@ class ApprovalsView(APIView):
                             "end_reading": str(c.trip.odometer_details.end_odo_reading) if hasattr(c.trip, 'odometer_details') and c.trip.odometer_details.end_odo_reading else None,
                             "end_image": decrypt_key(c.trip.odometer_details.end_odo_image) if hasattr(c.trip, 'odometer_details') and c.trip.odometer_details.end_odo_image else None,
                         } if hasattr(c.trip, 'odometer_details') else None
+                    }
+                })
+
+        if type_filter in ['all', 'batch']:
+            for b in batches.order_by('-created_at'):
+                tasks.append({
+                    "id": f"BATCH-{b.id}", "db_id": b.id, "type": "Monthly Tour Plan",
+                    "requester": b.user.name if b.user else "Unknown",
+                    "user_name": b.user.name if b.user else "Unknown",
+                    "purpose": f"Tour Plan: {b.file_name}", "status": b.status,
+                    "date": b.created_at.strftime("%b %d, %Y"),
+                    "hierarchy_level": b.hierarchy_level,
+                    "file_name": b.file_name,
+                    "data_json": b.data_json,
+                    "current_approver_name": b.current_approver.name if b.current_approver else (b.status if b.status in ['Approved', 'Rejected'] else "N/A"),
+                    "trip_id": b.trip.trip_id if b.trip else "N/A",
+                    "is_local": True,
+                    "details": {
+                        "file_name": b.file_name,
+                        "entry_count": len(b.data_json) if isinstance(b.data_json, list) else 0,
+                        "data": b.data_json,
+                        "remarks": b.remarks
                     }
                 })
 
@@ -910,15 +980,15 @@ class ApprovalsView(APIView):
                     
                     Notification.objects.create(
                         user=next_approver,
-                        title=f"Pending Approval: {request_type}",
-                        message=f"{requester.name}'s {request_type} requires your review (Forwarded from {user.name}).",
+                        title=f"Pending {request_type} Approval [{obj.trip_id}]",
+                        message=f"{requester.name}'s {request_type} {obj.trip_id} requires your review (Forwarded from {user.name}).",
                         type='info'
                     )
 
                     Notification.objects.create(
                         user=requester,
-                        title=f"Approved by {user.name}",
-                        message=f"Your {request_type} has been approved by {user.name} and forwarded to {next_approver.name} for the next level review.",
+                        title=f"Approved by {user.name} [{obj.trip_id}]",
+                        message=f"Your {request_type} {obj.trip_id} has been approved by {user.name} and forwarded to {next_approver.name} for review.",
                         type='success'
                     )
                 else:
@@ -930,8 +1000,8 @@ class ApprovalsView(APIView):
                     
                     Notification.objects.create(
                         user=requester,
-                        title=f"Management Approved",
-                        message=f"Your {request_type} has been approved by management and sent to HR for verification.",
+                        title=f"Management Approved [{obj.trip_id}]",
+                        message=f"Your {request_type} {obj.trip_id} has been approved by management and sent to HR for verification.",
                         type='success'
                     )
 
@@ -949,8 +1019,8 @@ class ApprovalsView(APIView):
                     if hr_head:
                         Notification.objects.create(
                             user=hr_head,
-                            title=f"HR Verification Required",
-                            message=f"{requester.name}'s {request_type} is management-approved and awaits your verification.",
+                            title=f"HR Verification Required [{obj.trip_id}]",
+                            message=f"{requester.name}'s {request_type} {obj.trip_id} is management-approved and awaits your verification.",
                             type='info'
                         )
                 return Response({"message": "Sent to HR for verification"})
@@ -969,8 +1039,8 @@ class ApprovalsView(APIView):
                     
                     Notification.objects.create(
                         user=requester,
-                        title="Trip Approved",
-                        message=f"Your Trip to {obj.destination} has been final-approved by HR.",
+                        title=f"Trip Approved [{obj.trip_id}]",
+                        message=f"Your Trip {obj.trip_id} to {obj.destination} has been final-approved by HR.",
                         type='success'
                     )
 
@@ -1002,16 +1072,16 @@ class ApprovalsView(APIView):
                     
                     Notification.objects.create(
                         user=requester,
-                        title=f"HR Verified",
-                        message=f"Your {request_type} has been verified by HR and sent to Finance Executive for verification.",
+                        title=f"HR Verified [{obj.trip_id}]",
+                        message=f"Your {request_type} {obj.trip_id} has been verified by HR and sent for finance review.",
                         type='success'
                     )
                     
                     if finance_exec:
                         Notification.objects.create(
                             user=finance_exec,
-                            title=f"Finance Verification Required",
-                            message=f"{requester.name}'s {request_type} is HR-verified and awaits your verification.",
+                            title=f"Finance Verification Required [{obj.trip_id}]",
+                            message=f"{requester.name}'s {request_type} {obj.trip_id} is HR-verified and awaits your verification.",
                             type='info'
                         )
                 return Response({"message": "HR recommendation processed"})
@@ -1036,8 +1106,8 @@ class ApprovalsView(APIView):
                     
                     Notification.objects.create(
                         user=obj.current_approver,
-                        title="Finance Authorization Required",
-                        message=f"{requester.name}'s request verified by executive and awaits your authorization.",
+                        title=f"Finance Authorization Required [{obj.trip_id}]",
+                        message=f"{requester.name}'s request {obj.trip_id} verified by executive and awaits your authorization.",
                         type='info'
                     )
                     return Response({"message": "Verified and sent to Head"})
@@ -1081,8 +1151,8 @@ class ApprovalsView(APIView):
             obj.save()
             Notification.objects.create(
                 user=requester,
-                title="Finance: Under Process",
-                message=f"Your {request_type} is under process by Finance Team.",
+                title=f"Finance: Under Process [{obj.trip_id}]",
+                message=f"Your {request_type} {obj.trip_id} is under process by Finance Team.",
                 type='info'
             )
             return Response({"message": "Under process updated"})
@@ -1128,8 +1198,8 @@ class ApprovalsView(APIView):
             
             Notification.objects.create(
                 user=requester,
-                title="Amount Credited",
-                message=f"Your {request_type} has been fully approved and the amount has been credited to your account.",
+                title=f"Amount Credited [{obj.trip_id}]",
+                message=f"Your {request_type} {obj.trip_id} has been fully approved and the amount has been credited to your account.",
                 type='success'
             )
             return Response({"message": f"{action} completed and phase closed."})
@@ -1141,8 +1211,8 @@ class ApprovalsView(APIView):
             obj.save()
             Notification.objects.create(
                 user=requester,
-                title="Finance: Request Rejected",
-                message=f"Your {request_type} was rejected by Finance. Reason: {reason}",
+                title=f"Finance: Request Rejected [{obj.trip_id}]",
+                message=f"Your {request_type} {obj.trip_id} was rejected by Finance. Reason: {reason}",
                 type='error'
             )
             return Response({"message": "Rejected by Finance"})
@@ -1279,6 +1349,9 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
             user_name=user.name,
             user_designation=user.designation,
             user_department=user.department,
+            reporting_manager=reporting_manager,
+            senior_manager=senior_manager,
+            hod_director=hod_director,
             reporting_manager_name=reporting_manager.name if reporting_manager else None,
             senior_manager_name=senior_manager.name if senior_manager else None,
             hod_director_name=hod_director.name if hod_director else None
@@ -1287,9 +1360,17 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
         if current_approver:
             Notification.objects.create(
                 user=current_approver,
-                title="New Expense Claim",
+                title=f"New Expense Claim [{claim.trip.trip_id}]",
                 message=f"{user.name} has submitted an expense claim for Trip {claim.trip.trip_id}.",
                 type='info'
+            )
+            
+            # NOTIFY USER: Claim submitted
+            Notification.objects.create(
+                user=user,
+                title=f"Expense Claim Sent [{claim.trip.trip_id}]",
+                message=f"Your expense claim for Trip {claim.trip.trip_id} has been submitted and sent for approval.",
+                type='success'
             )
             
         # Notify HR
@@ -1369,6 +1450,9 @@ class TravelAdvanceViewSet(viewsets.ModelViewSet):
             user_name=user.name,
             user_designation=user.designation,
             user_department=user.department,
+            reporting_manager=reporting_manager,
+            senior_manager=senior_manager,
+            hod_director=hod_director,
             reporting_manager_name=reporting_manager.name if reporting_manager else None,
             senior_manager_name=senior_manager.name if senior_manager else None,
             hod_director_name=hod_director.name if hod_director else None
@@ -1377,9 +1461,17 @@ class TravelAdvanceViewSet(viewsets.ModelViewSet):
         if current_approver:
             Notification.objects.create(
                 user=current_approver,
-                title="New Advance Request",
-                message=f"{user.name} has requested an advance of ₹{advance.requested_amount} for Trip {advance.trip.trip_id}.",
+                title=f"New Advance Request [{advance.trip.trip_id}]",
+                message=f"{user.name} has requested an advance for Trip {advance.trip.trip_id}.",
                 type='info'
+            )
+            
+            # NOTIFY USER: Advance submitted
+            Notification.objects.create(
+                user=user,
+                title=f"Advance Request Sent [{advance.trip.trip_id}]",
+                message=f"Your advance request for Trip {advance.trip.trip_id} has been submitted and sent for approval.",
+                type='success'
             )
             
         # Notify HR
@@ -1851,51 +1943,58 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
 
         wb = openpyxl.Workbook()
 
-        # ── Hidden locations sheet ───────────────────────────────────────────
-        loc_sheet = wb.create_sheet("_Locations")
-        loc_sheet.sheet_state = 'hidden'
 
-        # 1. Try to get locations of employees reporting to the current manager
-        from api_management.services import get_manager_reports_locations
+        # ── Fetch Locations (Inclusive: Self + Team + Project) ──
         user = getattr(request, 'custom_user', None)
         manager_code = user.employee_id if user else None
+        project_code = user.project_code if user else 'N/A'
         
-        # Gather clusters from all employees in the reporting chain
-        team_locs = set()
+        locations_set = set()
+        
+        # 1. Own Location
+        if user and user.office_location:
+            locations_set.add(user.office_location.strip())
+            
+        # 2. Team Locations ("Child Users") - Recursive fetch via API
         if manager_code:
-            for loc in get_manager_reports_locations(manager_code):
-                if loc:
-                    team_locs.add(loc)
+            from api_management.services import get_manager_reports_locations
+            try:
+                # This fetches unique clusters/districts for the entire reporting chain
+                team_locs = get_manager_reports_locations(manager_code)
+                for loc in team_locs:
+                    if loc: locations_set.add(loc.strip())
+            except Exception as e:
+                print(f"Template Location Sync Error: {e}")
 
-        # Add the manager's own cluster/district (using geo_location priority)
-        if user:
-            own_loc = (user.office_location or '').strip()
-            if own_loc:
-                team_locs.add(own_loc)
+        # 3. Project Jurisdiction Locations
+        if project_code and project_code != 'N/A':
+            from travel_masters.models import Location
+            juris_locs = Location.objects.filter(
+                jurisdiction_districts__project_code=project_code
+            ).values_list('name', flat=True).distinct()
+            for loc in juris_locs:
+                if loc: locations_set.add(loc.strip())
+        
+        # Fallback to all Districts if the set is empty or very small
+        if len(locations_set) < 2:
+            from travel_masters.models import Location
+            all_distruits = Location.objects.filter(location_type__iexact='District').values_list('name', flat=True).order_by('name')[:100]
+            for loc in all_distruits:
+                if loc: locations_set.add(loc.strip())
 
-        # Build final sorted list – strictly team clusters only, no trip history
-        if team_locs:
-            locations = sorted(team_locs)
-        else:
-            locations = ["Head Office", "Field Office", "Client Site"]
+        # Final ordered list
+        locations = sorted(list(locations_set)) if locations_set else ["Head Office", "Field Office", "Client Site"]
 
-        for i, loc in enumerate(locations, start=1):
-            loc_sheet.cell(row=i, column=1, value=loc)
-
-        # Create a named range for the locations
-        loc_range = f"_Locations!$A$1:$A${len(locations)}"
-        wb.defined_names['LocationList'] = openpyxl.workbook.defined_name.DefinedName(
-            'LocationList', attr_text=loc_range
-        )
+        # locations list is ready; will be written to Column Z after ws is created
 
         # ── Main data sheet ─────────────────────────────────────────────────
         ws = wb.active
         ws.title = "Monthly Activities"
 
         # ── Styles ──────────────────────────────────────────────────────────
-        HEADER_FILL   = PatternFill("solid", fgColor="BB0633")   # brand red
-        NOTE_FILL     = PatternFill("solid", fgColor="FFF3CD")   # warm yellow
-        HEADER_FONT   = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+        HEADER_FILL   = PatternFill("solid", fgColor="FFBB0633")   # brand red (8-char)
+        NOTE_FILL     = PatternFill("solid", fgColor="FFFFF3CD")   # warn yellow
+        HEADER_FONT   = Font(name="Calibri", bold=True, color="FFFFFFFF", size=11)
         NOTE_FONT     = Font(name="Calibri", italic=True, color="856404", size=9)
         DATA_FONT     = Font(name="Calibri", size=10)
         CENTER        = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -1926,7 +2025,7 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         # Row 2 – Instructional note (merged across all columns)
         ws.merge_cells("A2:E2")
         note_cell = ws.cell(row=2, column=1,
-            value="📋  Instructions: Date must be ≥ today  |  Time must be ≥ current time (HH:MM, 24h)  |  "
+            value="📋  Instructions: Date must be ≥ today  |  Time must be between 06:00 and 23:59 (24h)  |  "
                   "Choose From/To Location from the dropdown  |  Purpose is free text")
         note_cell.font      = NOTE_FONT
         note_cell.fill      = NOTE_FILL
@@ -1940,109 +2039,140 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         from zoneinfo import ZoneInfo
         ist_tz    = ZoneInfo('Asia/Kolkata')
         now_ist   = datetime.datetime.now(ist_tz)
-        time_str  = now_ist.strftime("%H:%M")
+        # Use 09:30 as a standard sample time rather than dynamic 'now' to avoid confusing users
+        sample_time = "09:30"
 
-        sample = [today_str, time_str, locations[0] if locations else "Office",
-                  locations[1] if len(locations) > 1 else "Client Site",
-                  "Site Inspection / Field Visit"]
+        # ── Sample Data (Row 3) ──
+        # Use real objects for comparison safety in Excel formulas
+        sample = [
+            datetime.date.today(), 
+            datetime.time(9, 30), 
+            locations[0] if locations else "Head Office",
+            locations[1] if len(locations) > 1 else "Field Office",
+            "Site Inspection / Field Visit"
+        ]
         ws.row_dimensions[3].height = 20
         for col_idx, val in enumerate(sample, start=1):
             cell = ws.cell(row=3, column=col_idx, value=val)
             cell.font      = DATA_FONT
             cell.alignment = columns[col_idx - 1][2]
             cell.border    = BORDER
+            if col_idx == 1: cell.number_format = 'YYYY-MM-DD'
+            if col_idx == 2: cell.number_format = 'HH:MM'
 
-        # Rows 4-103 – Empty data rows (100 rows)
-        for row in range(4, 104):
+        # Rows 4-503 – Empty data rows (500 rows)
+        for row in range(4, 504):
             ws.row_dimensions[row].height = 20
             for col_idx in range(1, 6):
                 cell = ws.cell(row=row, column=col_idx)
                 cell.font      = DATA_FONT
                 cell.alignment = columns[col_idx - 1][2]
                 cell.border    = BORDER
+                if col_idx == 1: cell.number_format = 'YYYY-MM-DD'
+                if col_idx == 2: cell.number_format = 'HH:MM'
 
-        DATA_ROWS = "3:103"   # applies to sample + 100 blank rows
+        DATA_ROWS = "3:503"   # applies to sample + 500 blank rows
+
+        # ── Location source list in Column Z (same-sheet = no corruption ever) ──
+        # Column Z is set very narrow so it is effectively invisible to users.
+        ws.column_dimensions['Z'].width = 0.1
+        for i, loc in enumerate(locations, start=1):
+            ws.cell(row=i, column=26, value=str(loc))
+
+        # Create a Named Range pointing to Column Z on THIS sheet.
+        # Named ranges scroll correctly in Excel dropdowns even with 100+ items.
+        from openpyxl.workbook.defined_name import DefinedName
+        sheet_title = ws.title
+        loc_named_range = DefinedName(
+            'LOC_LIST',
+            attr_text=f"'{sheet_title}'!$Z$1:$Z${len(locations)}"
+        )
+        wb.defined_names.add(loc_named_range)
 
         # ── Validation 1: Date >= today ──────────────────────────────────────
         today_serial = (datetime.date.today() - datetime.date(1899, 12, 30)).days
         dv_date = DataValidation(
-            type="date",
-            operator="greaterThanOrEqual",
+            type="date", 
+            operator="greaterThanOrEqual", 
             formula1=str(today_serial),
-            showDropDown=False,
             showErrorMessage=True,
+            errorStyle="stop",
             errorTitle="Invalid Date",
-            error=f"Date must be on or after today ({datetime.date.today().strftime('%d-%b-%Y')}). "
-                  f"Please enter a valid date.",
-            showInputMessage=True,
-            promptTitle="Date",
-            prompt=f"Enter date ≥ {datetime.date.today().strftime('%d-%b-%Y')} (YYYY-MM-DD format)"
+            error="The date cannot be earlier than today."
         )
         ws.add_data_validation(dv_date)
-        dv_date.sqref = "A3:A103"   # Column A
+        dv_date.add("A3:A503")
 
-        # ── Validation 2: Time format HH:MM ─────────────────────────────────
-        # Excel stores time as a fraction of a day (e.g. 09:30 = 9.5/24)
-        now_fraction = (now_ist.hour * 3600 + now_ist.minute * 60) / 86400
-        dv_time = DataValidation(
-            type="time",
-            operator="greaterThanOrEqual",
-            formula1=str(round(now_fraction, 8)),
-            showDropDown=False,
-            showErrorMessage=True,
+        # ── Validation 2a: Time for Row 3 (first data row – no previous row) ──
+        # ── Validation 2a: Time for Row 3 (first data row – no previous row) ──
+        dv_time_first = DataValidation(
+            type="custom",
+            formula1="=AND(B3>=0.25,B3<=0.999)",
+            showErrorMessage=True, errorStyle="stop",
             errorTitle="Invalid Time",
-            error=f"Time must be ≥ current time ({time_str}). Use HH:MM (24h) format.",
-            showInputMessage=True,
-            promptTitle="Time (HH:MM)",
-            prompt=f"Enter time in HH:MM (24h). Must be ≥ {time_str} for today."
+            error="Time must be between 06:00 and 23:59 (e.g. 09:30)."
         )
-        ws.add_data_validation(dv_time)
-        dv_time.sqref = "B3:B103"   # Column B
+        ws.add_data_validation(dv_time_first)
+        dv_time_first.add("B3")
 
-        # ── Validation 3: From Location dropdown ─────────────────────────────
+        # ── Validation 2b: Time for Rows 4–503 ────────────────────────────────
+        # Rules: in range 06:00–23:59 AND at least 10 minutes after previous on same day.
+        # 10 minutes = 10/1440 in Excel decimal time.
+        dv_time_seq = DataValidation(
+            type="custom",
+            formula1="=AND(B4>=0.25,B4<=0.999,OR(A4>A3,B4>B3+(10/1440)))",
+            showErrorMessage=True, errorStyle="stop",
+            errorTitle="Time Sequence Error",
+            error="Time must be at least 10 minutes after the previous row on the same day, or start a new date."
+        )
+        ws.add_data_validation(dv_time_seq)
+        dv_time_seq.add("B4:B503")
+
+        # ── Validation 3a: From Location – dropdown list ───────────────────────
         dv_from = DataValidation(
-            type="list",
-            formula1=f'_Locations!$A$1:$A${len(locations)}',
-            showDropDown=False,
-            showErrorMessage=True,
-            errorTitle="Invalid Location",
-            error="Please select a location from the dropdown list.",
-            showInputMessage=True,
-            promptTitle="From Location",
-            prompt="Select the starting location from the dropdown."
+            type="list", formula1="LOC_LIST", showDropDown=False,
+            showErrorMessage=True, errorStyle="stop",
+            errorTitle="Invalid From Location",
+            error="Please select a From location from the dropdown."
         )
         ws.add_data_validation(dv_from)
-        dv_from.sqref = "C3:C103"   # Column C
+        dv_from.add("C3:C503")
 
-        # ── Validation 4: To Location dropdown ───────────────────────────────
+        # ── Validation 3b: To Location – custom STOP (in-list AND != From) ───
+        # ── Validation 3b: To Location – dropdown list (dropdown arrow required) ─
+        # NOTE: Excel only allows ONE validation per cell. To show the dropdown arrow,
+        # we MUST use type="list". Same-From/To is handled via conditional formatting below.
         dv_to = DataValidation(
-            type="list",
-            formula1=f'_Locations!$A$1:$A${len(locations)}',
-            showDropDown=False,
-            showErrorMessage=True,
-            errorTitle="Invalid Location",
-            error="Please select a location from the dropdown list.",
-            showInputMessage=True,
-            promptTitle="To Location",
-            prompt="Select the destination location from the dropdown."
+            type="list", formula1="LOC_LIST", showDropDown=False,
+            showErrorMessage=True, errorStyle="stop",
+            errorTitle="Invalid To Location",
+            error="Please select a To location from the dropdown."
         )
         ws.add_data_validation(dv_to)
-        dv_to.sqref = "D3:D103"   # Column D
+        dv_to.add("D3:D503")
 
-        # Column E (Purpose) – no list validation, free text; just an input hint
+        # ── Conditional Formatting: visual alerts ─────────────────────────────
+        # ORANGE: From == To on same row (same location trip is invalid)
+        orange_fill = PatternFill(start_color="FFFFA500", end_color="FFFFA500", fill_type="solid")
+        ws.conditional_formatting.add("D3:D503",
+            FormulaRule(formula=["AND(D3<>\"\",D3=C3)"], fill=orange_fill))
+        # RED: route continuity break (From ≠ prev row's To on same day)
+        red_fill = PatternFill(start_color="FFE99696", end_color="FFE99696", fill_type="solid")
+        ws.conditional_formatting.add("C4:C503",
+            FormulaRule(formula=["AND(A4=A3,C4<>D3,C4<>\"\")"], fill=red_fill))
+
+        # ── Validation 4: Purpose ────────────────────────────────────────────
         dv_purpose = DataValidation(
-            type="textLength",
-            operator="greaterThan",
+            type="textLength", 
+            operator="greaterThan", 
             formula1="0",
             showErrorMessage=True,
-            errorTitle="Purpose Required",
-            error="Please describe the purpose of your visit.",
-            showInputMessage=True,
-            promptTitle="Purpose",
-            prompt="Briefly describe the reason for this visit (e.g. Site Inspection, Client Meeting)."
+            errorStyle="stop",
+            errorTitle="Missing Info",
+            error="Purpose of visit is mandatory."
         )
         ws.add_data_validation(dv_purpose)
-        dv_purpose.sqref = "E3:E103"   # Column E
+        dv_purpose.add("E3:E503")
 
         # ── Freeze panes below header + note rows ────────────────────────────
         ws.freeze_panes = "A3"
@@ -2060,6 +2190,7 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def upload(self, request):
+        user = getattr(request, 'custom_user', None)
         file = request.FILES.get('file')
         trip_id = request.data.get('trip_id') # Selected by user in UI
         
@@ -2067,67 +2198,203 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
             return Response({"error": "No file uploaded"}, status=400)
             
         try:
-            # drop the instruction row that sits just below the header
-            df = pd.read_excel(file, skiprows=[1])
+            import pandas as pd
+            # Explicitly use openpyxl but with a generic fallback
+            try:
+                xls = pd.ExcelFile(file)
+            except Exception:
+                try:
+                    xls = pd.ExcelFile(file, engine='openpyxl')
+                except Exception as ex:
+                    return Response({"error": f"Supported Excel engines failed: {str(ex)}"}, status=400)
+            
+            df_full = None
+            sheet_name = None
+            found_header = False
+            header_idx = 0
+            
+            # Try sheets in order: look for the one containing "Date" or "Activity"
+            for s in xls.sheet_names:
+                try:
+                    temp_df = xls.parse(s, header=None)
+                except Exception:
+                    continue
+                if temp_df.empty: continue
+                
+                # Scan first 20 rows for "Date"
+                for idx, row in temp_df.head(20).iterrows():
+                    row_vals = [str(c).strip().lower() for c in row if pd.notna(c)]
+                    if 'date' in row_vals or 'activity' in row_vals or 'plan' in row_vals:
+                        df_full = temp_df
+                        header_idx = idx
+                        found_header = True
+                        sheet_name = s
+                        break
+                if found_header: break
+            
+            if not found_header or df_full is None:
+                # Secondary fallback: try first sheet anyway 
+                sheet_name = xls.sheet_names[0]
+                df_full = xls.parse(sheet_name, header=None)
+                header_idx = 0 
+            
+            # 2. Slice and Map Columns
+            header_row_raw = df_full.iloc[header_idx]
+            df = df_full.iloc[header_idx:].copy()
+            
+            # Handle duplicate or empty headers
+            new_cols = []
+            for i, c in enumerate(header_row_raw):
+                c_str = str(c).strip() if pd.notna(c) else ""
+                if not c_str:
+                    new_cols.append(f"Col_{i}")
+                else:
+                    new_cols.append(c_str)
+            df.columns = new_cols
+            df = df.iloc[1:] # Data starts after header row
+            
+            # Improved Case-insensitive column matcher
+            col_map = {}
+            for col in df.columns:
+                c_str = str(col).strip().lower()
+                if 'date' in c_str: col_map['date'] = col
+                elif 'time' in c_str: col_map['time'] = col
+                elif 'from' in c_str or 'origin' in c_str or 'source' in c_str or 'src' in c_str: col_map['from'] = col
+                elif 'to' in c_str or 'dest' in c_str: col_map['to'] = col
+                elif 'purp' in c_str or 'intent' in c_str: col_map['purpose'] = col
 
-            # Map columns to internal JSON; ignore completely empty rows or
-            # any row where the date field clearly contains the word "instruc"
+            # CRITICAL: Validate that all required columns are MAPPED
+            required_keys = ['date', 'time', 'from', 'to', 'purpose']
+            missing_cols = [k for k in required_keys if k not in col_map]
+            if missing_cols:
+                return Response({
+                    "error": f"Missing mandatory columns in Excel: {', '.join(missing_cols)}. Please check headers.",
+                    "cols_found": list(df.columns)
+                }, status=400)
+
             rows = []
-            for _, row in df.iterrows():
-                # treat rows with no data as blanks
+            last_date = None
+            last_to = None
+            last_time = None
+            last_excel_row = None
+
+            for i, row in df.iterrows():
+                # Skip absolute blanks
                 if row.dropna().empty:
                     continue
-
-                # Support both new column names and old legacy names
-                date_raw = row.get('Date', row.get('Date (YYYY-MM-DD)', ''))
-                if pd.isna(date_raw):
+                
+                # Primary data extraction
+                curr_date = str(row.get(col_map.get('date'))).strip()
+                if len(curr_date) > 10: curr_date = curr_date[:10]
+                
+                # Skip header/instruction repetitions (CRITICAL: Do this BEFORE validation)
+                if any(kw in curr_date.lower() for kw in ['instruc', 'sample', 'yyyy', 'month', 'date']):
                     continue
-                date_val = str(date_raw).strip()
-                if 'instruc' in date_val.lower():
-                    # skip the instructions/sample row
-                    continue
-                if len(date_val) > 10:
-                    date_val = date_val[:10]
 
-                # Read the new Time column (stored as HH:MM string or Excel time fraction)
-                time_raw = row.get('Time', '')
-                if time_raw and str(time_raw).strip() not in ('', 'nan', 'NaT'):
-                    time_str = str(time_raw).strip()
-                    # Excel may read time as a float fraction of a day (e.g. 0.395833...)
+                # If DATE field is blank, treat as end-of-data and stop parsing
+                date_val = row.get(col_map.get('date'))
+                if pd.isna(date_val) or str(date_val).strip() in ('', 'nan', 'NaT', 'None'):
+                    # If we already collected rows, stop cleanly.
+                    # If no rows yet, just skip (might be a gap before data starts).
+                    if rows:
+                        break
+                    continue
+
+                # Check for mandatory data in this row (skip partial rows silently)
+                missing_data = [
+                    k for k in required_keys
+                    if pd.isna(row.get(col_map.get(k))) or str(row.get(col_map.get(k))).strip() in ('', 'nan', 'NaT', 'None')
+                ]
+                if missing_data:
+                    # Skip rows that have a date but are missing other fields (gaps in middle)
+                    continue
+
+
+                curr_from = str(row.get(col_map.get('from'))).strip()
+                curr_to = str(row.get(col_map.get('to'))).strip()
+                
+                # Extract and normalize time (handle 08.30, 8:30, 08;30)
+                time_raw = row.get(col_map.get('time'))
+                time_str = str(time_raw).replace('.', ':').replace(';', ':').replace(' ', '').strip()
+                
+                # Try handling Excel decimal serials (fraction of day)
+                try:
+                    frac = float(time_str)
+                    if 0 <= frac < 1:
+                        total_secs = int(frac * 86400)
+                        time_str = f"{total_secs // 3600:02d}:{(total_secs % 3600) // 60:02d}"
+                except:
+                    pass
+                
+                # Ensure HH:MM padding for string comparison robustness (08:30 vs 09:30)
+                if ':' in time_str:
+                    parts = time_str.split(':')
                     try:
-                        frac = float(time_str)
-                        if 0 <= frac < 1:
-                            total_secs = int(frac * 86400)
-                            time_str = f"{total_secs // 3600:02d}:{(total_secs % 3600) // 60:02d}"
-                    except (ValueError, TypeError):
-                        pass  # already a string like "09:30"
-                    # Strip any trailing :00 seconds if HH:MM:SS
-                    time_str = ':'.join(time_str.split(':')[:2])
-                else:
-                    time_str = ''
+                        h = int(parts[0])
+                        m = int(parts[1])
+                        time_str = f"{h:02d}:{m:02d}"
+                    except:
+                        pass
+                else: 
+                    # If it's just "8", make it "08:00"
+                    if time_str.isdigit():
+                        time_str = f"{int(time_str):02d}:00"
 
+                # ── LOGICAL MULTI-ROW VALIDATION ──
+                excel_row_ref = i + 1
+                if last_date == curr_date:
+                    # 1. Route Continuity Check
+                    if last_to and curr_from and last_to.lower() != curr_from.lower():
+                        return Response({
+                            "error": f"Logical Error on {curr_date}: Route mismatch between Row {last_excel_row} and Row {excel_row_ref}. "
+                                     f"Row {excel_row_ref} must start from '{last_to}' (the previous destination), but starts from '{curr_from}'."
+                        }, status=400)
+                    
+                    # 2. Time Sequence Check
+                    if last_time and time_str < last_time:
+                         return Response({
+                            "error": f"Logical Error on {curr_date}: Time sequence mismatch between Row {last_excel_row} and Row {excel_row_ref}. "
+                                     f"Row {excel_row_ref} time ({time_str}) cannot be earlier than Row {last_excel_row} time ({last_time})."
+                        }, status=400)
+
+                # Update trackers for next row
+                last_date = curr_date
+                last_to = curr_to
+                last_time = time_str
+                last_excel_row = excel_row_ref
+
+                # Append record
                 rows.append({
-                    "date": date_val,
+                    "date": curr_date,
                     "time": time_str,
                     "mode": "Bike",
-                    "origin_route": str(row.get('From Location', row.get('from location', ''))),
-                    "destination_route": str(row.get('To Location', row.get('to location', ''))),
+                    "origin_route": curr_from,
+                    "destination_route": curr_to,
                     "vehicle": "Own Bike",
-                    "visit_intent": str(row.get('Purpose', row.get('purpose', '')))
+                    "visit_intent": str(row.get(col_map.get('purpose'))).strip()
                 })
-            
-            user = request.custom_user
-            
-            # Find the first valid approver in the management hierarchy
-            from core.models import User
-            def is_management_role(u):
-                if not u or not u.role: return False
-                return u.role.name.lower() in ['admin', 'it-admin', 'superuser', 'it admin', 'system administrator']
 
+            if not rows:
+                debug_info = {
+                    "sheet": sheet_name,
+                    "header_row_idx": header_idx,
+                    "cols_found": list(df.columns),
+                    "mapped": col_map
+                }
+                return Response({
+                    "error": f"No valid data rows found in sheet '{sheet_name}'. Please ensure data is filled starting from the row after the headers.",
+                    "debug_info": debug_info
+                }, status=400)
+            
+            # Management Hierarchy Snapshots
             rm = user.reporting_manager
             sm = user.senior_manager
             hod = user.hod_director
             
+            def is_management_role(u):
+                if not u or not u.role: return False
+                return u.role.name.lower() in ['admin', 'it-admin', 'superuser', 'it admin', 'system administrator']
+
             current_approver = rm if not is_management_role(rm) else None
             h_level = 1
             
@@ -2140,7 +2407,6 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 h_level = 3
                 
             if not current_approver:
-                 # Final fallback to HR Head
                  from .views import get_hr_head
                  current_approver = get_hr_head(user)
                  h_level = 1
@@ -2148,19 +2414,32 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
             batch = BulkActivityBatch.objects.create(
                 user=user,
                 trip_id=trip_id,
-                file_name=file.name,
+                file_name=getattr(file, 'name', 'Uploaded_Log.xlsx') or 'Uploaded_Log.xlsx',
                 data_json=rows,
                 status='Submitted',
                 current_approver=current_approver,
-                hierarchy_level=h_level
+                hierarchy_level=h_level,
+                reporting_manager=rm,
+                senior_manager=sm,
+                hod_director=hod,
+                reporting_manager_name=rm.name if rm else None,
+                senior_manager_name=sm.name if sm else None,
+                hod_director_name=hod.name if hod else None
             )
             
             if current_approver:
                 Notification.objects.create(
                     user=current_approver,
-                    title="New Bulk Activity Batch",
-                    message=f"{user.name} submitted a bulk travel log for approval.",
+                    title=f"New Bulk Activity Batch [{batch.id}]",
+                    message=f"{user.name} submitted a bulk travel log {batch.file_name} for approval.",
                     type='info'
+                )
+                
+                Notification.objects.create(
+                    user=user,
+                    title=f"Tour Plan Submitted [{batch.id}]",
+                    message=f"Your Tour Plan (ID: {batch.id}) has been successfully submitted.",
+                    type='success'
                 )
             
             return Response(BulkActivityBatchSerializer(batch).data)
@@ -2183,18 +2462,15 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         
         # If the approver is not HR, do management chain logic
         if not is_hr:
-            next_approver = None
-            
-            # Try explicit levels first
+            # Try explicit snapshots first (as like in trip approval)
             if batch.hierarchy_level == 1:
-                next_approver = getattr(batch, 'senior_manager', None) or getattr(batch, 'hod_director', None)
+                next_approver = batch.senior_manager or batch.hod_director
             elif batch.hierarchy_level == 2:
-                next_approver = getattr(batch, 'hod_director', None)
+                next_approver = batch.hod_director
             
-            # DYNAMIC FALLBACK: If no explicit level but current user has a manager
+            # DYNAMIC FALLBACK: If no snapshot level matches, try relative to current approver
             if not next_approver:
                 potential_manager = user.reporting_manager
-                # Ensure we don't route back to requester or to a non-existent manager
                 if potential_manager and potential_manager != user and potential_manager != requester:
                     next_approver = potential_manager
 
@@ -2206,14 +2482,14 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 
                 Notification.objects.create(
                     user=next_approver,
-                    title="Pending Approval: Bulk Travel Log",
-                    message=f"{requester.name}'s bulk travel log requires your review (Forwarded from {user.name}).",
+                    title=f"Pending Tour Plan Approval [{batch.id}]",
+                    message=f"{requester.name}'s Tour Plan {batch.file_name} (ID: {batch.id}) requires your review (Forwarded from {user.name}).",
                     type='info'
                 )
                 Notification.objects.create(
                     user=requester,
-                    title=f"Approved by {user.name}",
-                    message=f"Your bulk travel log has been approved by {user.name} and forwarded to {next_approver.name} for the next level review.",
+                    title=f"Approved by {user.name} [{batch.id}]",
+                    message=f"Your Tour Plan {batch.file_name} has been approved by {user.name} and forwarded to {next_approver.name} for review.",
                     type='success'
                 )
                 return Response({"message": f"Batch approved and forwarded to {next_approver.name}."})
@@ -2226,16 +2502,16 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 
                 Notification.objects.create(
                     user=requester,
-                    title="Management Approved",
-                    message="Your bulk travel log has been approved by management and sent to HR for verification.",
+                    title=f"Management Approved [{batch.id}]",
+                    message=f"Your Tour Plan {batch.file_name} has been approved by management and sent to HR for verification.",
                     type='success'
                 )
                 
                 if hr_head:
                     Notification.objects.create(
                         user=hr_head,
-                        title="HR Verification Required",
-                        message=f"{requester.name}'s bulk travel log is management-approved and awaits your verification.",
+                        title=f"HR Verification Required [{batch.id}]",
+                        message=f"{requester.name}'s Tour Plan {batch.file_name} is management-approved and awaits your verification.",
                         type='info'
                     )
                 return Response({"message": "Sent to HR for verification"})
@@ -2346,8 +2622,8 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         # Notify user
         Notification.objects.create(
             user=batch.user,
-            title="Bulk Activities Approved",
-            message=f"Your travel log from {batch.file_name} has been approved and added to your report.",
+            title=f"Tour Plan Approved [{batch.id}]",
+            message=f"Your Tour Plan {batch.file_name} has been final-approved and added to your report.",
             type='success'
         )
         
@@ -2361,18 +2637,21 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         if batch.current_approver != user:
              return Response({"error": "Unauthorized"}, status=403)
              
-        if 'data_json' in request.data:
+        if 'data_json' in request.data and request.data['data_json'] is not None:
             batch.data_json = request.data['data_json']
              
         batch.status = 'Rejected'
-        batch.remarks = request.data.get('remarks', 'Rejected by Manager')
+        batch.remarks = request.data.get('remarks')
+        if not batch.remarks:
+            return Response({"error": "Rejection remarks are mandatory"}, status=400)
+            
         batch.save()
         
         # Notify user
         Notification.objects.create(
             user=batch.user,
-            title="Bulk Activities Rejected",
-            message=f"Your travel log {batch.file_name} was rejected. Reason: {batch.remarks}",
+            title=f"Tour Plan Rejected [{batch.id}]",
+            message=f"Your Tour Plan {batch.file_name} was rejected. Reason: {batch.remarks}",
             type='error'
         )
         return Response({"message": "Batch rejected"})
@@ -2481,7 +2760,33 @@ class JobReportViewSet(viewsets.ModelViewSet):
         return self.queryset
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.custom_user)
+        user = self.request.custom_user
+        rm = user.reporting_manager
+        sm = user.senior_manager
+        hod = user.hod_director
+        
+        # Resolve initial approver
+        current_approver = resolve_approver(user)
+        
+        serializer.save(
+            current_approver=current_approver,
+            status='Submitted',
+            submitted_at=timezone.now(),
+            reporting_manager=rm,
+            senior_manager=sm,
+            hod_director=hod,
+            reporting_manager_name=rm.name if rm else None,
+            senior_manager_name=sm.name if sm else None,
+            hod_director_name=hod.name if hod else None
+        )
+        
+        if current_approver:
+             Notification.objects.create(
+                user=current_approver,
+                title="New Expense Claim",
+                message=f"{user.name} submitted an expense claim for approval.",
+                type='info'
+            )
 
 class LocalTravelModeMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]

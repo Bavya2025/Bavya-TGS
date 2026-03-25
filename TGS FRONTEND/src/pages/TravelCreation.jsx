@@ -201,8 +201,6 @@ const TravelCreation = () => {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
-            // navigate to trips list immediately after creation
-            navigate('/trips');
 
             setModalState({
                 isOpen: true,

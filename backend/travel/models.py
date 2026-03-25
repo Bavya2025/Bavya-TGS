@@ -286,6 +286,15 @@ class TravelClaim(SoftDeleteModel):
     sent_by_executive = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='sent_claims')
     final_executive = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='final_processed_claims')
     
+    # Management Hierarchy Snapshots
+    reporting_manager = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='claims_as_rm')
+    senior_manager = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='claims_as_sm')
+    hod_director = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='claims_as_hod')
+    
+    reporting_manager_name = models.CharField(max_length=255, blank=True, null=True)
+    senior_manager_name = models.CharField(max_length=255, blank=True, null=True)
+    hod_director_name = models.CharField(max_length=255, blank=True, null=True)
+
     hierarchy_level = models.IntegerField(default=1)
     submitted_at = models.DateTimeField(null=True, blank=True)
     remarks = models.TextField(blank=True)
@@ -367,6 +376,11 @@ class TravelAdvance(SoftDeleteModel):
     user_name = models.CharField(max_length=255, null=True, blank=True)
     user_designation = models.CharField(max_length=255, null=True, blank=True)
     user_department = models.CharField(max_length=255, null=True, blank=True)
+    
+    reporting_manager = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='advances_as_rm')
+    senior_manager = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='advances_as_sm')
+    hod_director = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='advances_as_hod')
+
     reporting_manager_name = models.CharField(max_length=255, null=True, blank=True)
     senior_manager_name = models.CharField(max_length=255, null=True, blank=True)
     hod_director_name = models.CharField(max_length=255, null=True, blank=True)
@@ -456,6 +470,16 @@ class BulkActivityBatch(SoftDeleteModel):
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Draft')
     current_approver = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='batches_to_approve')
+    
+    # Management Hierarchy Snapshots
+    reporting_manager = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='batches_as_rm')
+    senior_manager = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='batches_as_sm')
+    hod_director = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='batches_as_hod')
+    
+    reporting_manager_name = models.CharField(max_length=255, blank=True, null=True)
+    senior_manager_name = models.CharField(max_length=255, blank=True, null=True)
+    hod_director_name = models.CharField(max_length=255, blank=True, null=True)
+
     hierarchy_level = models.IntegerField(default=1) 
     remarks = models.TextField(blank=True, null=True)
     

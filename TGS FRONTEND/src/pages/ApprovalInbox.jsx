@@ -65,6 +65,9 @@ const ApprovalInbox = ({ enforceTab = null }) => {
     const [batchItemEdits, setBatchItemEdits] = useState({});
     const [selectedJobReport, setSelectedJobReport] = useState(null);
     const [isJobReportModalOpen, setIsJobReportModalOpen] = useState(false);
+    const [showRejectModal, setShowRejectModal] = useState(false);
+    const [rejectContext, setRejectContext] = useState(null);
+    const [rejectionRemarks, setRejectionRemarks] = useState('');
 
     const rawRole = user?.role?.toLowerCase() || '';
     const dept = user?.department?.toLowerCase() || '';
@@ -129,55 +132,40 @@ const ApprovalInbox = ({ enforceTab = null }) => {
         setShowBreakdown(true);
     }, [activeTab, filterType]);
 
+    // Unified fetching now includes batches in tasks
     const fetchBatches = async () => {
-        try {
-            const resp = await api.get('/api/bulk-activities/');
-            const all = resp.data.results || resp.data || [];
-            // Filter to show ONLY batches where the current user is the approver
-            const pendingForMe = all.filter(b =>
-                ['Submitted', 'Manager Approved'].includes(b.status) &&
-                String(b.current_approver) === String(user?.id)
-            );
-            setBatches(pendingForMe);
-        } catch (e) {
-            showToast("Failed to load approval batches", "error");
-        }
+        // Redundant - now handled by fetchTasks
     };
 
     const handleBatchAction = async (batchId, action) => {
-        let remarks = "";
         let dataJsonToSave = null;
+        const batch = tasks.find(b => b.id === batchId);
+        const edits = batchItemEdits[batchId] || {};
         
-        if (action === 'reject') {
-            const batch = batches.find(b => b.id === batchId);
-            const edits = batchItemEdits[batchId] || {};
-            
-            if (Object.keys(edits).length > 0) {
-                // Apply edits to original data_json
-                dataJsonToSave = (batch.data_json || []).map((row, idx) => {
-                    if (edits[idx]) {
-                        return { ...row, _status: edits[idx].status, _remarks: edits[idx].remarks };
-                    }
-                    return row;
-                });
-            }
+        if (batch && batch.data_json && Object.keys(edits).length > 0) {
+            dataJsonToSave = batch.data_json.map((row, idx) => {
+                if (edits[idx]) {
+                    return { ...row, _status: edits[idx].status, _remarks: edits[idx].remarks };
+                }
+                return row;
+            });
+        }
 
-            remarks = window.prompt("Please enter the reason for rejection (or leave blank if detailed below):");
-            if (remarks === null) return; // User cancelled
-            if (!remarks.trim() && Object.keys(edits).length === 0) {
-                showToast("Rejection reason is mandatory if no items are marked", "error");
-                return;
-            }
+        if (action === 'reject') {
+            setRejectContext({ type: 'batch', id: batchId, action, data_json: dataJsonToSave });
+            setRejectionRemarks('');
+            setShowRejectModal(true);
+            return;
         }
 
         try {
-            await api.post(`/api/bulk-activities/${batchId}/${action}/`, { 
-                remarks: remarks || 'Some lines were rejected',
+            const realBatchId = String(batchId).startsWith('BATCH-') ? batchId.split('-')[1] : batchId;
+            await api.post(`/api/bulk-activities/${realBatchId}/${action}/`, { 
+                remarks: 'Approved by Manager',
                 data_json: dataJsonToSave
             });
             showToast(`Batch ${action}d successfully!`, 'success');
-            // remove approved/rejected batch from list and collapse details
-            setBatches(prev => prev.filter(b => b.id !== batchId));
+            setTasks(prev => prev.filter(b => b.id !== batchId));
             if (expandedBatch === batchId) setExpandedBatch(null);
         } catch (error) {
             showToast(error.response?.data?.error || 'Action failed', 'error');
@@ -191,21 +179,17 @@ const ApprovalInbox = ({ enforceTab = null }) => {
     const handleAction = async (action) => {
         if (!selectedTask) return;
 
-        let remarks = "";
         if (action === 'Reject' || action === 'RejectByFinance') {
-            remarks = window.prompt("Please enter the reason for rejection:");
-            if (remarks === null) return; // User cancelled
-            if (!remarks.trim()) {
-                showToast("Rejection reason is mandatory", "error");
-                return;
-            }
+            setRejectContext({ type: 'task', id: selectedTask.id, action });
+            setRejectionRemarks('');
+            setShowRejectModal(true);
+            return;
         }
 
         try {
             const payload = {
                 id: selectedTask.id,
                 action: action,
-                remarks: remarks,
                 executive_approved_amount: execAmount,
                 payment_mode: paymentMode,
                 transaction_id: transactionId,
@@ -263,49 +247,44 @@ const ApprovalInbox = ({ enforceTab = null }) => {
         }
     };
 
-    const confirmItemRejection = async () => {
-        if (!rejectionItemRemarks.trim()) {
+    const confirmGeneralRejection = async () => {
+        if (!rejectionRemarks.trim()) {
             showToast("Rejection reason is mandatory", "error");
             return;
         }
 
+        if (!rejectContext) return;
+
         try {
-            await api.post('/api/approvals/', {
-                id: selectedTask.id,
-                action: 'UpdateItem',
-                item_id: rejectItemId,
-                item_status: 'Rejected',
-                remarks: rejectionItemRemarks
-            });
-
-            const updatedTasks = tasks.map(t => {
-                if (t.id === selectedTask.id) {
-                    const updatedExpenses = t.details.expenses.map(e =>
-                        e.id === rejectItemId ? {
-                            ...e,
-                            status: 'Rejected',
-                            finance_remarks: isFinance ? rejectionItemRemarks : (e.finance_remarks || ""),
-                            hr_remarks: isHR ? rejectionItemRemarks : (e.hr_remarks || ""),
-                            rm_remarks: (!isFinance && !isHR) ? rejectionItemRemarks : (e.rm_remarks || "")
-                        } : e
-                    );
-                    return { ...t, details: { ...t.details, expenses: updatedExpenses } };
-                }
-                return t;
-            });
-            setTasks(updatedTasks);
-            const currentTask = updatedTasks.find(t => t.id === selectedTask.id);
-            setSelectedTask(currentTask);
-
-            // Sync the input field as well
-            setItemRemarks({ ...itemRemarks, [rejectItemId]: rejectionItemRemarks });
-
-            setShowItemRejectModal(false);
-            setRejectItemId(null);
-            setRejectionItemRemarks('');
-            showToast("Item rejected successfully", "success");
-        } catch (e) {
-            showToast("Failed to reject item", "error");
+            if (rejectContext.type === 'batch') {
+                const realBatchId = String(rejectContext.id).startsWith('BATCH-') ? rejectContext.id.split('-')[1] : rejectContext.id;
+                await api.post(`/api/bulk-activities/${realBatchId}/${rejectContext.action}/`, {
+                    remarks: rejectionRemarks,
+                    data_json: rejectContext.data_json
+                });
+                showToast(`Batch rejected successfully!`, 'success');
+                setTasks(prev => prev.filter(b => b.id !== rejectContext.id));
+                if (expandedBatch === rejectContext.id) setExpandedBatch(null);
+            } else {
+                const payload = {
+                    id: rejectContext.id,
+                    action: rejectContext.action,
+                    remarks: rejectionRemarks,
+                    executive_approved_amount: execAmount,
+                    payment_mode: paymentMode,
+                    transaction_id: transactionId,
+                    receipt_file: receiptFile
+                };
+                await api.post('/api/approvals/', payload);
+                showToast(`Request rejected successfully`, "success");
+                fetchTasks(activeTab);
+                fetchCounts();
+            }
+            setShowRejectModal(false);
+            setRejectContext(null);
+            setRejectionRemarks('');
+        } catch (error) {
+            showToast(error.response?.data?.error || 'Rejection failed', 'error');
         }
     };
 
@@ -378,6 +357,51 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                         <h4>Request Objective</h4>
                         <p className="purpose-text">{task.purpose}</p>
                     </div>
+
+                    {task.type === 'Monthly Tour Plan' && task.details && (
+                        <div className="detail-section">
+                            <h4>Batch Activity Details</h4>
+                            <div className="info-grid">
+                                <div className="info-block">
+                                    <span>File Name</span>
+                                    <p>{task.details.file_name}</p>
+                                </div>
+                                <div className="info-block">
+                                    <span>Entries</span>
+                                    <p>{task.details.entry_count}</p>
+                                </div>
+                            </div>
+                            <div className="batch-raw-data-container mt-4">
+                                <details className="premium-card p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                                    <summary className="font-bold text-slate-700 cursor-pointer hover:text-indigo-600 transition-colors">
+                                        View All {task.details.entry_count} Entries
+                                    </summary>
+                                    <div className="mt-3 overflow-x-auto">
+                                        <table className="w-full text-xs text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-slate-200">
+                                                    <th className="p-2 border">Date</th>
+                                                    <th className="p-2 border">From</th>
+                                                    <th className="p-2 border">To</th>
+                                                    <th className="p-2 border">Purpose</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {(task.details.data || []).map((row, idx) => (
+                                                    <tr key={idx} className="bg-white hover:bg-slate-100">
+                                                        <td className="p-2 border">{row.date}</td>
+                                                        <td className="p-2 border">{row.origin_route}</td>
+                                                        <td className="p-2 border">{row.destination_route}</td>
+                                                        <td className="p-2 border">{row.visit_intent}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    )}
 
                     {task.type === 'Trip' && task.details && (
                         <>
@@ -930,8 +954,10 @@ const ApprovalInbox = ({ enforceTab = null }) => {
         );
     };
 
-    const tourPlanClaims = tasks.filter(t => t.is_local);
-    const specialRequestTasks = tasks.filter(t => !t.is_local);
+    const tourPlanTasks = tasks.filter(t => t.is_local);
+    const specialRequestTasks = tasks.filter(t => t.type !== 'Monthly Tour Plan');
+    const monthlyBatchTasks = tasks.filter(t => t.type === 'Monthly Tour Plan');
+    const tourPlanClaims = []; // Handled within monthlyBatchTasks logic or moved to special if they are claims
 
     return (
         <div className="approvals-page">
@@ -1075,17 +1101,17 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                 >
                                     <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <Upload size={22} className="text-indigo-600" /> Monthly Tour Plan
-                                        <span style={{ fontSize: '0.8rem', background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: '12px' }}>{batches.length + tourPlanClaims.length}</span>
+                                        <span style={{ fontSize: '0.8rem', background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: '12px' }}>{monthlyBatchTasks.length}</span>
                                     </h2>
                                     {isTourPlanOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                                 </div>
 
                                 {isTourPlanOpen && (
                                     <div className="animate-fade-in">
-                                        {(batches.length > 0 || tourPlanClaims.length > 0) ? (
+                                        {monthlyBatchTasks.length > 0 ? (
                                             <div>
                                                 {/* Existing Bulk Batches */}
-                                                {batches.map(batch => (
+                                        {monthlyBatchTasks.map(batch => (
                                                     <React.Fragment key={batch.id}>
                                                         <div style={{ background: '#fffbeb', border: '1px solid #fbbf24', borderRadius: '10px', padding: '16px', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                                                             <div>
@@ -1172,7 +1198,8 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                                                                 </td>
                                                                                 <td className="p-2 border text-center">
                                                                                     <button 
-                                                                                        onClick={() => {
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
                                                                                             const isRejected = itemEdit.status === 'Rejected';
                                                                                             setBatchItemEdits(prev => ({
                                                                                                 ...prev,
@@ -1195,7 +1222,7 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                                                                         {itemEdit.status === 'Rejected' ? 'Undo Reject' : 'Reject'}
                                                                                     </button>
                                                                                 </td>
-                                                                                <td className="p-2 border">
+                                                                                <td className="p-2 border" onClick={e => e.stopPropagation()}>
                                                                                     <input 
                                                                                         type="text" 
                                                                                         placeholder="Optional reason..."
@@ -1223,39 +1250,6 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                                             </div>
                                                         )}
                                                     </React.Fragment>
-                                                ))}
-                                                {tourPlanClaims.map(claim => (
-                                                    <div
-                                                        key={claim.id}
-                                                        onClick={() => {
-                                                            setSelectedTask(claim);
-                                                            // We stay in the monthly view but ensure details area is ready
-                                                            // We'll also update the layout below to show details for selected task
-                                                        }}
-                                                        style={{
-                                                            background: selectedTask?.id === claim.id ? '#e0f2fe' : '#f0f9ff',
-                                                            border: selectedTask?.id === claim.id ? '2px solid #0369a1' : '1px solid #7dd3fc',
-                                                            borderRadius: '10px',
-                                                            padding: '16px',
-                                                            marginBottom: '12px',
-                                                            display: 'flex',
-                                                            justifyContent: 'space-between',
-                                                            alignItems: 'center',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s ease'
-                                                        }}
-                                                        className="hover:bg-sky-100"
-                                                    >
-                                                        <div>
-                                                            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0369a1' }}>{claim.requester}</div>
-                                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{claim.type}: {claim.purpose}</div>
-                                                            <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>{claim.cost}</div>
-                                                        </div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <span style={{ fontSize: '0.75rem', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '10px' }}>Final Approval</span>
-                                                            <ArrowRight size={16} className={selectedTask?.id === claim.id ? 'text-sky-700' : 'text-sky-400'} />
-                                                        </div>
-                                                    </div>
                                                 ))}
 
                                                 {/* Details Pane for Monthly Selection */}
@@ -1366,31 +1360,34 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                     </div>
                 </React.Fragment>
             )}
-            {/* Rejection Modal for Individual Items */}
-            {showItemRejectModal && (
+            {/* General Rejection Modal (Batch or Task) */}
+            {showRejectModal && (
                 <div className="custom-confirm-overlay" style={{ zIndex: 2000 }}>
                     <div className="custom-confirm-modal" style={{ maxWidth: '400px' }}>
                         <div className="modal-content-p" style={{ padding: '1.5rem', textAlign: 'left' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>Reject Expense Item</h3>
-                                <button onClick={() => setShowItemRejectModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                                    <XCircle size={20} color="#94a3b8" />
+                                <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>
+                                    {rejectContext?.type === 'batch' ? 'Reject Monthly Tour Plan' : 'Reject Request'}
+                                </h3>
+                                <button onClick={() => setShowRejectModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                                    <X size={20} color="#94a3b8" />
                                 </button>
                             </div>
                             <div className="field-group mb-3" style={{ marginBottom: '1.5rem' }}>
                                 <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>
-                                    Rejection Remarks <span style={{ color: 'red' }}>*</span>
+                                    Reason for Rejection <span style={{ color: 'red' }}>*</span>
                                 </label>
                                 <textarea
-                                    placeholder="Explain why this expense is being rejected..."
-                                    value={rejectionItemRemarks}
-                                    onChange={(e) => setRejectionItemRemarks(e.target.value)}
+                                    placeholder="Please provide a reason for rejection..."
+                                    value={rejectionRemarks}
+                                    onChange={(e) => setRejectionRemarks(e.target.value)}
                                     style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', minHeight: '100px', fontSize: '0.9rem', resize: 'vertical' }}
+                                    autoFocus
                                 />
                             </div>
                             <div className="modal-actions-p" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                                <button className="modal-btn cancel" onClick={() => setShowItemRejectModal(false)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>Cancel</button>
-                                <button className="modal-btn confirm" onClick={confirmItemRejection} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>Confirm Rejection</button>
+                                <button className="modal-btn cancel" onClick={() => setShowRejectModal(false)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>Cancel</button>
+                                <button className="modal-btn confirm" onClick={confirmGeneralRejection} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>Confirm Rejection</button>
                             </div>
                         </div>
                     </div>

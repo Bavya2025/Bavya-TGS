@@ -15,6 +15,7 @@ import {
 import api from '../api/api';
 import { useToast } from '../context/ToastContext.jsx';
 import { encodeId } from '../utils/idEncoder';
+import './MyRequests.css';
 
 
 const MyRequests = ({ enforceView = null }) => {
@@ -24,6 +25,7 @@ const MyRequests = ({ enforceView = null }) => {
     const [trips, setTrips] = useState([]);
     const [advances, setAdvances] = useState([]);
     const [claims, setClaims] = useState([]);
+    const [batches, setBatches] = useState([]);
 
     const [viewMode, setViewMode] = useState(enforceView || 'active'); // 'active' or 'historical'
     const [isLoading, setIsLoading] = useState(true);
@@ -41,12 +43,17 @@ const MyRequests = ({ enforceView = null }) => {
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            // Fetch Trips and Travels
-            const [tripsRes, travelsRes] = await Promise.all([
+            // Fetch Trips, Travels, and Batches
+            const [tripsRes, travelsRes, advancesRes, batchesRes] = await Promise.all([
                 api.get('/api/trips/'),
-                api.get('/api/travels/')
+                api.get('/api/travels/'),
+                api.get('/api/advances/').catch(() => ({ data: [] })),
+                api.get('/api/bulk-activities/').catch(() => ({ data: [] }))
             ]);
+
             const rawTrips = [...(tripsRes.data || []), ...(travelsRes.data || [])];
+            const rawAdvances = advancesRes.data || [];
+            const rawBatches = batchesRes.data || [];
 
             // Map Trips
             const mappedTrips = rawTrips.map(trip => ({
@@ -59,10 +66,7 @@ const MyRequests = ({ enforceView = null }) => {
                 raw: trip
             }));
 
-            // Fetch Advances
-            const advancesRes = await api.get('/api/advances/').catch(() => ({ data: [] }));
-            const rawAdvances = advancesRes.data || [];
-
+            // Map Advances
             const mappedAdvances = rawAdvances.map(adv => ({
                 id: `ADV-${adv.id || adv.trip.substring(4)}`,
                 title: `Advance for ${adv.trip || 'Trip'}`,
@@ -73,8 +77,18 @@ const MyRequests = ({ enforceView = null }) => {
                 tripRef: adv.trip
             }));
 
+            // Map Batches
+            const mappedBatches = rawBatches.map(batch => ({
+                id: `BATCH-${batch.id}`,
+                title: `Tour Plan: ${batch.file_name}`,
+                date: new Date(batch.created_at || Date.now()).toLocaleDateString(),
+                amount: (batch.data_json || []).length,
+                status: batch.status || 'Draft',
+                type: 'batch',
+                label: 'Entries'
+            }));
+
             // Synthesize Expense Claims from Trips 
-            // In a real scenario, this would fetch from /api/claims/
             const claimsList = [];
             rawTrips.forEach(trip => {
                 if (parseFloat(trip.total_expenses) > 0) {
@@ -93,6 +107,7 @@ const MyRequests = ({ enforceView = null }) => {
             setTrips(mappedTrips);
             setAdvances(mappedAdvances);
             setClaims(claimsList);
+            setBatches(mappedBatches);
 
         } catch (error) {
             showToast("Failed to load request boards", "error");
@@ -103,7 +118,8 @@ const MyRequests = ({ enforceView = null }) => {
 
     const isActiveStatus = (status) => {
         const s = status.toLowerCase();
-        return !['settled', 'rejected', 'cancelled'].includes(s);
+        // Move Approved and Completed to history to keep Active queue clean
+        return !['settled', 'rejected', 'cancelled', 'approved', 'completed', 'resolved', 'paid'].includes(s);
     };
 
     const filterData = (dataArray) => {
@@ -115,13 +131,21 @@ const MyRequests = ({ enforceView = null }) => {
     const displayTrips = filterData(trips);
     const displayAdvances = filterData(advances);
     const displayClaims = filterData(claims);
+    const displayBatches = filterData(batches);
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
+        const val = parseFloat(amount || 0);
+        return '₹' + val.toLocaleString('en-IN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
     };
 
     const renderCard = (item, icon) => (
-        <div key={item.id} className="req-card" onClick={() => item.type === 'trip' ? navigate(`/trip-timeline/${encodeId(item.id)}`) : null}>
+        <div key={item.id} className="req-card" onClick={() => {
+            if (item.type === 'trip') navigate(`/trip-timeline/${encodeId(item.id)}`);
+            else if (item.type === 'batch') navigate('/approvals'); // Direct to approvals for details
+        }}>
             <div className="card-top-row">
                 <span className="req-id">{item.id}</span>
                 <span className={`req-status ${item.status.toLowerCase().replace(' ', '-')}`}>{item.status}</span>
@@ -140,11 +164,11 @@ const MyRequests = ({ enforceView = null }) => {
             <div className="req-footer">
                 <span className="req-date">Last Updated: Today</span>
                 <span className="req-amount">
-                    {formatCurrency(item.amount)}
+                    {item.type === 'batch' ? `${item.amount} ${item.label}` : formatCurrency(item.amount)}
                 </span>
             </div>
 
-            {item.type === 'trip' && (
+            {(item.type === 'trip' || item.type === 'batch') && (
                 <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity right-3 bottom-3 text-primary">
                     <ArrowRight size={16} />
                 </div>
@@ -183,7 +207,7 @@ const MyRequests = ({ enforceView = null }) => {
                     <p className="text-muted">Syncing your requests...</p>
                 </div>
             ) : (
-                <div className="requests-kanban">
+                <div className="requests-kanban grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {/* Trips Column */}
                     <div className="kanban-col">
                         <div className="col-header">
@@ -197,10 +221,31 @@ const MyRequests = ({ enforceView = null }) => {
                             {displayTrips.length === 0 ? (
                                 <div className="empty-col">
                                     <FileText size={32} opacity={0.5} />
-                                    <p>No {viewMode} trip requests found.</p>
+                                    <p>No {viewMode} trips.</p>
                                 </div>
                             ) : (
                                 displayTrips.map(trip => renderCard(trip, <Plane size={14} />))
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Monthly Tour Plans (New Column) */}
+                    <div className="kanban-col">
+                        <div className="col-header">
+                            <div className="col-header-left">
+                                <FileText size={18} style={{ color: '#6366f1' }} />
+                                <h3>Monthly Plans</h3>
+                            </div>
+                            <span className="req-count">{displayBatches.length}</span>
+                        </div>
+                        <div className="col-body">
+                            {displayBatches.length === 0 ? (
+                                <div className="empty-col">
+                                    <FileText size={32} opacity={0.5} />
+                                    <p>No {viewMode} monthly plans.</p>
+                                </div>
+                            ) : (
+                                displayBatches.map(batch => renderCard(batch, <FileText size={14} />))
                             )}
                         </div>
                     </div>
@@ -218,7 +263,7 @@ const MyRequests = ({ enforceView = null }) => {
                             {displayAdvances.length === 0 ? (
                                 <div className="empty-col">
                                     <FileText size={32} opacity={0.5} />
-                                    <p>No {viewMode} advance requests found.</p>
+                                    <p>No {viewMode} advances.</p>
                                 </div>
                             ) : (
                                 displayAdvances.map(adv => renderCard(adv, <Wallet size={14} />))
@@ -239,7 +284,7 @@ const MyRequests = ({ enforceView = null }) => {
                             {displayClaims.length === 0 ? (
                                 <div className="empty-col">
                                     <FileText size={32} opacity={0.5} />
-                                    <p>No {viewMode} claim requests found.</p>
+                                    <p>No {viewMode} claims.</p>
                                 </div>
                             ) : (
                                 displayClaims.map(claim => renderCard(claim, <IndianRupee size={14} />))

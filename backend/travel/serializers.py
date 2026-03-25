@@ -234,10 +234,18 @@ class TravelClaimSerializer(serializers.ModelSerializer):
     
     user_name = serializers.SerializerMethodField()
     reporting_manager_name = serializers.SerializerMethodField()
+    processed_by_name = serializers.CharField(source='processed_by.name', read_only=True)
 
     class Meta:
         model = TravelClaim
-        fields = '__all__'
+        fields = [
+            'id', 'trip', 'total_amount', 'approved_amount', 'status',
+            'current_approver', 'hierarchy_level', 'submitted_at', 'remarks',
+            'payment_mode', 'transaction_id', 'receipt_file', 'payment_date',
+            'processed_by', 'processed_by_name', 'finance_remarks',
+            'reporting_manager_name', 'senior_manager_name', 'hod_director_name'
+        ]
+        read_only_fields = ['submitted_at', 'processed_by']
 
     def get_user_name(self, obj):
         return obj.user_name or (obj.trip.user.name if obj.trip and obj.trip.user else 'Unknown User')
@@ -257,7 +265,7 @@ class TravelAdvanceSerializer(serializers.ModelSerializer):
         return obj.user_name or (obj.trip.user.name if obj.trip and obj.trip.user else 'Unknown User')
 
     def get_reporting_manager_name(self, obj):
-        return obj.reporting_manager_name or (obj.trip.user.reporting_manager.name if obj.trip and obj.trip.user and obj.user.reporting_manager else None)
+        return obj.reporting_manager_name or (obj.trip.user.reporting_manager.name if obj.trip and obj.trip.user and obj.trip.user.reporting_manager else None)
 
 class DisputeSerializer(serializers.ModelSerializer):
     trip_id_display = serializers.CharField(source='trip.trip_id', read_only=True)
