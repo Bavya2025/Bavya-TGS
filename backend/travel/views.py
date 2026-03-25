@@ -2104,7 +2104,6 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         dv_date.add("A3:A503")
 
         # ── Validation 2a: Time for Row 3 (first data row – no previous row) ──
-        # ── Validation 2a: Time for Row 3 (first data row – no previous row) ──
         dv_time_first = DataValidation(
             type="custom",
             formula1="=AND(B3>=0.25,B3<=0.999)",
