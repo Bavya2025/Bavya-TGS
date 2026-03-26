@@ -13,7 +13,7 @@ SET "NGINX_URL=http://nginx.org/download/nginx-1.24.0.zip"
 :: --- APP 1: TGS (at %~dp0) ---
 SET APP1_NAME=TGS_Core
 SET APP1_PATH=%~dp0
-SET APP1_FRONTEND=frontend
+SET APP1_FRONTEND=TGS FRONTEND
 SET APP1_HIGH_LOAD=false
 SET APP1_PORTS=4567 4568
 
@@ -21,12 +21,12 @@ SET APP1_PORTS=4567 4568
 :: All points to the same TGS root to scale workers
 SET APP2_NAME=TGS_Replica_1
 SET APP2_PATH=%~dp0
-SET APP2_FRONTEND=frontend
+SET APP2_FRONTEND=TGS FRONTEND
 SET APP2_PORTS=4570
 
 SET APP3_NAME=TGS_Replica_2
 SET APP3_PATH=%~dp0
-SET APP3_FRONTEND=frontend
+SET APP3_FRONTEND=TGS FRONTEND
 SET APP3_PORTS=4573
 
 echo ============================================================================

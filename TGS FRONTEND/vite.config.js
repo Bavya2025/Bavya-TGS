@@ -8,7 +8,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 6786, // Standard Vite port
     proxy: {
-      '/api': {
+      '/api/': {
         target: 'http://127.0.0.1:4567', // Matches the user's backend port
         changeOrigin: true,
         secure: false,
