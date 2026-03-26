@@ -48,7 +48,9 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
 
   Future<void> _detectManager() async {
     final user = _apiService.getUser();
-    if (user == null) return;
+    if (user == null) {
+      return;
+    }
     final myId = _normalizeId(user['employee_id'] ?? user['username']);
 
     try {
@@ -135,7 +137,9 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
     
     if (_selectedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please upload the activities file'), backgroundColor: Colors.red),
+        const SnackBar(
+            content: Text('Please upload the activities file'),
+            backgroundColor: Colors.red),
       );
       return;
     }
@@ -177,7 +181,9 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
       } catch (uploadError) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Trip created, but file upload failed: $uploadError'), backgroundColor: Colors.orange),
+            SnackBar(
+                content: Text('Trip created, but file upload failed: $uploadError'),
+                backgroundColor: Colors.orange),
           );
         }
       }
@@ -208,7 +214,9 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                  shape: BoxShape.circle),
               child: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 64),
             ),
             const SizedBox(height: 24),
@@ -320,11 +328,12 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: enabled ? Colors.white : const Color(0xFFF1F5F9).withOpacity(0.5),
+        color:
+            enabled ? Colors.white : const Color(0xFFF1F5F9).withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -360,7 +369,12 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -437,7 +451,10 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.blue.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withOpacity(0.1))),
+            decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.1))),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -473,9 +490,15 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _selectedFile != null ? const Color(0xFF10B981).withOpacity(0.1) : Colors.white,
+                        color: _selectedFile != null
+                            ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                            : Colors.white,
                         shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                        boxShadow: [
+                          BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 10)
+                        ],
                       ),
                       child: Icon(
                         _selectedFile != null ? Icons.check_circle_rounded : Icons.upload_file_rounded,

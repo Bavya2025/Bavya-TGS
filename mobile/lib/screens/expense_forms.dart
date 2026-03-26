@@ -903,7 +903,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF4F46E5).withOpacity(0.3),
+                          color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -915,7 +915,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                         Text(
                           'DAY TOTAL  ',
                           style: GoogleFonts.plusJakartaSans(
-                            color: Colors.white.withOpacity(0.8),
+                            color: Colors.white.withValues(alpha: 0.8),
                             fontSize: 10,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1,
@@ -1403,9 +1403,8 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
-            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -1487,7 +1486,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.08)),
+        border: Border.all(color: color.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1546,15 +1545,19 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
     if (confirmed == true) {
       setState(() => _isProcessing = true);
       try {
-        await _tripService.deleteExpense(widget.expenseData['id'].toString());
-        if (mounted) Navigator.pop(context, true);
+        if (mounted) {
+          Navigator.pop(context, true);
+        }
       } catch (e) {
-        if (mounted)
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          );
+        }
       } finally {
-        if (mounted) setState(() => _isProcessing = false);
+        if (mounted) {
+          setState(() => _isProcessing = false);
+        }
       }
     }
   }
@@ -1635,7 +1638,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
               firstDate: DateTime(2020),
               lastDate: DateTime(2030),
             );
-            if (d != null) onType(d);
+            if (d != null) {
+              onType(d);
+            }
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1690,7 +1695,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
               context: context,
               initialTime: value,
             );
-            if (t != null) onType(t);
+            if (t != null) {
+              onType(t);
+            }
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -2057,7 +2064,7 @@ class SelectCategoryScreen extends StatelessWidget {
           border: Border.all(color: const Color(0xFFF1F5F9)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),

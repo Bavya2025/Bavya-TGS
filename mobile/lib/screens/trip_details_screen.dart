@@ -95,20 +95,21 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
       if (!sequenceBroken && s['required'] == true) {
         sequenceBroken = true;
         String desc = 'Pending action.';
-        if (title == 'Journey Started')
+        if (title == 'Journey Started') {
           desc = 'Ready to start. Please record start odometer.';
-        else if (title == 'Journey Ended')
+        } else if (title == 'Journey Ended') {
           desc = 'Journey in progress. Please record end odometer to finish.';
-        else if (title == 'Settlement')
+        } else if (title == 'Settlement') {
           desc = 'Trip completed. Please submit expenses and settlement.';
-        else if (title == 'Ticket Booking')
+        } else if (title == 'Ticket Booking') {
           desc = 'Waiting for ticket details.';
-        else if (title == 'Level 1 Approval')
+        } else if (title == 'Level 1 Approval') {
           desc = 'Awaiting manager approval.';
-        else if (title == 'Level 2 Approval')
+        } else if (title == 'Level 2 Approval') {
           desc = 'Awaiting Senior Manager (L2) approval.';
-        else if (title == 'Level 3 Approval')
+        } else if (title == 'Level 3 Approval') {
           desc = 'Awaiting Director (L3) approval.';
+        }
 
         _lifecycleSteps.add({
           'title': title,
@@ -150,7 +151,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFFA9052E).withOpacity(0.04),
+                    const Color(0xFFA9052E).withValues(alpha: 0.04),
                     Colors.transparent,
                   ],
                 ),
@@ -167,7 +168,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF3B82F6).withOpacity(0.03),
+                    const Color(0xFF3B82F6).withValues(alpha: 0.03),
                     Colors.transparent,
                   ],
                 ),
@@ -229,7 +230,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
         color: const Color(0xFFA9052E),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -248,7 +249,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
               width: 180,
               height: 180,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
             ),
@@ -292,7 +293,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                                 letterSpacing: 1.2,
                               ),
                             ),
@@ -316,10 +317,10 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
+                        color: Colors.white.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.white.withValues(alpha: 0.1),
                         ),
                       ),
                       child: Row(
@@ -397,9 +398,9 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Text(
         status.toUpperCase(),
@@ -421,7 +422,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.04),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -435,7 +436,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFBB0633).withOpacity(0.1),
+                  color: const Color(0xFFBB0633).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
@@ -501,7 +502,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
                   boxShadow: status == 'current'
                       ? [
                           BoxShadow(
-                            color: nodeColor.withOpacity(0.3),
+                            color: nodeColor.withValues(alpha: 0.3),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -597,7 +598,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.01),
+                            color: Colors.black.withValues(alpha: 0.01),
                             blurRadius: 10,
                           ),
                         ],

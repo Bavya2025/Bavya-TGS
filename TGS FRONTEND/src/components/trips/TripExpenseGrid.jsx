@@ -487,23 +487,23 @@ const TripExpenseGrid = ({
                  _originalSetRowError(id, key, msg);
             };
 
-            // Temporary override just for this block
-            const showToast = _scopedShowToast;
-            const setRowError = _scopedSetRowError;
+            // Temporary variables for this block to avoid shadowing that causes TDZ errors
+            const localizedShowToast = _scopedShowToast;
+            const localizedSetRowError = _scopedSetRowError;
 
             // DATE RANGE VALIDATION
             if (minDate && maxDate) {
                 if (row.date < minDate || row.date > maxDate) {
-                    showToast(`Item #${rowNum}: Selected date (${row.date}) is outside trip range. Only trip dates +/- 1 day grace allowed.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Selected date (${row.date}) is outside trip range. Only trip dates +/- 1 day grace allowed.`, "error");
                     return false;
                 }
                 if (row.nature === 'Accommodation') {
                     if (row.details.checkIn && (row.details.checkIn < minDate || row.details.checkIn > maxDate)) {
-                        showToast(`Item #${rowNum}: Check-In date is outside trip range.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Check-In date is outside trip range.`, "error");
                         return false;
                     }
                     if (row.details.checkOut && (row.details.checkOut < minDate || row.details.checkOut > maxDate)) {
-                        showToast(`Item #${rowNum}: Check-Out date is outside trip range.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Check-Out date is outside trip range.`, "error");
                         return false;
                     }
                 }
@@ -511,22 +511,22 @@ const TripExpenseGrid = ({
 
             // AMOUNT
             if (row.amount === '' || row.amount === null || row.amount === undefined || isNaN(parseFloat(row.amount))) {
-                showToast(`Item #${rowNum}: Please enter a valid numeric amount.`, "error");
+                localizedShowToast(`Item #${rowNum}: Please enter a valid numeric amount.`, "error");
                 return false;
             }
             // require bill if any charge present
             if (parseFloat(row.amount) > 0 && (!row.bills || row.bills.length === 0)) {
-                showToast(`Item #${rowNum}: Please upload a bill as amount is entered.`, "error");
+                localizedShowToast(`Item #${rowNum}: Please upload a bill as amount is entered.`, "error");
                 return false;
             }
             const amt = parseFloat(row.amount);
             if (amt < 0) {
-                showToast(`Item #${rowNum}: Amount cannot be negative.`, "error");
+                localizedShowToast(`Item #${rowNum}: Amount cannot be negative.`, "error");
                 return false;
             }
             // two decimal places
             if (!/^\d+(\.\d{1,2})?$/.test(String(row.amount))) {
-                showToast(`Item #${rowNum}: Amount can have at most two decimal places.`, "error");
+                localizedShowToast(`Item #${rowNum}: Amount can have at most two decimal places.`, "error");
                 return false;
             }
             // TODO: compare against company policy limit if available
@@ -538,46 +538,49 @@ const TripExpenseGrid = ({
 
                 // Booking date must always be present
                 if (!row.date) {
-                    showToast(`Item #${rowNum}: Booking Date is required.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Booking Date is required.`, "error");
                     return false;
                 }
 
                 // COMMON MANDATORY FIELDS
                 if (!mode) {
-                    showToast(`Item #${rowNum}: Please select a Travel Mode.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Please select a Travel Mode.`, "error");
                     return false;
                 }
 
                 // origin/destination validations
                 if (!origin || !destination) {
-                    showToast(`Item #${rowNum}: Origin and Destination are required for Travel entries.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Origin and Destination are required for Travel entries.`, "error");
                     return false;
                 }
                 if (origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
-                    showToast(`Item #${rowNum}: Origin and Destination cannot be the same.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Origin and Destination cannot be the same.`, "error");
                     return false;
                 }
                 const locRegex = /^[A-Za-z ]{2,}$/;
                 if (!locRegex.test(origin) || !locRegex.test(destination)) {
-                    showToast(`Item #${rowNum}: From/To must be at least 2 alphabetic characters.`, "error");
+                    localizedShowToast(`Item #${rowNum}: From/To must be at least 2 alphabetic characters.`, "error");
                     return false;
                 }
                 // invoice number validation (alphanumeric, max 30)
                 if (row.details.invoiceNo) {
                     const inv = row.details.invoiceNo;
                     if (!/^[A-Za-z0-9]+$/.test(inv)) {
-                        showToast(`Item #${rowNum}: Invoice Number may only be alphanumeric.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Invoice Number may only be alphanumeric.`, "error");
                         return false;
                     }
                     if (inv.length > 30) {
-                        showToast(`Item #${rowNum}: Invoice Number cannot exceed 30 characters.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Invoice Number cannot exceed 30 characters.`, "error");
                         return false;
                     }
                 }
-                // carrier name allowed letters and spaces
-                if (row.details.carrier && !/^[A-Za-z ]+$/.test(row.details.carrier)) {
-                    showToast(`Item #${rowNum}: Carrier name may only contain letters and spaces.`, "error");
-                    return false;
+                // carrier name (Train Name/Operator/Airline) allowed alphanumeric and spaces
+                if (row.details.carrier) {
+                    const carrierLabel = row.details.mode === 'Train' ? 'Train Name' : row.details.mode === 'Intercity Bus' ? 'Bus Operator' : 'Carrier Name';
+                    if (!/^[A-Za-z0-9\s\.\-]+$/.test(row.details.carrier)) {
+                        localizedShowToast(`Item #${rowNum}: ${carrierLabel} may only contain letters, numbers, spaces, and symbols like - or .`, "error");
+                        return false;
+                    }
                 }
 
                 // universal date order checks
@@ -585,71 +588,71 @@ const TripExpenseGrid = ({
                 const depDateObj = new Date(depDate || row.date);
                 const arrDateObj = new Date(arrDate || row.date);
                 if (depDateObj < bookDateObj) {
-                    setRowError(row.id, 'depDate', 'Departure Date cannot be before Booking Date.');
+                    localizedSetRowError(row.id, 'depDate', 'Departure Date cannot be before Booking Date.');
                     return false;
                 }
                 if (arrDateObj < depDateObj) {
-                    setRowError(row.id, 'arrDate', 'Arrival Date cannot be before Departure Date.');
+                    localizedSetRowError(row.id, 'arrDate', 'Arrival Date cannot be before Departure Date.');
                     return false;
                 }
 
                 // time order check (if both times provided)
                 if (row.timeDetails.boardingTime && row.timeDetails.actualTime) {
                     if (row.timeDetails.boardingTime >= row.timeDetails.actualTime) {
-                        showToast(`Item #${rowNum}: Arrival time must be later than Departure time.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Arrival time must be later than Departure time.`, "error");
                         return false;
                     }
                 }
 
                 if (mode === 'Flight') {
-                    if (!provider) { setRowError(row.id, 'provider', 'Airline Name is mandatory.'); return false; }
-                    if (!ticketNo) { setRowError(row.id, 'ticketNo', 'Ticket Number is mandatory.'); return false; }
-                    if (!pnr) { setRowError(row.id, 'pnr', 'PNR is mandatory.'); return false; }
-                    if (!row.details.classType) { setRowError(row.id, 'classType', 'Class is mandatory for Flight.'); return false; }
-                    if (!travelNo) { setRowError(row.id, 'travelNo', 'Flight Number is mandatory.'); return false; }
-                    if (!row.timeDetails.boardingTime || !row.timeDetails.actualTime) { setRowError(row.id, 'time', 'Departure and Arrival times are mandatory.'); return false; }
+                    if (!provider) { localizedSetRowError(row.id, 'provider', 'Airline Name is mandatory.'); return false; }
+                    if (!ticketNo) { localizedSetRowError(row.id, 'ticketNo', 'Ticket Number is mandatory.'); return false; }
+                    if (!pnr) { localizedSetRowError(row.id, 'pnr', 'PNR is mandatory.'); return false; }
+                    if (!row.details.classType) { localizedSetRowError(row.id, 'classType', 'Class is mandatory for Flight.'); return false; }
+                    if (!travelNo) { localizedSetRowError(row.id, 'travelNo', 'Flight Number is mandatory.'); return false; }
+                    if (!row.timeDetails.boardingTime || !row.timeDetails.actualTime) { localizedSetRowError(row.id, 'time', 'Departure and Arrival times are mandatory.'); return false; }
                     // format/length validations
                     const alnum = /^[A-Za-z0-9]+$/;
-                    if (!alnum.test(ticketNo)) { setRowError(row.id, 'ticketNo', 'Ticket Number may only contain letters and numbers.'); return false; }
-                    if (ticketNo.length > 25) { setRowError(row.id, 'ticketNo', 'Ticket Number cannot exceed 25 characters.'); return false; }
-                    if (!alnum.test(pnr)) { setRowError(row.id, 'pnr', 'PNR may only contain letters and numbers.'); return false; }
-                    if (pnr.length < 5 || pnr.length > 15) { setRowError(row.id, 'pnr', 'PNR must be 5-15 characters long.'); return false; }
+                    if (!alnum.test(ticketNo)) { localizedSetRowError(row.id, 'ticketNo', 'Ticket Number may only contain letters and numbers.'); return false; }
+                    if (ticketNo.length > 25) { localizedSetRowError(row.id, 'ticketNo', 'Ticket Number cannot exceed 25 characters.'); return false; }
+                    if (!alnum.test(pnr)) { localizedSetRowError(row.id, 'pnr', 'PNR may only contain letters and numbers.'); return false; }
+                    if (pnr.length < 5 || pnr.length > 15) { localizedSetRowError(row.id, 'pnr', 'PNR must be 5-15 characters long.'); return false; }
                 } else if (mode === 'Train') {
-                    if (!ticketNo) { setRowError(row.id, 'ticketNo', 'Ticket Number is mandatory for Train.'); return false; }
-                    if (!pnr) { setRowError(row.id, 'pnr', 'PNR is mandatory for Train.'); return false; }
-                    if (!row.details.carrier) { setRowError(row.id, 'carrier', 'Train Name is mandatory.'); return false; }
-                    if (!row.details.classType) { setRowError(row.id, 'classType', 'Class is mandatory for Train.'); return false; }
+                    if (!ticketNo) { localizedSetRowError(row.id, 'ticketNo', 'Ticket Number is mandatory for Train.'); return false; }
+                    if (!pnr) { localizedSetRowError(row.id, 'pnr', 'PNR is mandatory for Train.'); return false; }
+                    if (!row.details.carrier) { localizedSetRowError(row.id, 'carrier', 'Train Name is mandatory.'); return false; }
+                    if (!row.details.classType) { localizedSetRowError(row.id, 'classType', 'Class is mandatory for Train.'); return false; }
                     const alnum = /^[A-Za-z0-9]+$/;
-                    if (!alnum.test(ticketNo)) { setRowError(row.id, 'ticketNo', 'Ticket Number may only contain letters and numbers.'); return false; }
-                    if (ticketNo.length > 25) { setRowError(row.id, 'ticketNo', 'Ticket Number cannot exceed 25 characters.'); return false; }
-                    if (!alnum.test(pnr)) { setRowError(row.id, 'pnr', 'PNR may only contain letters and numbers.'); return false; }
-                    if (pnr.length < 5 || pnr.length > 15) { setRowError(row.id, 'pnr', 'PNR must be 5-15 characters long.'); return false; }
+                    if (!alnum.test(ticketNo)) { localizedSetRowError(row.id, 'ticketNo', 'Ticket Number may only contain letters and numbers.'); return false; }
+                    if (ticketNo.length > 25) { localizedSetRowError(row.id, 'ticketNo', 'Ticket Number cannot exceed 25 characters.'); return false; }
+                    if (!alnum.test(pnr)) { localizedSetRowError(row.id, 'pnr', 'PNR may only contain letters and numbers.'); return false; }
+                    if (pnr.length < 5 || pnr.length > 15) { localizedSetRowError(row.id, 'pnr', 'PNR must be 5-15 characters long.'); return false; }
                 } else if (mode === 'Intercity Bus') {
-                    if (!row.details.carrier) { setRowError(row.id, 'carrier', 'Bus Operator is mandatory.'); return false; }
+                    if (!row.details.carrier) { localizedSetRowError(row.id, 'carrier', 'Bus Operator is mandatory.'); return false; }
                 } else if (mode === 'Intercity Cab') {
-                    if (!provider) { setRowError(row.id, 'provider', 'Provider / Vendor (Ola/Uber etc) is mandatory.'); return false; }
-                    if (!row.timeDetails.boardingTime || !row.timeDetails.actualTime) { setRowError(row.id, 'time', 'Departure and Arrival times are mandatory for Cab.'); return false; }
+                    if (!provider) { localizedSetRowError(row.id, 'provider', 'Provider / Vendor (Ola/Uber etc) is mandatory.'); return false; }
+                    if (!row.timeDetails.boardingTime || !row.timeDetails.actualTime) { localizedSetRowError(row.id, 'time', 'Departure and Arrival times are mandatory for Cab.'); return false; }
                 }
 
                 if (isSelfBooked) {
                     // travel-specific requirement
                     if (row.nature === 'Travel') {
                         if (row.amount === '' || row.amount <= 0) {
-                            showToast(`${row.nature} Item #${rowNum}: Total Amount is mandatory for Self Booked.`, "error");
+                            localizedShowToast(`${row.nature} Item #${rowNum}: Total Amount is mandatory for Self Booked.`, "error");
                             return false;
                         }
                     }
                     // local travel also needs positive amount when self-booked
                     if (row.nature === 'Local Travel') {
                         if (row.amount === '' || row.amount <= 0) {
-                            showToast(`${row.nature} Item #${rowNum}: Total Amount is mandatory for Self Booked.`, "error");
+                            localizedShowToast(`${row.nature} Item #${rowNum}: Total Amount is mandatory for Self Booked.`, "error");
                             return false;
                         }
                     }
                     if (mode === 'Flight' || mode === 'Intercity Bus' || mode === 'Intercity Cab') {
                         // Ticket/Invoice requirements
                         if (!row.bills || row.bills.length < (mode === 'Intercity Cab' ? 1 : 2)) {
-                            showToast(`Item #${rowNum}: Please upload ${mode === 'Intercity Cab' ? 'Invoice' : 'Ticket and Invoice'} for self-booked ${mode.toLowerCase()}.`, "warning");
+                            localizedShowToast(`Item #${rowNum}: Please upload ${mode === 'Intercity Cab' ? 'Invoice' : 'Ticket and Invoice'} for self-booked ${mode.toLowerCase()}.`, "warning");
                         }
                     }
                 }
@@ -658,7 +661,7 @@ const TripExpenseGrid = ({
                     const travelInvoiceNumbers = getTravelInvoiceNumbers(row);
                     const missingInvoice = travelInvoiceNumbers.some(invoice => !invoice || !invoice.trim());
                     if (missingInvoice) {
-                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded file.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Invoice number is required for each uploaded file.`, "error");
                         return false;
                     }
                 }
@@ -669,11 +672,11 @@ const TripExpenseGrid = ({
                     const refund = parseFloat(row.details.refundAmount || 0);
                     const baseFare = parseFloat(row.details.baseFare || 0);
                     if (baseFare > 0 && (charges + refund > baseFare + 0.5)) {
-                        showToast(`Item #${rowNum}: Sum of Charges and Refund exceeds original Ticket Amount.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Sum of Charges and Refund exceeds original Ticket Amount.`, "error");
                         return false;
                     }
                     if (!row.details.cancellationReason || row.details.cancellationReason.trim().length < 3) {
-                        showToast(`Item #${rowNum}: Please provide a valid cancellation reason.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Please provide a valid cancellation reason.`, "error");
                         return false;
                     }
                 }
@@ -681,7 +684,7 @@ const TripExpenseGrid = ({
                 // Upload Validation
                 if (isSelfBooked || mode !== 'Flight') {
                     if (!row.bills || row.bills.length === 0) {
-                        showToast(`Item #${rowNum}: Please upload your ticket/invoice. This is mandatory for all travel.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Please upload your ticket/invoice. This is mandatory for all travel.`, "error");
                         return false;
                     }
                 }
@@ -700,7 +703,7 @@ const TripExpenseGrid = ({
                             const dep = new Date(other.details.depDate + 'T' + (other.timeDetails.boardingTime || '00:00'));
                             const arr = new Date(other.details.arrDate + 'T' + (other.timeDetails.actualTime || '23:59'));
                             if (localStart >= dep && localStart <= arr) {
-                                showToast(`Item #${rowNum}: Cannot record local conveyance during active long-distance travel period.`, "error");
+                                localizedShowToast(`Item #${rowNum}: Cannot record local conveyance during active long-distance travel period.`, "error");
                                 return false;
                             }
                         }
@@ -708,80 +711,80 @@ const TripExpenseGrid = ({
                 }
 
                 if (!mode) {
-                    showToast(`Item #${rowNum}: Please select a Mode for Local Travel.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Please select a Mode for Local Travel.`, "error");
                     return false;
                 }
 
                 if (mode !== 'Walk' && !subType) {
-                    showToast(`Item #${rowNum}: Please select a Sub-Type for ${mode}.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Please select a Sub-Type for ${mode}.`, "error");
                     return false;
                 }
 
                 // date range validation for local travel
                 if (row.date && row.endDate) {
                     if (new Date(row.date) > new Date(row.endDate)) {
-                        showToast(`Item #${rowNum}: End Date should be after Start Date.`, "error");
+                        localizedShowToast(`Item #${rowNum}: End Date should be after Start Date.`, "error");
                         return false;
                     }
                     // optionally block future dates if needed
                     const today = new Date();
                     if (new Date(row.date) > today || new Date(row.endDate) > today) {
-                        showToast(`Item #${rowNum}: Travel dates cannot be in the future.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Travel dates cannot be in the future.`, "error");
                         return false;
                     }
                 }
 
                 // location cross-check
                 if (origin && destination && origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
-                    showToast(`Item #${rowNum}: From and To locations cannot be the same.`, "error");
+                    localizedShowToast(`Item #${rowNum}: From and To locations cannot be the same.`, "error");
                     return false;
                 }
                 // time validations for local travel
                 if ((row.timeDetails.boardingTime && !row.timeDetails.actualTime) || (!row.timeDetails.boardingTime && row.timeDetails.actualTime)) {
-                    showToast(`Item #${rowNum}: Both start and end times are required for Local Travel.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Both start and end times are required for Local Travel.`, "error");
                     return false;
                 }
                 if (row.timeDetails.boardingTime && row.timeDetails.actualTime) {
                     if (row.timeDetails.boardingTime >= row.timeDetails.actualTime) {
-                        showToast(`Item #${rowNum}: End Time must be greater than Start Time.`, "error");
+                        localizedShowToast(`Item #${rowNum}: End Time must be greater than Start Time.`, "error");
                         return false;
                     }
                 }
 
                 if (mode === 'Walk') {
                     if (parseFloat(row.amount) > 0) {
-                        showToast(`Item #${rowNum}: Walk mode cannot have an associated cost.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Walk mode cannot have an associated cost.`, "error");
                         return false;
                     }
                     if (!origin || !destination) {
-                        showToast(`Item #${rowNum}: From and To locations are required for Walk entries.`, "error");
+                        localizedShowToast(`Item #${rowNum}: From and To locations are required for Walk entries.`, "error");
                         return false;
                     }
                 }
 
                 if (subType === 'Own Car') {
                     if (!odoStart || !odoEnd) {
-                        showToast(`Item #${rowNum}: Both start and end odometer readings are required for Own Car.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Both start and end odometer readings are required for Own Car.`, "error");
                         return false;
                     }
                     if (isNaN(parseFloat(odoStart)) || isNaN(parseFloat(odoEnd))) {
-                        showToast(`Item #${rowNum}: Odometer readings must be numeric.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Odometer readings must be numeric.`, "error");
                         return false;
                     }
                     if (parseFloat(odoEnd) <= parseFloat(odoStart)) {
-                        showToast(`Item #${rowNum}: End Odometer should be greater than Start Odometer.`, "error");
+                        localizedShowToast(`Item #${rowNum}: End Odometer should be greater than Start Odometer.`, "error");
                         return false;
                     }
                     // require photos for both start and end readings
                     if (!row.details.odoStartImg || !row.details.odoEndImg) {
-                        showToast(`Item #${rowNum}: Please capture both start and end odometer photos.`, "error");
-                        if (!row.details.odoStartImg) setRowError(row.id, 'odoStartImg', 'Start odometer photo required.');
-                        if (!row.details.odoEndImg) setRowError(row.id, 'odoEndImg', 'End odometer photo required.');
+                        localizedShowToast(`Item #${rowNum}: Please capture both start and end odometer photos.`, "error");
+                        if (!row.details.odoStartImg) localizedSetRowError(row.id, 'odoStartImg', 'Start odometer photo required.');
+                        if (!row.details.odoEndImg) localizedSetRowError(row.id, 'odoEndImg', 'End odometer photo required.');
                         return false;
                     }
                 } else if (['Self Drive Rental', 'Own Bike'].includes(subType)) {
                     if (odoStart && odoEnd && parseFloat(odoEnd) <= parseFloat(odoStart)) {
-                        showToast(`Item #${rowNum}: ODO End must be greater than ODO Start.`, "error");
+                        localizedShowToast(`Item #${rowNum}: ODO End must be greater than ODO Start.`, "error");
                         return false;
                     }
                 }
@@ -790,7 +793,7 @@ const TripExpenseGrid = ({
                     const localInvoiceNumbers = getLocalInvoiceNumbers(row);
                     const missingInvoice = localInvoiceNumbers.some(invoice => !invoice || !invoice.trim());
                     if (missingInvoice) {
-                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
                         return false;
                     }
                 }
@@ -799,26 +802,26 @@ const TripExpenseGrid = ({
             if (row.nature === 'Food') {
                 const mealSource = normalizeMealSource(row.details.mealSource);
                 const isSelfMeal = row.details.mealCategory === 'Self Meal';
-                if (!row.date) { showToast(`Item #${rowNum}: Date is required.`, "error"); return false; }
-                if (!row.details.mealType) { showToast(`Item #${rowNum}: Please select Meal Type.`, "error"); return false; }
-                if (!row.details.mealTime) { showToast(`Item #${rowNum}: Meal Time is required.`, "error"); return false; }
-                if (!row.details.mealCategory) { showToast(`Item #${rowNum}: Please select Meal Category.`, "error"); return false; }
+                if (!row.date) { localizedShowToast(`Item #${rowNum}: Date is required.`, "error"); return false; }
+                if (!row.details.mealType) { localizedShowToast(`Item #${rowNum}: Please select Meal Type.`, "error"); return false; }
+                if (!row.details.mealTime) { localizedShowToast(`Item #${rowNum}: Meal Time is required.`, "error"); return false; }
+                if (!row.details.mealCategory) { localizedShowToast(`Item #${rowNum}: Please select Meal Category.`, "error"); return false; }
                 if (isSelfMeal) {
-                    if (!row.details.mealSource) { showToast(`Item #${rowNum}: Please select Meal Source.`, "error"); return false; }
-                    if (mealSource === 'online' && (!row.details.provider || !row.details.provider.trim())) { showToast(`Item #${rowNum}: Provider is required for Online meal source.`, "error"); return false; }
-                    if (mealSource === 'hotel' && !row.details.hotelName?.trim()) { showToast(`Item #${rowNum}: Hotel Name is required.`, "error"); return false; }
-                    if (mealSource === 'restaurant' && !row.details.restaurant?.trim()) { showToast(`Item #${rowNum}: Restaurant Name is required.`, "error"); return false; }
-                    if (mealSource === 'online' && !row.details.hotelName?.trim()) { showToast(`Item #${rowNum}: Hotel/Outlet Name is required for Online meal source.`, "error"); return false; }
-                    if (!row.amount || parseFloat(row.amount) <= 0) { showToast(`Item #${rowNum}: Amount must be greater than 0 for Self Meal.`, "error"); return false; }
+                    if (!row.details.mealSource) { localizedShowToast(`Item #${rowNum}: Please select Meal Source.`, "error"); return false; }
+                    if (mealSource === 'online' && (!row.details.provider || !row.details.provider.trim())) { localizedShowToast(`Item #${rowNum}: Provider is required for Online meal source.`, "error"); return false; }
+                    if (mealSource === 'hotel' && !row.details.hotelName?.trim()) { localizedShowToast(`Item #${rowNum}: Hotel Name is required.`, "error"); return false; }
+                    if (mealSource === 'restaurant' && !row.details.restaurant?.trim()) { localizedShowToast(`Item #${rowNum}: Restaurant Name is required.`, "error"); return false; }
+                    if (mealSource === 'online' && !row.details.hotelName?.trim()) { localizedShowToast(`Item #${rowNum}: Hotel/Outlet Name is required for Online meal source.`, "error"); return false; }
+                    if (!row.amount || parseFloat(row.amount) <= 0) { localizedShowToast(`Item #${rowNum}: Amount must be greater than 0 for Self Meal.`, "error"); return false; }
                 } else if (parseFloat(row.amount || 0) !== 0) {
-                    showToast(`Item #${rowNum}: Amount must be 0 for Client Hosted and Working Meal.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Amount must be 0 for Client Hosted and Working Meal.`, "error");
                     return false;
                 }
                 if ((row.bills || []).length > 0) {
                     const foodInvoiceNumbers = getFoodInvoiceNumbers(row);
                     const missingInvoice = foodInvoiceNumbers.some(invoice => !invoice || !invoice.trim());
                     if (missingInvoice) {
-                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
                         return false;
                     }
                 }
@@ -835,42 +838,42 @@ const TripExpenseGrid = ({
                 const actualCheckOutTime = row.details.actualCheckOutTime || row.details.checkOutTime;
 
                 if (!scheduledCheckInDate || !scheduledCheckInTime || !scheduledCheckOutDate || !scheduledCheckOutTime) {
-                    showToast(`Item #${rowNum}: Scheduled check-in and check-out date/time are required.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Scheduled check-in and check-out date/time are required.`, "error");
                     return false;
                 }
                 if (!actualCheckInDate || !actualCheckInTime || !actualCheckOutDate || !actualCheckOutTime) {
-                    showToast(`Item #${rowNum}: Actual check-in and check-out date/time are required.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Actual check-in and check-out date/time are required.`, "error");
                     return false;
                 }
                 if (!row.details.bookingType) {
-                    showToast(`Item #${rowNum}: Please select a Booking Type.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Please select a Booking Type.`, "error");
                     return false;
                 }
                 if (!row.details.bookingSource) {
-                    showToast(`Item #${rowNum}: Please select a Booking Source.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Please select a Booking Source.`, "error");
                     return false;
                 }
                 if (!row.details.accomType) {
-                    showToast(`Item #${rowNum}: Please select a Stay Type.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Please select a Stay Type.`, "error");
                     return false;
                 }
                 if (!['No Stay', 'Self Stay'].includes(row.details.accomType) && !row.details.hotelName) {
-                    showToast(`Item #${rowNum}: Please provide the Hotel/Guest House name.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Please provide the Hotel/Guest House name.`, "error");
                     return false;
                 }
                 if (actualCheckInDate && actualCheckOutDate && new Date(actualCheckInDate) > new Date(actualCheckOutDate)) {
-                    showToast(`Item #${rowNum}: Actual check-out date cannot be before actual check-in date.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Actual check-out date cannot be before actual check-in date.`, "error");
                     return false;
                 }
                 if (!row.amount || parseFloat(row.amount) <= 0) {
-                    showToast(`Item #${rowNum}: Amount must be greater than 0.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Amount must be greater than 0.`, "error");
                     return false;
                 }
                 if ((row.bills || []).length > 0) {
                     const accommodationInvoiceNumbers = getAccommodationInvoiceNumbers(row);
                     const missingInvoice = accommodationInvoiceNumbers.some(invoice => !invoice || !invoice.trim());
                     if (missingInvoice) {
-                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
                         return false;
                     }
                 }
@@ -878,39 +881,39 @@ const TripExpenseGrid = ({
 
             if (row.nature === 'Incidental') {
                 if (!row.date) {
-                    showToast(`Item #${rowNum}: Date is mandatory for incidental expenses.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Date is mandatory for incidental expenses.`, "error");
                     return false;
                 }
                 if (!row.details.incidentalTime) {
-                    showToast(`Item #${rowNum}: Time is mandatory for incidental expenses.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Time is mandatory for incidental expenses.`, "error");
                     return false;
                 }
                 if (!row.details.incidentalType) {
-                    showToast(`Item #${rowNum}: Please select an Incidental Type.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Please select an Incidental Type.`, "error");
                     return false;
                 }
                 if (!row.details.location || row.details.location.trim().length < 3) {
-                    showToast(`Item #${rowNum}: Location must be at least 3 characters.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Location must be at least 3 characters.`, "error");
                     return false;
                 }
                 if (!/^\d+(\.\d{1,2})?$/.test(String(row.amount || '').trim())) {
-                    showToast(`Item #${rowNum}: Amount must be a valid number with up to 2 decimal places.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Amount must be a valid number with up to 2 decimal places.`, "error");
                     return false;
                 }
                 if (parseFloat(row.amount) <= 0) {
-                    showToast(`Item #${rowNum}: Amount must be greater than 0.`, "error");
+                    localizedShowToast(`Item #${rowNum}: Amount must be greater than 0.`, "error");
                     return false;
                 }
                 if (isIncidentalOthersType(row.details.incidentalType)) {
-                    if (countWords(row.details.otherReason) < 5) { showToast(`Item #${rowNum}: Reason must be at least 5 words.`, "error"); return false; }
-                    if (!row.details.notes || !row.details.notes.trim()) { showToast(`Item #${rowNum}: Remarks are required for 'Others'.`, "error"); return false; }
-                    if (countWords(row.details.notes) > 50) { showToast(`Item #${rowNum}: Remarks can have up to 50 words.`, "error"); return false; }
+                    if (countWords(row.details.otherReason) < 5) { localizedShowToast(`Item #${rowNum}: Reason must be at least 5 words.`, "error"); return false; }
+                    if (!row.details.notes || !row.details.notes.trim()) { localizedShowToast(`Item #${rowNum}: Remarks are required for 'Others'.`, "error"); return false; }
+                    if (countWords(row.details.notes) > 50) { localizedShowToast(`Item #${rowNum}: Remarks can have up to 50 words.`, "error"); return false; }
                 }
                 if ((row.bills || []).length > 0) {
                     const invoiceNumbers = getIncidentalInvoiceNumbers(row);
                     const missingInvoice = invoiceNumbers.some(invoice => !invoice || !invoice.trim());
                     if (missingInvoice) {
-                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
                         return false;
                     }
                 }
@@ -940,14 +943,16 @@ const TripExpenseGrid = ({
 
         setIsSaving(true);
         try {
-            const newRows = targetRows.filter(r => !r.isSaved);
+            // We need to keep track of updated rows to update state at the end
+            let updatedRows = [...rows];
+            const targetIdsToProcess = new Set(targetRows.map(r => r.id));
+            
+            // Loop through only the rows that need saving (or all if saveAll is true)
+            // But we process them one by one to handle potential errors and ID updates
+            for (let i = 0; i < updatedRows.length; i++) {
+                const row = updatedRows[i];
+                if (!targetIdsToProcess.has(row.id) || row.isSaved) continue;
 
-            if (newRows.length === 0) {
-                setIsSaving(false);
-                return true;
-            }
-
-            for (const row of newRows) {
                 const categoryMap = {
                     'Travel': 'Others',
                     'Local Travel': 'Fuel',
@@ -959,7 +964,6 @@ const TripExpenseGrid = ({
                 const filteredDetails = { ...row.details };
                 if (row.nature === 'Local Travel') {
                     const { mode, subType } = row.details;
-                    // Remove fields not applicable for current mode/subtype
                     if (mode === 'Walk') {
                         delete filteredDetails.toll;
                         delete filteredDetails.parking;
@@ -1031,7 +1035,6 @@ const TripExpenseGrid = ({
                     date: row.date,
                     category: categoryMap[row.nature] || 'Others',
                     amount: parseFloat(row.amount || 0),
-                    // New Database Fields
                     travel_mode: row.nature === 'Travel' ? row.details.mode : (row.nature === 'Local Travel' ? row.details.mode : null),
                     class_type: row.nature === 'Travel' ? row.details.classType : null,
                     booking_reference: row.nature === 'Travel' ? (row.details.pnr || row.details.bookingRef) : null,
@@ -1047,7 +1050,6 @@ const TripExpenseGrid = ({
                     cancellation_reason: row.nature === 'Travel' ? row.details.cancellationReason : null,
                     booked_by: row.nature === 'Travel' ? row.details.bookedBy : null,
                     reimbursement_eligible: row.nature === 'Travel' ? (row.details.bookedBy === 'Self Booked') : true,
-                    // description and image always part of payload
                     description: JSON.stringify({
                         ...filteredDetails,
                         remarks: row.remarks ? row.remarks.trim() : '',
@@ -1057,7 +1059,6 @@ const TripExpenseGrid = ({
                     receipt_image: JSON.stringify(row.bills || []),
                 };
 
-                // enforce fixed values for local rows when trip id not starting with TRP
                 if (isFixedLocal && row.nature === 'Local Travel') {
                     payload.travel_mode = 'Bike';
                     payload.vehicle_type = 'Own Bike';
@@ -1065,17 +1066,19 @@ const TripExpenseGrid = ({
                     payload.reimbursement_eligible = true;
                 }
 
+                let savedRowData = { ...row, isSaved: true };
+
                 if (!isNaN(Number(row.id))) {
                     await api.patch(`/api/expenses/${row.id}/`, payload);
                 } else {
                     const res = await api.post('/api/expenses/', payload);
                     if (res.data && res.data.id) {
-                        row.id = res.data.id; // Update the ID to the real database ID
+                        savedRowData.id = res.data.id;
                     }
                 }
 
-                // If incidental expense added, create a separate record to ensure accurate accounting
-                if (row.nature === 'Local Travel' && row.details.incidentalAmount && parseFloat(row.details.incidentalAmount) > 0 && !row.isSaved) {
+                // If incidental expense added, create a separate record
+                if (row.nature === 'Local Travel' && row.details.incidentalAmount && parseFloat(row.details.incidentalAmount) > 0) {
                     try {
                         await api.post('/api/expenses/', {
                             trip: tripId,
@@ -1088,20 +1091,23 @@ const TripExpenseGrid = ({
                             }),
                             receipt_image: row.details.incidentalBill ? JSON.stringify([row.details.incidentalBill]) : '[]',
                         });
-                        row.details.incidentalAmount = ''; // Clear it so it won't duplicate if saved again
-                        row.details.incidentalBill = '';
-                        row.details.incidentalCategory = '';
+                        savedRowData.details = {
+                            ...savedRowData.details,
+                            incidentalAmount: '',
+                            incidentalBill: '',
+                            incidentalCategory: ''
+                        };
                     } catch (e) {
                         console.error("Failed to save incidental cost:", e);
                     }
                 }
+
+                updatedRows[i] = savedRowData;
             }
 
+            setRows(updatedRows);
             showToast("Registry committed successfully!", "success");
             if (onUpdate) onUpdate();
-
-            const targetIds = new Set(targetRows.map(r => r.id));
-            setRows(rows.map(r => targetIds.has(r.id) ? { ...r, isSaved: true } : r));
             return true;
 
         } catch (error) {
@@ -1110,8 +1116,7 @@ const TripExpenseGrid = ({
             showToast(errorMsg, "error");
             return false;
         } finally {
-            setIsSaving(true);
-            setTimeout(() => setIsSaving(false), 500);
+            setIsSaving(false);
         }
     };
 
@@ -1613,6 +1618,8 @@ const TripExpenseGrid = ({
         setRows(prevRows => prevRows.map(row => {
             if (row.id === id) {
                 const newTimeDetails = { ...row.timeDetails, [timeField]: value };
+
+                // Auto-calc delay: scheduledTime vs actualTime
                 if (timeField === 'scheduledTime' || timeField === 'actualTime') {
                     const scheduled = newTimeDetails.scheduledTime;
                     const actual = newTimeDetails.actualTime;
@@ -1620,24 +1627,41 @@ const TripExpenseGrid = ({
                         try {
                             const [sH, sM] = scheduled.split(':').map(Number);
                             const [aH, aM] = actual.split(':').map(Number);
-                            const sDate = new Date();
-                            sDate.setHours(sH, sM, 0);
-                            const aDate = new Date();
-                            aDate.setHours(aH, aM, 0);
-
-                            // Handle next day arrival if actual < scheduled
+                            const sDate = new Date(); sDate.setHours(sH, sM, 0);
+                            const aDate = new Date(); aDate.setHours(aH, aM, 0);
                             if (aDate < sDate) aDate.setDate(aDate.getDate() + 1);
-
                             const diffMin = Math.round((aDate - sDate) / (1000 * 60));
                             if (diffMin >= 0) newTimeDetails.delay = diffMin;
                         } catch (e) { }
                     }
                 }
+
+                // Auto-calc journey duration: depDate+boardingTime → arrDate+actualTime
+                const depDate = (timeField === 'depDate' ? value : row.details?.depDate) || row.date;
+                const arrDate = (timeField === 'arrDate' ? value : row.details?.arrDate) || depDate;
+                const boarding = timeField === 'boardingTime' ? value : newTimeDetails.boardingTime;
+                const arrival  = timeField === 'actualTime'   ? value : newTimeDetails.actualTime;
+                if (depDate && arrDate && boarding && arrival) {
+                    try {
+                        const dep = new Date(`${depDate}T${boarding}:00`);
+                        const arr = new Date(`${arrDate}T${arrival}:00`);
+                        if (!isNaN(dep) && !isNaN(arr) && arr >= dep) {
+                            const totalMin = Math.round((arr - dep) / 60000);
+                            const hh = Math.floor(totalMin / 60);
+                            const mm = totalMin % 60;
+                            newTimeDetails.journeyDuration = hh > 0 ? `${hh}h ${mm}m` : `${mm}m`;
+                        } else {
+                            newTimeDetails.journeyDuration = '';
+                        }
+                    } catch (e) { newTimeDetails.journeyDuration = ''; }
+                }
+
                 return { ...row, timeDetails: newTimeDetails, isSaved: false };
             }
             return row;
         }));
     };
+
 
     const handleOdoCapture = (id, field) => {
         activeRowRef.current = id;
@@ -1926,22 +1950,24 @@ const TripExpenseGrid = ({
 
         return (
             <tr key={row.id} className="category-row-block incidental-card-row">
-                <td>
-                    <div className="incidental-entry-shell">
+                <td colSpan={20} className="incidental-td-stretch">
+                    <div className="incidental-entry-shell incidental-entry-shell-full">
                         <div className="incidental-entry-header">
                             <div className="incidental-entry-title">
-                                <Receipt size={16} />
+                                <Receipt size={18} />
                                 <div>
-                                    <strong>Incidental Expense Entry</strong>
-                                    <span>Card-based entry for cleaner expense capture</span>
+                                    <strong>Incidental Expense Detail</strong>
+                                    <span>Manual entry for miscellaneous trip costs</span>
                                 </div>
                             </div>
                             {!isLocked && (
-                                <button className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
-                                    <Trash2 size={14} />
+                                <button type="button" className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
+                                    <Trash2 size={15} />
+                                    <span>Delete Entry</span>
                                 </button>
                             )}
                         </div>
+
 
                         <div className="trip-incidental-card-grid incidental-card-grid">
                             <div className="incidental-form-card">
@@ -2045,14 +2071,14 @@ const TripExpenseGrid = ({
                                 <div className="incidental-card-body">
                                     <div className="incidental-upload-top">
                                         {!isLocked && (
-                                            <label className="incidental-upload-btn" htmlFor={`f-${row.id}`}>
+                                            <label className="incidental-upload-btn" htmlFor={`incidental-f-${row.id}`}>
                                                 <Upload size={14} />
                                                 <span>Upload Bills</span>
                                             </label>
                                         )}
                                         <input
                                             type="file"
-                                            id={`f-${row.id}`}
+                                            id={`incidental-f-${row.id}`}
                                             hidden
                                             multiple
                                             accept="image/*,.pdf"
@@ -2127,26 +2153,27 @@ const TripExpenseGrid = ({
 
         return (
             <tr key={row.id} className="category-row-block incidental-card-row">
-                <td>
-                    <div className="incidental-entry-shell travel-entry-shell">
+                <td colSpan={20} className="incidental-td-stretch">
+                    <div className="incidental-entry-shell travel-entry-shell incidental-entry-shell-full">
                         <div className="incidental-entry-header">
                             <div className="incidental-entry-title">
-                                <Plane size={16} />
+                                <Plane size={18} />
                                 <div>
                                     <strong>Long Distance Travel Entry</strong>
                                     <span>Card-based travel entry for cleaner journey capture</span>
                                 </div>
                             </div>
                             {!isLocked && (
-                                <button className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
-                                    <Trash2 size={14} />
+                                <button type="button" className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
+                                    <Trash2 size={15} />
+                                    <span>Delete Entry</span>
                                 </button>
                             )}
                         </div>
 
                         <div className="trip-travel-card-grid travel-card-grid">
                             {/* 1. Mode & Booking */}
-                            <div className="incidental-form-card">
+                            <div className="incidental-form-card" style={{ gridRow: '1', gridColumn: '1' }}>
                                 <div className="incidental-card-head">
                                     <Receipt size={14} />
                                     <span>Mode &amp; Booking</span>
@@ -2177,7 +2204,7 @@ const TripExpenseGrid = ({
                                 </div>
                             </div>
                             {/* 2. Booking Details */}
-                            <div className="incidental-form-card">
+                            <div className="incidental-form-card" style={{ gridRow: '1', gridColumn: '2' }}>
                                 <div className="incidental-card-head">
                                     <Calendar size={14} />
                                     <span>Booking Details</span>
@@ -2198,7 +2225,7 @@ const TripExpenseGrid = ({
                                 </div>
                             </div>
                             {/* 3. Route Details */}
-                            <div className="incidental-form-card">
+                            <div className="incidental-form-card" style={{ gridRow: '1', gridColumn: '3' }}>
                                 <div className="incidental-card-head">
                                     <MapPin size={14} />
                                     <span>Route Details</span>
@@ -2221,7 +2248,7 @@ const TripExpenseGrid = ({
                                 </div>
                             </div>
                             {/* 4. Travel Details (Dynamic) */}
-                            <div className="incidental-form-card">
+                            <div className="incidental-form-card" style={{ gridRow: '1', gridColumn: '4' }}>
                                 <div className="incidental-card-head">
                                     <Plane size={14} />
                                     <span>Travel Details</span>
@@ -2329,7 +2356,7 @@ const TripExpenseGrid = ({
                                 </div>
                             </div>
                             {/* 5. Schedule Details */}
-                            <div className="incidental-form-card travel-schedule-card">
+                            <div className="incidental-form-card travel-schedule-card" style={{ gridRow: '2', gridColumn: '1' }}>
                                 <div className="incidental-card-head">
                                     <Clock size={14} />
                                     <span>Schedule Details</span>
@@ -2361,12 +2388,39 @@ const TripExpenseGrid = ({
                                     </div>
                                     <div className="input-with-label-mini" style={{ gridColumn: 'span 2' }}>
                                         <label>Journey Duration</label>
-                                        <input type="text" readOnly className="cat-input" value={row.timeDetails?.boardingTime && row.timeDetails?.actualTime ? "Calculated on View" : "N/A"} disabled />
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            className="cat-input"
+                                            value={row.timeDetails?.journeyDuration ||
+                                                (() => {
+                                                    const dep = row.details?.depDate || row.date;
+                                                    const arr = row.details?.arrDate || dep;
+                                                    const b   = row.timeDetails?.boardingTime;
+                                                    const a   = row.timeDetails?.actualTime;
+                                                    if (dep && arr && b && a) {
+                                                        try {
+                                                            const d1 = new Date(`${dep}T${b}:00`);
+                                                            const d2 = new Date(`${arr}T${a}:00`);
+                                                            if (!isNaN(d1) && !isNaN(d2) && d2 >= d1) {
+                                                                const tot = Math.round((d2 - d1) / 60000);
+                                                                const hh = Math.floor(tot / 60);
+                                                                const mm = tot % 60;
+                                                                return hh > 0 ? `${hh}h ${mm}m` : `${mm}m`;
+                                                            }
+                                                        } catch (_) {}
+                                                    }
+                                                    return 'Fill Departure & Arrival';
+                                                })()
+                                            }
+                                            disabled
+                                            style={{ color: row.timeDetails?.journeyDuration ? '#1e293b' : '#94a3b8', fontWeight: row.timeDetails?.journeyDuration ? 700 : 400 }}
+                                        />
                                     </div>
                                 </div>
                             </div>
                             {/* 6. Ticket Details */}
-                            <div className="incidental-form-card">
+                            <div className="incidental-form-card" style={{ gridRow: '2', gridColumn: '2' }}>
                                 <div className="incidental-card-head">
                                     <Receipt size={14} />
                                     <span>Ticket Details</span>
@@ -2390,7 +2444,7 @@ const TripExpenseGrid = ({
                                 </div>
                             </div>
                             {/* 7. Expense */}
-                            <div className="incidental-form-card incidental-amount-card">
+                            <div className="incidental-form-card incidental-amount-card" style={{ gridRow: '2', gridColumn: '3' }}>
                                 <div className="incidental-card-head">
                                     <IndianRupee size={14} />
                                     <span>Expense</span>
@@ -2488,19 +2542,20 @@ const TripExpenseGrid = ({
 
         return (
             <tr key={row.id} className="category-row-block incidental-card-row">
-                <td>
-                    <div className="incidental-entry-shell local-entry-shell">
+                <td colSpan={20} className="incidental-td-stretch">
+                    <div className="incidental-entry-shell local-entry-shell incidental-entry-shell-full">
                         <div className="incidental-entry-header">
                             <div className="incidental-entry-title">
-                                <Car size={16} />
+                                <Car size={18} />
                                 <div>
                                     <strong>Local Conveyance Entry</strong>
                                     <span>Card-based local travel entry with grouped tracking and billing</span>
                                 </div>
                             </div>
                             {!isLocked && (
-                                <button className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
-                                    <Trash2 size={14} />
+                                <button type="button" className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
+                                    <Trash2 size={15} />
+                                    <span>Delete Entry</span>
                                 </button>
                             )}
                         </div>
@@ -2689,8 +2744,8 @@ const TripExpenseGrid = ({
                                 </div>
                             </div>
 
-                            {/* 6. Upload */}
-                            <div className="incidental-form-card incidental-upload-card">
+                            {/* 8. Upload */}
+                            <div className="incidental-form-card incidental-upload-card" style={{ gridRow: '2', gridColumn: '4' }}>
                                 <div className="incidental-card-head">
                                     <Upload size={14} />
                                     <span>Upload</span>
@@ -2768,19 +2823,20 @@ const TripExpenseGrid = ({
 
         return (
             <tr key={row.id} className="category-row-block incidental-card-row">
-                <td>
-                    <div className="incidental-entry-shell food-entry-shell">
+                <td colSpan={20} className="incidental-td-stretch">
+                    <div className="incidental-entry-shell food-entry-shell incidental-entry-shell-full">
                         <div className="incidental-entry-header">
                             <div className="incidental-entry-title">
-                                <Coffee size={16} />
+                                <Coffee size={18} />
                                 <div>
                                     <strong>Food & Refreshment Entry</strong>
                                     <span>Card-based meal entry for cleaner capture</span>
                                 </div>
                             </div>
                             {!isLocked && (
-                                <button className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
-                                    <Trash2 size={14} />
+                                <button type="button" className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
+                                    <Trash2 size={15} />
+                                    <span>Delete Entry</span>
                                 </button>
                             )}
                         </div>
@@ -2982,19 +3038,20 @@ const TripExpenseGrid = ({
 
         return (
             <tr key={row.id} className="category-row-block incidental-card-row">
-                <td>
-                    <div className="incidental-entry-shell accommodation-entry-shell">
+                <td colSpan={20} className="incidental-td-stretch">
+                    <div className="incidental-entry-shell accommodation-entry-shell incidental-entry-shell-full">
                         <div className="incidental-entry-header">
                             <div className="incidental-entry-title">
-                                <Hotel size={16} />
+                                <Hotel size={18} />
                                 <div>
                                     <strong>Stay & Lodging Entry</strong>
                                     <span>Card-based stay entry with grouped scheduling and billing</span>
                                 </div>
                             </div>
                             {!isLocked && (
-                                <button className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
-                                    <Trash2 size={14} />
+                                <button type="button" className="row-del-btn" onClick={() => deleteRow(row.id)} title="Delete row">
+                                    <Trash2 size={15} />
+                                    <span>Delete Entry</span>
                                 </button>
                             )}
                         </div>
@@ -3323,8 +3380,8 @@ const TripExpenseGrid = ({
                     )}
                 </div>
 
-                <div className="category-table-wrapper">
-                    <table className="category-table">
+                <div className="category-table-wrapper" style={{ margin: '0 -24px' }}>
+                    <table className="category-table" style={{ width: 'calc(100% + 48px)' }}>
                         <thead>
                             {nature === 'Travel' && null}
                             {nature === 'Local Travel' && null}
@@ -3640,12 +3697,10 @@ const TripExpenseGrid = ({
                                                                                 <input type="number" placeholder="Cost" style={{ border: 'none', background: 'transparent', width: '90px', padding: '0 10px', fontSize: '0.85rem', outline: 'none', height: '100%' }} value={row.details.incidentalAmount || ''} onChange={e => updateDetails(row.id, 'incidentalAmount', e.target.value)} disabled={isLocked} />
                                                                             </div>
                                                                             {!isLocked && (
-                                                                                <>
-                                                                                    <button type="button" className="upload-bill-btn" onClick={() => document.getElementById(`f-${row.id}`).click()}>
-                                                                                        <Upload size={13} /> Upload Bill
-                                                                                    </button>
-                                                                                    <input type="file" id={`f-${row.id}`} hidden onChange={e => { handleFileUpload(row.id, e.target.files); e.target.value = ''; }} accept="image/*,.pdf" />
-                                                                                </>
+                                                                                <button className="add-bill-btn-mini" onClick={() => document.getElementById(`table-f-${row.id}`).click()} title="Add Bill">
+                                                                                    <Plus size={14} />
+                                                                                    <input type="file" id={`table-f-${row.id}`} hidden onChange={e => { handleFileUpload(row.id, e.target.files); e.target.value = ''; }} accept="image/*,.pdf" />
+                                                                                </button>
                                                                             )}
                                                                             {(row.bills || []).length > 0 && (
                                                                                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -4319,9 +4374,9 @@ const TripExpenseGrid = ({
                                                             ))}
                                                             <div className="upload-controls-mini">
                                                                 {!isLocked && !(row.nature === 'Food' && row.details.mealCategory && row.details.mealCategory !== 'Self Meal') && (
-                                                                    <button className="add-bill-btn-mini" onClick={() => document.getElementById(`f-${row.id}`).click()} title="Add Bill">
+                                                                    <button className="add-bill-btn-mini" onClick={() => document.getElementById(`table-f-${row.id}`).click()} title="Add Bill">
                                                                         <Plus size={14} />
-                                                                        <input type="file" id={`f-${row.id}`} hidden onChange={e => { handleFileUpload(row.id, e.target.files); e.target.value = ''; }} accept="image/*,.pdf" />
+                                                                        <input type="file" id={`table-f-${row.id}`} hidden onChange={e => { handleFileUpload(row.id, e.target.files); e.target.value = ''; }} accept="image/*,.pdf" />
                                                                     </button>
                                                                 )}
                                                                 {(row.bills || []).length === 0 && (
@@ -4917,6 +4972,102 @@ const TripExpenseGrid = ({
             )}
 
             <style>{`
+                .incidental-form-card {
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+                    overflow: hidden;
+                    transition: all 0.2s ease;
+                    display: flex;
+                    flex-direction: column;
+                }
+                .incidental-form-card:hover {
+                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                    border-color: #cbd5e1;
+                    transform: translateY(-2px);
+                }
+                .incidental-card-head {
+                    background: #f8fafc;
+                    padding: 10px 16px;
+                    border-bottom: 1px solid #e2e8f0;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: #334155;
+                    font-weight: 600;
+                    font-size: 0.8rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.025em;
+                }
+                .incidental-card-head svg {
+                    color: #64748b;
+                }
+                .incidental-card-body {
+                    padding: 16px;
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                }
+                .cat-input {
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    font-size: 0.875rem;
+                    transition: all 0.2s ease;
+                    background: #ffffff;
+                }
+                .cat-input:focus {
+                    outline: none;
+                    border-color: #2563eb;
+                    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+                    background: #fff;
+                }
+                .cat-input:disabled {
+                    background: #f8fafc;
+                    color: #94a3b8;
+                    cursor: not-allowed;
+                }
+                .input-with-label-mini label {
+                    display: block;
+                    font-size: 0.7rem;
+                    font-weight: 700;
+                    color: #64748b;
+                    margin-bottom: 5px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.025em;
+                }
+                .incidental-upload-btn {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 12px 16px;
+                    background: #f8fafc;
+                    border: 2px dashed #e2e8f0;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    color: #475569;
+                    font-weight: 600;
+                    font-size: 0.85rem;
+                    transition: all 0.2s ease;
+                    width: 100%;
+                    justify-content: center;
+                }
+                .incidental-upload-btn:hover {
+                    background: #f1f5f9;
+                    border-color: #2563eb;
+                    color: #2563eb;
+                }
+                .incidental-upload-count {
+                    display: block;
+                    font-size: 0.75rem;
+                    color: #64748b;
+                    margin-top: 8px;
+                    text-align: center;
+                }
+
                 .incidental-invoice-stack {
                     display: grid;
                     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -4931,18 +5082,83 @@ const TripExpenseGrid = ({
                     }
                 }
 
+                .incidental-td-stretch {
+                    width: 100% !important;
+                    padding: 12px 0 !important;
+                    display: block !important;
+                    box-sizing: border-box !important;
+                }
+
+                .incidental-entry-shell-full {
+                    width: 100% !important;
+                    min-width: 100% !important;
+                    box-sizing: border-box !important;
+                    margin: 0 !important;
+                }
+
+                .incidental-entry-shell {
+                    width: 100% !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 1.5rem !important;
+                    padding: 24px !important;
+                    background: #fff;
+                    border-radius: 12px;
+                    border: 1px solid #e2e8f0;
+                    box-sizing: border-box !important;
+                }
+
+                .incidental-entry-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    width: 100%;
+                    border-bottom: 2px solid #f1f5f9;
+                    padding-bottom: 15px;
+                    margin-bottom: 15px;
+                }
+
+                .row-del-btn {
+                    padding: 8px 12px;
+                    background: #fef2f2;
+                    border: 1px solid #fee2e2;
+                    border-radius: 8px;
+                    color: #ef4444 !important;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-size: 0.8rem;
+                    font-weight: 600;
+                }
+
+                .row-del-btn:hover {
+                    background: #fee2e2;
+                    color: #dc2626 !important;
+                    box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.1);
+                    transform: translateY(-1px);
+                }
+
+                .trip-travel-card-grid, .trip-local-card-grid, .trip-accommodation-card-grid, .trip-food-card-grid, .trip-incidental-card-grid {
+                    display: grid !important;
+                    width: 100% !important;
+                    gap: 20px !important;
+                    align-items: stretch !important;
+                }
+
                 .trip-local-card-grid {
                     display: grid !important;
                     grid-template-columns: repeat(3, 1fr) !important;
                     gap: 20px !important;
                     align-items: stretch !important;
                 }
-                .trip-local-card-grid > :nth-child(1) { grid-column: 1 !important; grid-row: 1 !important; } /* Mode & Booking */
-                .trip-local-card-grid > :nth-child(2) { grid-column: 2 !important; grid-row: 1 !important; } /* Location */
-                .trip-local-card-grid > :nth-child(3) { grid-column: 3 !important; grid-row: 1 !important; } /* Expense */
-                .trip-local-card-grid > :nth-child(4) { grid-column: 1 !important; grid-row: 2 !important; } /* Date & Time */
-                .trip-local-card-grid > :nth-child(5) { grid-column: 2 !important; grid-row: 2 !important; } /* Tracking */
-                .trip-local-card-grid > :nth-child(6) { grid-column: 3 !important; grid-row: 2 !important; } /* Upload */
+                .trip-local-card-grid > :nth-child(1) { grid-column: 1 !important; grid-row: 1 !important; }
+                .trip-local-card-grid > :nth-child(2) { grid-column: 2 !important; grid-row: 1 !important; }
+                .trip-local-card-grid > :nth-child(3) { grid-column: 3 !important; grid-row: 1 !important; }
+                .trip-local-card-grid > :nth-child(4) { grid-column: 1 !important; grid-row: 2 !important; }
+                .trip-local-card-grid > :nth-child(5) { grid-column: 2 !important; grid-row: 2 !important; }
+                .trip-local-card-grid > :nth-child(6) { grid-column: 3 !important; grid-row: 2 !important; }
                 
                 @media (max-width: 900px) {
                     .trip-local-card-grid {
@@ -4959,11 +5175,11 @@ const TripExpenseGrid = ({
                     gap: 20px !important;
                     align-items: stretch !important;
                 }
-                .trip-accommodation-card-grid > :nth-child(1) { grid-column: 1 !important; grid-row: 1 / span 2 !important; } /* Stay Schedule */
-                .trip-accommodation-card-grid > :nth-child(2) { grid-column: 2 !important; grid-row: 1 !important; } /* Booking Details */
-                .trip-accommodation-card-grid > :nth-child(3) { grid-column: 3 !important; grid-row: 1 !important; } /* Lodging Info */
-                .trip-accommodation-card-grid > :nth-child(4) { grid-column: 2 !important; grid-row: 2 !important; } /* Expense */
-                .trip-accommodation-card-grid > :nth-child(5) { grid-column: 3 !important; grid-row: 2 !important; } /* Upload */
+                .trip-accommodation-card-grid > :nth-child(1) { grid-column: 1 !important; grid-row: 1 / span 2 !important; }
+                .trip-accommodation-card-grid > :nth-child(2) { grid-column: 2 !important; grid-row: 1 !important; }
+                .trip-accommodation-card-grid > :nth-child(3) { grid-column: 3 !important; grid-row: 1 !important; }
+                .trip-accommodation-card-grid > :nth-child(4) { grid-column: 2 !important; grid-row: 2 !important; }
+                .trip-accommodation-card-grid > :nth-child(5) { grid-column: 3 !important; grid-row: 2 !important; }
 
                 .trip-food-card-grid, .trip-incidental-card-grid {
                     display: grid !important;

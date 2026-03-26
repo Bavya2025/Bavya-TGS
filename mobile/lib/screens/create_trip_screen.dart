@@ -7,7 +7,6 @@ import '../services/api_service.dart';
 import '../constants/api_constants.dart';
 import 'trip_story_screen.dart';
 import 'travel_story_screen.dart';
-import 'trip_planner_screen.dart';
 
 class CreateTripScreen extends StatefulWidget {
   const CreateTripScreen({super.key});
@@ -85,13 +84,13 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   Future<void> _fetchHierarchy() async {
     try {
       final res = await _apiService.get(ApiConstants.geoHierarchy);
-      setState(() {
-        _fullHierarchy = (res is List)
-            ? res
-            : (res['results'] ?? res['data'] ?? []);
-      });
-      // Re-fetch pool after hierarchy is ready (essential for long distance city extraction)
-      _fetchLocationsPool();
+      if (mounted) {
+        setState(() {
+          _fullHierarchy = (res is List) ? res : (res['results'] ?? res['data'] ?? []);
+        });
+        // Re-fetch pool after hierarchy is ready (essential for long distance city extraction)
+        _fetchLocationsPool();
+      }
     } catch (e) {
       debugPrint("Failed to fetch hierarchy: $e");
     }
@@ -166,10 +165,15 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       } else {
         // Local: Fetch Site-level locations from backend
         final res = await _apiService.get("${ApiConstants.locations}?type=Site");
-        setState(() {
-          _locationsPool = (res is List) ? res : (res['results'] ?? res['data'] ?? []);
-        });
-        debugPrint("DEBUG LOC: Local Pool set with ${_locationsPool.length} sites.");
+        if (mounted) {
+          setState(() {
+            _locationsPool =
+                (res is List) ? res : (res['results'] ?? res['data'] ?? []);
+          });
+        }
+        debugPrint(
+          "DEBUG LOC: Local Pool set with ${_locationsPool.length} sites.",
+        );
       }
     } catch (e) {
       debugPrint("Failed to fetch locations pool: $e");
@@ -179,8 +183,9 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   List<dynamic> get _allStates {
     List<dynamic> states = [];
     void search(dynamic nodes, [int depth = 0]) {
-      if (depth > 15 || nodes == null || nodes is! List)
-        return; // Type & Recursion protection
+      if (depth > 15 || nodes == null || nodes is! List) {
+        return;
+      }
       for (var node in nodes) {
         if (node['level'] == 3 ||
             (node['type']?.toString().toLowerCase().contains('state') ??
@@ -199,8 +204,12 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   }
 
   List<dynamic> _getChildren(String type, Map<String, String> filters) {
-    if (_fullHierarchy.isEmpty) return [];
-    if (type == 'state') return _allStates;
+    if (_fullHierarchy.isEmpty) {
+      return [];
+    }
+    if (type == 'state') {
+      return _allStates;
+    }
 
     bool safeMatch(dynamic name, String target) =>
         name?.toString().trim().toLowerCase() == target.trim().toLowerCase();
@@ -315,23 +324,25 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         final res = await _apiService.get(
           "${ApiConstants.findPaths}?source=$src&destination=$dest",
         );
-        setState(() {
-          _availablePaths = res is List ? res : [];
-          if (_availablePaths.isNotEmpty) {
-            final path = _availablePaths.firstWhere(
-              (p) => p['is_default'] == true,
-              orElse: () => _availablePaths[0],
-            );
-            _routePathId = path['id'].toString();
-            _enRouteController.text =
-                (path['via_location_names'] as List? ?? []).join(', ');
-            _distance = path['distance_km']?.toString() ?? '';
-          } else {
-            _routePathId = null;
-            _enRouteController.text = '';
-            _distance = '';
-          }
-        });
+        if (mounted) {
+          setState(() {
+            _availablePaths = res is List ? res : [];
+            if (_availablePaths.isNotEmpty) {
+              final path = _availablePaths.firstWhere(
+                (p) => p['is_default'] == true,
+                orElse: () => _availablePaths[0],
+              );
+              _routePathId = path['id'].toString();
+              _enRouteController.text =
+                  (path['via_location_names'] as List? ?? []).join(', ');
+              _distance = path['distance_km']?.toString() ?? '';
+            } else {
+              _routePathId = null;
+              _enRouteController.text = '';
+              _distance = '';
+            }
+          });
+        }
       } catch (e) {
         debugPrint("Failed to fetch paths: $e");
       }
@@ -354,12 +365,14 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     final String levelStr = levelVal.toString().toLowerCase();
     if (levelStr.contains('head') ||
         levelStr.contains('hq') ||
-        levelStr.contains('office'))
+        levelStr.contains('office')) {
       return 1;
+    }
     if (levelStr.contains('region') ||
         levelStr.contains('state') ||
-        levelStr.contains('zone'))
+        levelStr.contains('zone')) {
       return 2;
+    }
     if (levelStr.contains('branch') || levelStr.contains('facility')) return 3;
     final match = RegExp(r'\d+').firstMatch(levelStr);
     return match != null ? int.parse(match.group(0)!) : 99;
@@ -372,16 +385,20 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   // --- LOGIC ---
   Future<void> _setupAuthData() async {
     final user = _apiService.getUser();
-    if (user == null) return;
+    if (user == null) {
+      return;
+    }
 
     final userName = (user['name'] ?? user['username'] ?? 'Self');
     _travelerInfo = "$userName (${user['employee_id'] ?? 'ID-N/A'})";
 
     final myId = _normalizeId(user['employee_id'] ?? user['username']);
 
-    setState(() {
-      _tripLeaderController.text = _travelerInfo;
-    });
+    if (mounted) {
+      setState(() {
+        _tripLeaderController.text = _travelerInfo;
+      });
+    }
 
     try {
       // 1. Fetch Employees & Users parallel
@@ -424,7 +441,9 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           );
 
           if (systemMgr.isNotEmpty) {
-            if (!mounted) return;
+            if (!mounted) {
+              return;
+            }
             setState(() {
               _reportingManagerId = systemMgr['id'].toString();
               _reportingManagerName = systemMgr['name'] ?? managerName;
@@ -440,7 +459,9 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               ].contains(u['role']?.toString() ?? ''),
               orElse: () => {},
             );
-            if (!mounted) return;
+            if (!mounted) {
+              return;
+            }
             setState(() {
               _reportingManagerId = admin.isNotEmpty
                   ? admin['id'].toString()
@@ -472,7 +493,9 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           });
         }
       } else {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
         setState(() {
           _reportingManagerName = 'Employee Profile Missing';
           _isDetectingManager = false;
@@ -496,18 +519,26 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             };
           })
           .where((emp) {
-            if (_normalizeId(emp['id']) == myId) return false;
-            if (_myLevel == 99) return true;
+            if (_normalizeId(emp['id']) == myId) {
+              return false;
+            }
+            if (_myLevel == 99) {
+              return true;
+            }
             return (emp['numericLevel'] as int) >= _myLevel;
           })
           .toList();
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _employeeList = mapped;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _reportingManagerName = 'Error detecting manager';
         _isDetectingManager = false;
@@ -557,21 +588,25 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       },
     );
     if (picked != null) {
-      setState(() {
-        if (isStart) {
-          _startDate = picked;
-          if (_endDate != null && _endDate!.isBefore(_startDate!)) {
-            _endDate = null;
+      if (mounted) {
+        setState(() {
+          if (isStart) {
+            _startDate = picked;
+            if (_endDate != null && _endDate!.isBefore(_startDate!)) {
+              _endDate = null;
+            }
+          } else {
+            _endDate = picked;
           }
-        } else {
-          _endDate = picked;
-        }
-      });
+        });
+      }
     }
   }
 
   Future<void> _handleSubmit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
     if (_fromController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -636,17 +671,24 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
     try {
       final trip = await _tripService.createTrip(payload);
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       _showSuccessDialog(trip.tripId);
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-      if (mounted)
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
         );
+      }
     }
   }
 
@@ -664,7 +706,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withOpacity(0.1),
+                color: const Color(0xFF10B981).withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -781,7 +823,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFFA9052E).withOpacity(0.04),
+                    const Color(0xFFA9052E).withValues(alpha: 0.04),
                     Colors.transparent,
                   ],
                 ),
@@ -798,7 +840,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF3B82F6).withOpacity(0.03),
+                    const Color(0xFF3B82F6).withValues(alpha: 0.03),
                     Colors.transparent,
                   ],
                 ),
@@ -848,7 +890,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
           if (_isLoading)
             Container(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               child: const Center(
                 child: CircularProgressIndicator(color: Color(0xFFBB0633)),
               ),
@@ -866,7 +908,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         color: const Color(0xFFA9052E),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -886,7 +928,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               width: 140,
               height: 140,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
+                color: Colors.white.withValues(alpha: 0.06),
                 shape: BoxShape.circle,
               ),
             ),
@@ -898,7 +940,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.04),
+                color: Colors.white.withValues(alpha: 0.04),
                 shape: BoxShape.circle,
               ),
             ),
@@ -924,7 +966,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.12),
+                          color: Colors.black.withValues(alpha: 0.12),
                           blurRadius: 15,
                           offset: const Offset(0, 5),
                         ),
@@ -947,7 +989,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -1157,10 +1199,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 filters['district'] = '';
                 filters['mandal'] = '';
                 filters['cluster'] = '';
-                if (side == 'source')
+                if (side == 'source') {
                   _fromController.clear();
-                else
+                } else {
                   _toController.clear();
+                }
               });
             },
           ),
@@ -1174,10 +1217,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 filters['district'] = val;
                 filters['mandal'] = '';
                 filters['cluster'] = '';
-                if (side == 'source')
+                if (side == 'source') {
                   _fromController.clear();
-                else
+                } else {
                   _toController.clear();
+                }
               });
             },
             disabled: filters['state']!.isEmpty,
@@ -1191,10 +1235,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               setState(() {
                 filters['mandal'] = val;
                 filters['cluster'] = '';
-                if (side == 'source')
+                if (side == 'source') {
                   _fromController.clear();
-                else
+                } else {
                   _toController.clear();
+                }
               });
             },
             disabled: filters['district']!.isEmpty,
@@ -1207,10 +1252,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             (val) {
               setState(() {
                 filters['cluster'] = val;
-                if (side == 'source')
+                if (side == 'source') {
                   _fromController.clear();
-                else
+                } else {
                   _toController.clear();
+                }
               });
             },
             disabled: filters['mandal']!.isEmpty,
@@ -1222,10 +1268,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             side == 'source' ? _fromController.text : _toController.text,
             (val) {
               setState(() {
-                if (side == 'source')
+                if (side == 'source') {
                   _fromController.text = val;
-                else
+                } else {
                   _toController.text = val;
+                }
                 _fetchPaths();
               });
             },
@@ -1338,7 +1385,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
           color: disabled
-              ? const Color(0xFFF1F5F9).withOpacity(0.5)
+              ? const Color(0xFFF1F5F9).withValues(alpha: 0.5)
               : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFF1F5F9)),
@@ -1385,7 +1432,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           border: Border.all(color: const Color(0xFFF1F5F9)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -1522,7 +1569,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   'Should this be treated as local?',
                   style: GoogleFonts.inter(
                     fontSize: 11,
-                    color: Colors.brown.withOpacity(0.7),
+                    color: Colors.brown.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -1680,7 +1727,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               border: Border.all(color: const Color(0xFFF1F5F9)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -1855,7 +1902,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             filled: true,
             fillColor: enabled
                 ? Colors.white
-                : const Color(0xFFF1F5F9).withOpacity(0.5),
+                : const Color(0xFFF1F5F9).withValues(alpha: 0.5),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 18,
               vertical: 16,
@@ -1942,7 +1989,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               border: Border.all(color: const Color(0xFFF1F5F9)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
+                  color: Colors.black.withValues(alpha: 0.02),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -2003,7 +2050,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             border: Border.all(color: const Color(0xFFF1F5F9)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
+                color: Colors.black.withValues(alpha: 0.02),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -2066,8 +2113,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: isWarning
-                ? const Color(0xFFFEF2F2).withOpacity(0.5)
-                : const Color(0xFFF1F5F9).withOpacity(0.5),
+                    ? const Color(0xFFBB0633).withValues(alpha: 0.1)
+                    : const Color(0xFFF1F5F9).withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isWarning
@@ -2188,7 +2235,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 25,
             offset: const Offset(0, 12),
           ),
@@ -2211,7 +2258,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         border: Border(top: BorderSide(color: const Color(0xFFF1F5F9))),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, -5),
           ),
@@ -2230,7 +2277,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF0F1E2A).withOpacity(0.3),
+                      color: const Color(0xFFF1F5F9).withValues(alpha: 0.03),
                       blurRadius: 15,
                       offset: const Offset(0, 8),
                     ),

@@ -54,11 +54,13 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
           debugPrint('Notification sync failed (non-critical): $notifErr');
         }
       }
-      setState(() {
-        _allTrips = trips;
-        _applyFilters();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _allTrips = trips;
+          _applyFilters();
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -70,7 +72,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   }
 
   String _formatCurrency(dynamic amount) {
-    if (amount == null) return '₹0';
+    if (amount == null) {
+      return '₹0';
+    }
     double? numAmount;
     if (amount is num) {
       numAmount = amount.toDouble();
@@ -111,7 +115,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
         bool isHidden =
             hideStates.contains(status) || status.contains('pending');
 
-        if (isHidden) return false;
+        if (isHidden) {
+          return false;
+        }
 
         final filterLabel = _filter.trim().toLowerCase();
         final filterClean = filterLabel.replaceAll(' ', '').replaceAll('-', '');
@@ -126,8 +132,12 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
         bool matchesType = _typeFilter == 'All Types' || _typeFilter == 'All';
         if (!matchesType) {
-          if (_typeFilter == 'Trip' && !t.considerAsLocal) matchesType = true;
-          if (_typeFilter == 'Travel' && t.considerAsLocal) matchesType = true;
+          if (_typeFilter == 'Trip' && !t.considerAsLocal) {
+            matchesType = true;
+          }
+          if (_typeFilter == 'Travel' && t.considerAsLocal) {
+            matchesType = true;
+          }
         }
 
         final matchesSearch =
@@ -147,7 +157,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   }
 
   void _onFilterChanged(String? v) {
-    if (v == null) return;
+    if (v == null) {
+      return;
+    }
     setState(() {
       _filter = v;
       _applyFilters();
@@ -171,7 +183,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
       final paint = Paint();
 
       canvas.drawImage(image, Offset.zero, paint);
-      final rectPaint = Paint()..color = Colors.black.withOpacity(0.5);
+      final rectPaint = Paint()..color = Colors.black.withValues(alpha: 0.5);
       canvas.drawRect(
         Rect.fromLTWH(
           0,
@@ -223,12 +235,16 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
   Future<Position?> _determinePosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return null;
+    if (!serviceEnabled) {
+      return null;
+    }
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return null;
+      if (permission == LocationPermission.denied) {
+        return null;
+      }
     }
     return await Geolocator.getCurrentPosition();
   }
@@ -249,7 +265,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFFA9052E).withOpacity(0.03),
+                    const Color(0xFFA9052E).withValues(alpha: 0.03),
                     Colors.transparent,
                   ],
                 ),
@@ -266,7 +282,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF3B82F6).withOpacity(0.02),
+                    const Color(0xFF3B82F6).withValues(alpha: 0.02),
                     Colors.transparent,
                   ],
                 ),
@@ -322,7 +338,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.grey.withOpacity(0.2),
+                      color: Colors.grey.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -399,7 +415,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
         color: const Color(0xFFA9052E),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -419,7 +435,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               width: 140,
               height: 140,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
+                color: Colors.white.withValues(alpha: 0.06),
                 shape: BoxShape.circle,
               ),
             ),
@@ -431,7 +447,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.04),
+                color: Colors.white.withValues(alpha: 0.04),
                 shape: BoxShape.circle,
               ),
             ),
@@ -457,7 +473,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.12),
+                          color: Colors.black.withValues(alpha: 0.12),
                           blurRadius: 15,
                           offset: const Offset(0, 5),
                         ),
@@ -480,7 +496,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -520,7 +536,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                     border: Border.all(color: const Color(0xFFF1F5F9)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: Colors.black.withValues(alpha: 0.04),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -581,11 +597,12 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                         )
                         .toList(),
                     onChanged: (v) {
-                      if (v != null)
+                      if (v != null) {
                         setState(() {
                           _typeFilter = v;
                           _applyFilters();
                         });
+                      }
                     },
                   ),
                 ),
@@ -652,7 +669,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(icon, color: color, size: 28),
@@ -686,7 +703,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               Icon(
                 Icons.arrow_forward_ios_rounded,
                 size: 14,
-                color: Colors.grey.withOpacity(0.5),
+                color: Colors.grey.withValues(alpha: 0.5),
               ),
             ],
           ),
@@ -721,7 +738,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -753,7 +770,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: _getStatusColor(displayValue).withOpacity(0.1),
+                color: _getStatusColor(displayValue).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
@@ -797,7 +814,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.04),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -809,10 +826,14 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
         child: InkWell(
           onTap: t.status.toLowerCase() == 'settled'
               ? null
-              : () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => TripSummaryScreen(trip: t)),
-                ),
+              : () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TripSummaryScreen(trip: t),
+                    ),
+                  );
+                },
           borderRadius: BorderRadius.circular(28),
           child: Stack(
             children: [
@@ -831,7 +852,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.1),
+                            color: statusColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Row(
@@ -1025,7 +1046,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
+                              color: Colors.black.withValues(alpha: 0.2),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -1066,7 +1087,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(icon, size: 14, color: color),
@@ -1095,7 +1116,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
             borderRadius: BorderRadius.circular(100),
             border: isPrimary
                 ? null
-                : Border.all(color: text.withOpacity(0.12), width: 1.2),
+                : Border.all(color: text.withValues(alpha: 0.12), width: 1.2),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,

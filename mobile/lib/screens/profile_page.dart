@@ -42,7 +42,9 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _initProfile() async {
     // If we already have some data, don't show the blocker loader
     if (_userData != null && mounted) {
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+      });
     }
 
     // Perform background refresh without blocking the initial UI render
@@ -52,19 +54,36 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _runBackgroundRefresh() async {
     try {
       final freshUser = await _refreshUserData();
+      if (!mounted) {
+        return;
+      }
       if (freshUser != null) {
         await _fetchDetailedProfile();
+        if (!mounted) {
+          return;
+        }
       }
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint("Background refresh failed: $e");
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<Map<String, dynamic>?> _refreshUserData() async {
     try {
       final freshUser = await _apiService.fetchFreshUser();
+      if (!mounted) {
+        return null;
+      }
       if (mounted) {
         setState(() {
           _userData = freshUser;
@@ -96,6 +115,10 @@ class _ProfilePageState extends State<ProfilePage> {
       final response = await _apiService.get(
         '/api/employees/?employee_code=$empId',
       );
+
+      if (!mounted) {
+        return;
+      }
 
       List<dynamic> results = [];
       if (response is Map && response.containsKey('results')) {
@@ -129,7 +152,11 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     } catch (e) {
       debugPrint("Profile fetch error: $e");
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -283,7 +310,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     decoration: BoxDecoration(
                       gradient: RadialGradient(
                         colors: [
-                          const Color(0xFFA9052E).withOpacity(0.04),
+                          const Color(0xFFA9052E).withValues(alpha: 0.04),
                           Colors.transparent,
                         ],
                       ),
@@ -299,7 +326,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     height: 400,
                     decoration: BoxDecoration(
                       gradient: RadialGradient(
-                        colors: [Colors.orange.withOpacity(0.03), Colors.transparent],
+                        colors: [Colors.orange.withValues(alpha: 0.03), Colors.transparent],
                       ),
                       shape: BoxShape.circle,
                     ),
@@ -314,7 +341,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     decoration: BoxDecoration(
                       gradient: RadialGradient(
                         colors: [
-                          const Color(0xFF3B82F6).withOpacity(0.03),
+                          const Color(0xFF3B82F6).withValues(alpha: 0.03),
                           Colors.transparent,
                         ],
                       ),
@@ -404,7 +431,7 @@ class _ProfilePageState extends State<ProfilePage> {
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.04),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -582,7 +609,7 @@ class _ProfilePageState extends State<ProfilePage> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.03),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.03),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -596,7 +623,7 @@ class _ProfilePageState extends State<ProfilePage> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, size: 18, color: color),
@@ -692,7 +719,7 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           CircleAvatar(
             radius: 12,
-            backgroundColor: const Color(0xFF7C1D1D).withOpacity(0.1),
+            backgroundColor: const Color(0xFF7C1D1D).withValues(alpha: 0.1),
             child: Text(
               name[0].toUpperCase(),
               style: const TextStyle(
@@ -743,7 +770,9 @@ class _ProfilePageState extends State<ProfilePage> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: ElevatedButton(
-        onPressed: () => _handleFaceUpdateAction(!needsRequest),
+        onPressed: () {
+          _handleFaceUpdateAction(!needsRequest);
+        },
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: const Color(0xFF7C1D1D),
@@ -788,11 +817,16 @@ class _ProfilePageState extends State<ProfilePage> {
         context,
         MaterialPageRoute(builder: (context) => const FrsEnrollmentScreen()),
       );
+      if (!mounted) {
+        return;
+      }
       if (result == true) {
         // Update local session data if possible or just refresh
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Face updated successfully')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Face updated successfully')),
+          );
+        }
       }
     } else {
       final TextEditingController reasonController = TextEditingController();
@@ -829,12 +863,16 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+              },
               child: const Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () async {
-                if (reasonController.text.trim().isEmpty) return;
+                if (reasonController.text.trim().isEmpty) {
+                  return;
+                }
                 try {
                   await _frsService.requestPhotoUpdate(reasonController.text);
                   if (mounted) {
@@ -844,13 +882,14 @@ class _ProfilePageState extends State<ProfilePage> {
                     );
                   }
                 } catch (e) {
-                  if (mounted)
+                  if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(e.toString()),
                         backgroundColor: Colors.red,
                       ),
                     );
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -882,7 +921,9 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                   Navigator.pop(context);
+                 },
                   child: const Text('Cancel'),
                 ),
                 TextButton(
@@ -940,10 +981,12 @@ class _ProfilePageState extends State<ProfilePage> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: ElevatedButton(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const DebugLogsScreen()),
-        ),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const DebugLogsScreen()),
+          );
+        },
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: const Color(0xFF1E293B),

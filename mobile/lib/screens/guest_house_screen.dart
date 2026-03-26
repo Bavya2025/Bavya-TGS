@@ -59,7 +59,9 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
   }
 
   String _toTitleCase(String? text) {
-    if (text == null || text.isEmpty) return "";
+    if (text == null || text.isEmpty) {
+      return "";
+    }
     return text.split(' ').map((str) => str.isEmpty ? "" : "${str[0].toUpperCase()}${str.substring(1).toLowerCase()}").join(' ');
   }
 
@@ -158,8 +160,12 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
         _isLoading = false;
       });
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 
@@ -186,7 +192,9 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
       }
     } catch (e) {
       debugPrint("Failed to fetch requests: $e");
-      if (mounted) setState(() => _isAccLoading = false);
+      if (mounted) {
+        setState(() => _isAccLoading = false);
+      }
     }
   }
 
@@ -197,7 +205,13 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
         final name = gh['name']?.toString().toLowerCase() ?? "";
         final addr = gh['address']?.toString().toLowerCase() ?? "";
         final loc = gh['location']?.toString().toLowerCase() ?? "";
-        return name.contains(query.toLowerCase()) || addr.contains(query.toLowerCase()) || loc.contains(query.toLowerCase());
+        if (name.contains(query.toLowerCase())) {
+          return true;
+        }
+        if (addr.contains(query.toLowerCase())) {
+          return true;
+        }
+        return loc.contains(query.toLowerCase());
       }).toList();
     });
   }
@@ -305,7 +319,19 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(color: active ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(12), boxShadow: active ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))] : null),
+        decoration: BoxDecoration(
+          color: active ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : null,
+        ),
         child: Center(child: Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w900, color: active ? const Color(0xFF7C1D1D) : Colors.black26))),
       ),
     );
@@ -404,7 +430,13 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          )
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,7 +447,10 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (matchingGH != null ? const Color(0xFF059669) : const Color(0xFF7C1D1D)).withOpacity(0.1),
+                  color: (matchingGH != null
+                          ? const Color(0xFF059669)
+                          : const Color(0xFF7C1D1D))
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -580,7 +615,9 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
                         _fetchAccommodationRequests();
                       }
                     } catch (e) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                      }
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -641,7 +678,18 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
       }),
       child: Container(
         margin: const EdgeInsets.only(bottom: 20),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFFF1F5F9)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8))]),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFF1F5F9)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            )
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -739,7 +787,13 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
       onTap: onTap,
       child: Container(
         width: 36, height: 36,
-        decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)]),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)
+          ],
+        ),
         child: Icon(icon, size: 18, color: color),
       ),
     );
@@ -860,7 +914,10 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Text(status.toUpperCase(), style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: color)),
     );
   }
@@ -876,7 +933,9 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
   }
 
   DateTime _safeParse(String? dateStr, {DateTime? fallback}) {
-    if (dateStr == null || dateStr.isEmpty) return fallback ?? DateTime.now();
+    if (dateStr == null || dateStr.isEmpty) {
+      return fallback ?? DateTime.now();
+    }
     try {
       return DateTime.parse(dateStr);
     } catch (_) {
@@ -951,7 +1010,12 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
                         final isToday = todayOnly.day == d && todayOnly.month == _currentCalendarDate.month && todayOnly.year == _currentCalendarDate.year;
                         return Container(
                           width: 40, height: 40,
-                          decoration: isToday ? BoxDecoration(color: const Color(0xFF7C1D1D).withOpacity(0.05), borderRadius: BorderRadius.circular(8)) : null,
+                          decoration: isToday
+                              ? BoxDecoration(
+                                  color: const Color(0xFF7C1D1D)
+                                      .withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(8))
+                              : null,
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -1029,7 +1093,14 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
                                   color: cellColor,
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(color: active != null ? cellColor : const Color(0xFFF1F5F9)),
-                                  boxShadow: active != null ? [BoxShadow(color: cellColor.withOpacity(0.2), blurRadius: 4)] : null,
+                                  boxShadow: active != null
+                                      ? [
+                                          BoxShadow(
+                                            color: cellColor.withValues(alpha: 0.2),
+                                            blurRadius: 4,
+                                          )
+                                        ]
+                                      : null,
                                 ),
                               ),
                             );
@@ -1120,7 +1191,13 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          )
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1236,10 +1313,24 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
           color: cellColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isExpanded ? const Color(0xFF7C1D1D) : (isToday ? const Color(0xFF7C1D1D).withOpacity(0.5) : (activeBooking != null ? cellColor : const Color(0xFFE2E8F0))), 
-            width: isExpanded ? 2.5 : (isToday ? 2 : (activeBooking != null ? 0 : 1)),
+            color: isExpanded
+                ? const Color(0xFF7C1D1D)
+                : (isToday
+                    ? const Color(0xFF7C1D1D).withValues(alpha: 0.5)
+                    : (activeBooking != null ? cellColor : const Color(0xFFE2E8F0))),
+            width: isExpanded
+                ? 2.5
+                : (isToday ? 2 : (activeBooking != null ? 0 : 1)),
           ),
-          boxShadow: activeBooking != null ? [BoxShadow(color: cellColor.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4))] : null,
+          boxShadow: activeBooking != null
+              ? [
+                  BoxShadow(
+                    color: cellColor.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : null,
         ),
         child: Center(
           child: Text(
@@ -1282,7 +1373,7 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(0.2),
+                color: color.withValues(alpha: 0.2),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -1424,10 +1515,14 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
                         final payload = _prepareGhPayload(data);
                         try {
                           await _tripService.saveGuestHouse(payload, id: gh?['id']);
-                          if (mounted) Navigator.pop(context);
-                          _fetchGuestHouses();
+                          if (mounted) {
+                            Navigator.pop(context);
+                            _fetchGuestHouses();
+                          }
                         } catch (e) {
-                           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                          }
                         }
                       }),
                     ],
@@ -1534,7 +1629,9 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
 
                         if (item != null) {
                           final idx = current.indexWhere((i) => i['id'] == item['id']);
-                          if (idx != -1) current[idx] = newItem;
+                          if (idx != -1) {
+                            current[idx] = newItem;
+                          }
                         } else {
                           current.add(newItem);
                         }
@@ -1545,10 +1642,14 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
                         
                         try {
                           await _tripService.saveGuestHouse(payload, id: updatedData['id']);
-                          if (mounted) Navigator.pop(context);
-                          _refreshSelected();
+                          if (mounted) {
+                            Navigator.pop(context);
+                            _refreshSelected();
+                          }
                         } catch (e) {
-                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                          }
                         }
                       }),
                     ],
@@ -1662,13 +1763,27 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
                           Container(
                             padding: const EdgeInsets.all(12),
                             margin: const EdgeInsets.only(bottom: 16),
-                            decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.3))),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.green.withValues(alpha: 0.3),
+                              ),
+                            ),
                             child: Row(
                               children: [
-                                const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                                const Icon(Icons.check_circle,
+                                    color: Colors.green, size: 20),
                                 const SizedBox(width: 10),
-                                Expanded(child: Text('Linked to ${selectedTrip!.tripId}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green))),
-                                IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => sb(() => selectedTrip = null))
+                                Expanded(
+                                    child: Text('Linked to ${selectedTrip!.tripId}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.green))),
+                                IconButton(
+                                    icon: const Icon(Icons.close, size: 18),
+                                    onPressed: () =>
+                                        sb(() => selectedTrip = null))
                               ],
                             ),
                           ),
@@ -1734,15 +1849,19 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
                           // If we were booking for a specific request, notify the employee
                           if (_activeBookingRequest != null) {
                             try {
-                              final rawUserId = _activeBookingRequest?.userId ?? '';
+                              final rawUserId =
+                                  _activeBookingRequest?.userId ?? '';
                               final numericUserId = int.tryParse(rawUserId);
                               if (numericUserId != null) {
-                                await _apiService.post('${ApiConstants.baseUrl}/api/notifications/', body: {
-                                  'title': 'Accommodation Confirmed',
-                                  'message': 'Guest house room has been booked for your trip ${_activeBookingRequest!.tripId} to ${_activeBookingRequest!.destination} at ${_selectedGuestHouse!['name']}.',
-                                  'type': 'info',
-                                  'user': numericUserId,
-                                });
+                                await _apiService.post(
+                                    '${ApiConstants.baseUrl}/api/notifications/',
+                                    body: {
+                                      'title': 'Accommodation Confirmed',
+                                      'message':
+                                          'Guest house room has been booked for your trip ${_activeBookingRequest!.tripId} to ${_activeBookingRequest!.destination} at ${_selectedGuestHouse!['name']}.',
+                                      'type': 'info',
+                                      'user': numericUserId,
+                                    });
                               }
                             } catch (nErr) {
                               debugPrint("Auto-notify failed: $nErr");
@@ -1750,11 +1869,15 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
                             _activeBookingRequest = null;
                           }
 
-                          if (mounted) Navigator.pop(context);
-                          _refreshSelected();
-                          _fetchAccommodationRequests(); // Refresh requests list
+                          if (mounted) {
+                            Navigator.pop(context);
+                            _refreshSelected();
+                            _fetchAccommodationRequests(); // Refresh requests list
+                          }
                         } catch (e) {
-                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                          }
                         }
                       }),
                     ],
@@ -1776,9 +1899,13 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
     final payload = _prepareGhPayload(updatedData);
     try {
       await _tripService.saveGuestHouse(payload, id: updatedData['id']);
-      _refreshSelected();
+      if (mounted) {
+        _refreshSelected();
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to delete item.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to delete item.')));
+      }
     }
   }
 
@@ -1794,10 +1921,15 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
             onPressed: () async {
               try {
                 await _tripService.deleteGuestHouse(gh['id']);
-                if (mounted) Navigator.pop(context);
-                _fetchGuestHouses();
+                if (mounted) {
+                  Navigator.pop(context);
+                  _fetchGuestHouses();
+                }
               } catch (e) {
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to delete Guest House.')));
+                if (mounted) {
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(const SnackBar(content: Text('Failed to delete Guest House.')));
+                }
               }
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
@@ -1815,7 +1947,10 @@ class _GuestHouseScreenState extends State<GuestHouseScreen> with SingleTickerPr
         _fetchGuestHouses();
       });
     } catch (e) {
-       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Refresh failed: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Refresh failed: $e')));
+      }
     }
   }
 

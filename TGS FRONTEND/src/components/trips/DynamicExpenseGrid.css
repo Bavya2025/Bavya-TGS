@@ -1,4 +1,4 @@
-﻿/* Categorized Smart Grid Styles - Scoped to .smart-grid-container */
+/* Categorized Smart Grid Styles - Scoped to .smart-grid-container */
 .smart-grid-container.categorized {
     background: transparent;
     padding: 0 !important;
@@ -230,6 +230,32 @@
     padding: 0.75rem 1rem;
     vertical-align: top;
 }
+
+/* Card-style rows (Travel, Local, Food, Accommodation, Incidental) -
+   the TD must have zero padding so the shell fills 100% of the table width */
+.smart-grid-container .category-table .category-row-block {
+    display: table-row;
+    width: 100%;
+}
+
+.smart-grid-container .category-table .category-row-block td {
+    padding: 0 !important;
+    width: 100% !important;
+    display: block;
+}
+
+.smart-grid-container .incidental-entry-shell-full {
+    width: 100% !important;
+    min-width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+}
+
+.smart-grid-container .incidental-entry-shell {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
 
 .smart-grid-container .category-row:hover {
     background: #fcfdfe;

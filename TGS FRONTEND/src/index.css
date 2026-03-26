@@ -21218,6 +21218,31 @@ input:checked + .toggle-slider:before {
     vertical-align: top;
 }
 
+/* Card-style rows (Travel, Local, Food, Accommodation, Incidental) -
+   reset TD padding so the card shell fills 100% of the table row */
+.smart-grid-container .category-table .category-row-block {
+    display: table-row;
+    width: 100%;
+}
+
+.smart-grid-container .category-table .category-row-block td {
+    padding: 0 !important;
+    width: 100% !important;
+    display: block;
+}
+
+.smart-grid-container .incidental-entry-shell-full {
+    width: 100% !important;
+    min-width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+}
+
+.smart-grid-container .incidental-entry-shell {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
 .smart-grid-container .category-row:hover {
     background: #fcfdfe;
 }

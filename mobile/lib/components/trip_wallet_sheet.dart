@@ -38,7 +38,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
   late String _view; // 'overview', 'request_advance', 'add_expense'
   bool _isLoading = false;
   bool _isSubmitting = false;
-  bool _isLocating = false;
+  final bool _isLocating = false;
   late Trip _tripData;
   final TripService _tripService = TripService();
 
@@ -102,7 +102,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
   String? _selectedMode;
   String? _selectedLocalMode;
   String? _selectedLocalSubType; // Added for web app parity
-  String _vehicleType = 'Own';
+  final String _vehicleType = 'Own';
   String _mealCategory = 'Self Meal';
   String _mealType = 'Lunch';
   String _roomType = 'Standard';
@@ -243,10 +243,16 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
     setState(() => _isLoading = true);
     try {
       final bytes = await _tripService.downloadBulkTemplate();
+      if (!mounted) {
+        return;
+      }
       final dir = await getApplicationDocumentsDirectory();
+      if (!mounted) {
+        return;
+      }
       final file = File('${dir.path}/bulk_local_travel_template.xlsx');
       await file.writeAsBytes(bytes);
-      
+
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -271,6 +277,10 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls'],
       );
+
+      if (!mounted) {
+        return;
+      }
 
       if (result != null && result.files.single.path != null) {
         setState(() => _isBulkUploading = true);
@@ -310,12 +320,16 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
     setState(() => _isLoading = true);
     try {
       final updatedTrip = await _tripService.fetchTripDetails(widget.trip.id);
-      setState(() {
-        _tripData = updatedTrip;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _tripData = updatedTrip;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -325,15 +339,21 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       MaterialPageRoute(builder: (context) => const ForensicCamera()),
     );
 
+    if (!mounted) {
+      return;
+    }
+
     if (result != null && result is Map<String, dynamic>) {
       setState(() {
         _receiptImagePaths.add(result['path']);
         _latitude ??= result['latitude'];
         _longitude ??= result['longitude'];
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Forensic Receipt Captured!')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Forensic Receipt Captured!')),
+        );
+      }
     }
   }
 
@@ -341,9 +361,16 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
     final ImagePicker picker = ImagePicker();
     final List<XFile> images = await picker.pickMultiImage();
 
+    if (!mounted) {
+      return;
+    }
+
     if (images.isNotEmpty) {
       if (_latitude == null) {
         final pos = await _determinePosition();
+        if (!mounted) {
+          return;
+        }
         if (pos != null) {
           setState(() {
             _latitude = pos.latitude;
@@ -357,9 +384,11 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
           _receiptImagePaths.add(img.path);
         }
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${images.length} images added from gallery!')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${images.length} images added from gallery!')),
+        );
+      }
     }
   }
 
@@ -428,7 +457,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(icon, color: color, size: 28),
@@ -453,6 +482,10 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       MaterialPageRoute(builder: (context) => const ForensicCamera()),
     );
 
+    if (!mounted) {
+      return;
+    }
+
     if (result != null && result is Map<String, dynamic>) {
       setState(() {
         if (isStart) {
@@ -465,11 +498,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
           _odoEndLong = result['longitude'];
         }
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Forensic ${isStart ? 'Start' : 'End'} Odo Captured!'),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Forensic ${isStart ? 'Start' : 'End'} Odo Captured!'),
+          ),
+        );
+      }
     }
   }
 
@@ -478,6 +513,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
     LocationPermission permission;
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!mounted) {
+      return null;
+    }
     if (!serviceEnabled) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -488,22 +526,35 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
     }
 
     permission = await Geolocator.checkPermission();
+    if (!mounted) {
+      return null;
+    }
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
+      if (!mounted) {
+        return null;
+      }
       if (permission == LocationPermission.denied) return null;
     }
 
-    if (permission == LocationPermission.deniedForever) return null;
+    if (permission == LocationPermission.deniedForever) {
+      return null;
+    }
 
-    return await Geolocator.getCurrentPosition(
+    final pos = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.medium,
     );
+    if (!mounted) {
+      return null;
+    }
+    return pos;
   }
 
   Future<void> _handleRequestAdvance() async {
     if (_advanceAmountController.text.isEmpty ||
-        _advancePurposeController.text.isEmpty)
+        _advancePurposeController.text.isEmpty) {
       return;
+    }
 
     setState(() => _isSubmitting = true);
     try {
@@ -525,10 +576,11 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       }
     } catch (e) {
       setState(() => _isSubmitting = false);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 
@@ -562,8 +614,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       if (_receiptImagePaths.isNotEmpty) {
         List<String> base64s = [];
         for (var path in _receiptImagePaths) {
-          if (path == 'PROXIED_STILL_VALID')
+          if (path == 'PROXIED_STILL_VALID') {
             continue; // Should not happen with current logic but safe to have
+          }
           final bytes = await File(path).readAsBytes();
           base64s.add('data:image/jpeg;base64,${base64Encode(bytes)}');
         }
@@ -752,12 +805,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
 
       // Map mobile categories to backend categories to avoid 400 Bad Request
       String backendCategory = _selectedCategory;
-      if (_selectedCategory == 'Travel')
+      if (_selectedCategory == 'Travel') {
         backendCategory = 'Others';
-      else if (_selectedCategory == 'Local')
+      } else if (_selectedCategory == 'Local') {
         backendCategory = 'Fuel';
-      else if (_selectedCategory == 'Stay')
+      } else if (_selectedCategory == 'Stay') {
         backendCategory = 'Accommodation';
+      }
 
       // Backend expects receipt_image as a JSON-encoded list of base64 strings
       String receiptImagesJson = jsonEncode([]);
@@ -774,7 +828,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
           'isFinalized': isNowFinalized,
           'isCompleted': isNowCompleted,
           'endOdoSubmittedAt':
-              endOdoTimestamp ?? (detailMap['endOdoSubmittedAt'] ?? null),
+              endOdoTimestamp ?? detailMap['endOdoSubmittedAt'],
         }),
         'receipt_image': receiptImagesJson,
         'latitude': _latitude ?? 0.0,
@@ -792,7 +846,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
           'isFinalized': isNowFinalized,
           'isCompleted': isNowCompleted,
           'endOdoSubmittedAt':
-              endOdoTimestamp ?? (detailMap['endOdoSubmittedAt'] ?? null),
+              endOdoTimestamp ?? detailMap['endOdoSubmittedAt'],
         });
       }
 
@@ -864,10 +918,11 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       }
     } catch (e) {
       setState(() => _isSubmitting = false);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to record expense: $e')));
+      }
     }
   }
 
@@ -900,7 +955,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       ),
     );
 
-    if (confirm != true) return;
+    if (!mounted) {
+      return;
+    }
+
+    if (confirm != true) {
+      return;
+    }
 
     setState(() => _isSubmitting = true);
     try {
@@ -917,10 +978,11 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       }
     } catch (e) {
       setState(() => _isSubmitting = false);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to delete expense: $e')));
+      }
     }
   }
 
@@ -957,7 +1019,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
   }
 
   Widget _buildHeader() {
-    final leaderName = _tripData.employee ?? 'Employee';
+    final leaderName = _tripData.employee;
     final designation = _tripData.leaderDesignation ?? 'Staff';
     final empId = _tripData.leaderEmployeeId ?? '00000';
 
@@ -1023,7 +1085,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
             child: Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: const Color(0xFF7C1D1D).withOpacity(0.1),
+                  backgroundColor: const Color(0xFF7C1D1D).withValues(alpha: 0.1),
                   radius: 18,
                   child: const Icon(
                     Icons.person_rounded,
@@ -1086,7 +1148,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
               BoxShadow(
                 color:
                     (isLow ? const Color(0xFF991B1B) : const Color(0xFF0B2844))
-                        .withOpacity(0.3),
+                        .withValues(alpha: 0.3),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -1173,7 +1235,11 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                 Icons.currency_rupee_rounded,
                 'Top Up',
                 const Color(0xFF0B2844),
-                () => setState(() => _view = 'request_advance'),
+                () {
+                  setState(() {
+                    _view = 'request_advance';
+                  });
+                },
               ),
             ),
             const SizedBox(width: 16),
@@ -1184,7 +1250,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
             //     const Color(0xFF7C1D1D),
             //     () {
             //       _clearForm();
-            //       setState(() => _view = 'add_expense');
+            //       setState(() {
+            //         _view = 'add_expense';
+            //       });
             //     },
             //   ),
             // ),
@@ -1257,7 +1325,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
         decoration: BoxDecoration(
           color: const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.1)),
+          border: Border.all(color: color.withValues(alpha: 0.1)),
         ),
         child: Column(
           children: [
@@ -1301,7 +1369,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       for (var e in _tripData.expenses!) {
         Map<String, dynamic> detail = {};
         try {
-          if (e['description'] != null) detail = jsonDecode(e['description']);
+          if (e['description'] != null) {
+            detail = jsonDecode(e['description']);
+          }
         } catch (_) {}
 
         final displayCategory = e['category'] ?? 'Expense';
@@ -1352,12 +1422,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
         }
 
         String displayTitle = displayCategory;
-        if (displayTitle == 'Others')
+        if (displayTitle == 'Others') {
           displayTitle = 'Travel';
-        else if (displayTitle == 'Fuel')
+        } else if (displayTitle == 'Fuel') {
           displayTitle = 'Local Conveyance';
-        else if (displayTitle == 'Accommodation')
+        } else if (displayTitle == 'Accommodation') {
           displayTitle = 'Stay & Lodging';
+        }
 
         activities.add({
           'id': e['id'],
@@ -1405,7 +1476,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: activities.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final act = activities[index];
         final isAdvance = act['type'] == 'advance';
@@ -1499,7 +1570,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                             if (act['is_odo_form'] == true &&
                                 act['is_completed'] != true)
                               IconButton(
-                                onPressed: () => _editExpense(act['raw_data']),
+                                onPressed: () {
+                                  _editExpense(act['raw_data']);
+                                },
                                 icon: const Icon(
                                   Icons.edit_note_rounded,
                                   size: 18,
@@ -1512,7 +1585,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                                 act['is_completed'] != true)
                               const SizedBox(width: 8),
                             IconButton(
-                              onPressed: () => _deleteExpense(act['id']),
+                              onPressed: () {
+                                _deleteExpense(act['id']);
+                              },
                               icon: const Icon(
                                 Icons.delete_outline_rounded,
                                 size: 18,
@@ -1559,8 +1634,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
   void _editExpense(Map<String, dynamic> expense) {
     Map<String, dynamic> detail = {};
     try {
-      if (expense['description'] != null)
+      if (expense['description'] != null) {
         detail = jsonDecode(expense['description']);
+      }
     } catch (_) {}
 
     setState(() {
@@ -1570,12 +1646,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
 
       // Reverse map backend categories to mobile categories
       String cat = expense['category'] ?? 'Travel';
-      if (cat == 'Others')
+      if (cat == 'Others') {
         cat = 'Travel';
-      else if (cat == 'Fuel')
+      } else if (cat == 'Fuel') {
         cat = 'Local';
-      else if (cat == 'Accommodation')
+      } else if (cat == 'Accommodation') {
         cat = 'Stay';
+      }
       _selectedCategory = cat;
       _expenseAmountController.text = (expense['amount'] ?? 0).toString();
       _expenseRemarksController.text = detail['remarks'] ?? '';
@@ -1634,12 +1711,15 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       _tollType = detail['incidentalType'] ?? 'Toll';
 
       try {
-        if (detail['depDate'] != null)
+        if (detail['depDate'] != null) {
           _selectedDate = DateTime.parse(detail['depDate']);
-        if (detail['arrDate'] != null)
+        }
+        if (detail['arrDate'] != null) {
           _endDate = DateTime.parse(detail['arrDate']);
-        if (detail['bookingDate'] != null)
+        }
+        if (detail['bookingDate'] != null) {
           _bookingDate = DateTime.parse(detail['bookingDate']);
+        }
       } catch (_) {}
 
       // Images
@@ -1651,8 +1731,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
         } else if (expense['receipt_image'] is String) {
           try {
             final decoded = jsonDecode(expense['receipt_image']);
-            if (decoded is List)
+            if (decoded is List) {
               _existingReceiptBase64s = List<String>.from(decoded);
+            }
           } catch (_) {}
         }
       }
@@ -1689,13 +1770,17 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
     if (confirmed == true) {
       try {
         await _tripService.deleteExpense(id.toString());
+        if (!mounted) {
+          return;
+        }
         _refreshTripData();
         widget.onUpdate();
       } catch (e) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+        }
       }
     }
   }
@@ -1707,7 +1792,11 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
         Row(
           children: [
             IconButton(
-              onPressed: () => setState(() => _view = 'overview'),
+              onPressed: () {
+                setState(() {
+                  _view = 'overview';
+                });
+              },
               icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
             ),
             const SizedBox(width: 8),
@@ -1825,7 +1914,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    color: Colors.blueGrey.withOpacity(0.6),
+                    color: Colors.blueGrey.withValues(alpha: 0.6),
                     letterSpacing: 1.2,
                   ),
                 ),
@@ -1843,8 +1932,12 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                       scale: 0.7,
                       child: Switch(
                         value: _carryingLuggage,
-                        onChanged: (v) => setState(() => _carryingLuggage = v),
-                        activeColor: const Color(0xFF3B82F6),
+                        onChanged: (v) {
+                          setState(() {
+                            _carryingLuggage = v;
+                          });
+                        },
+                        activeThumbColor: const Color(0xFF3B82F6),
                       ),
                     ),
                   ],
@@ -1890,7 +1983,14 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                                 const Duration(days: 365),
                               ),
                             );
-                            if (d != null) setState(() => _bookingDate = d);
+                            if (!mounted) {
+                              return;
+                            }
+                            if (d != null) {
+                              setState(() {
+                                _bookingDate = d;
+                              });
+                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -1938,9 +2038,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               context: context,
                               initialTime: TimeOfDay.now(),
                             );
-                            if (t != null)
+                            if (!mounted) {
+                              return;
+                            }
+                            if (t != null) {
                               _bookingTimeController.text =
                                   "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
+                            }
                           },
                         ),
                       ),
@@ -1981,19 +2085,20 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                         ),
                       )
                       .toList(),
-                  onChanged: (v) => setState(() {
-                    _selectedMode = v!;
-                    if (_selectedMode == 'Flight')
-                      _selectedClass = 'Economy';
-                    else if (_selectedMode == 'Train')
-                      _selectedClass = 'Sleeper';
-                    else if (_selectedMode == 'Intercity Bus')
-                      _selectedClass = 'Volvo';
-                    else if (_selectedMode == 'Intercity Cab')
-                      _selectedClass = 'Sedan';
-                    else if (_selectedMode == 'Intercity Car')
-                      _selectedClass = 'Own Car';
-                  }),
+                    onChanged: (v) => setState(() {
+                      _selectedMode = v!;
+                      if (_selectedMode == 'Flight') {
+                        _selectedClass = 'Economy';
+                      } else if (_selectedMode == 'Train') {
+                        _selectedClass = 'Sleeper';
+                      } else if (_selectedMode == 'Intercity Bus') {
+                        _selectedClass = 'Volvo';
+                      } else if (_selectedMode == 'Intercity Cab') {
+                        _selectedClass = 'Sedan';
+                      } else if (_selectedMode == 'Intercity Car') {
+                        _selectedClass = 'Own Car';
+                      }
+                    }),
                   icon: const Icon(
                     Icons.keyboard_arrow_down_rounded,
                     color: Colors.black26,
@@ -2287,7 +2392,11 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                                   ),
                                 )
                                 .toList(),
-                        onChanged: (v) => setState(() => _selectedClass = v!),
+                        onChanged: (v) {
+                          setState(() {
+                            _selectedClass = v!;
+                          });
+                        },
                         decoration: _inputDecorationSuffix(
                           null,
                           _selectedMode == 'Intercity Bus'
@@ -2390,7 +2499,12 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                                 const Duration(days: 365),
                               ),
                             );
-                            if (d != null) setState(() => _selectedDate = d);
+                            if (!mounted) {
+                              return;
+                            }
+                            if (d != null) {
+                              setState(() => _selectedDate = d);
+                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -2441,7 +2555,12 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                                 const Duration(days: 365),
                               ),
                             );
-                            if (d != null) setState(() => _endDate = d);
+                            if (!mounted) {
+                              return;
+                            }
+                            if (d != null) {
+                              setState(() => _endDate = d);
+                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -2496,9 +2615,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               context: context,
                               initialTime: TimeOfDay.now(),
                             );
-                            if (t != null)
+                            if (!mounted) {
+                              return;
+                            }
+                            if (t != null) {
                               _boardingTimeController.text =
                                   "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
+                            }
                           },
                         ),
                       ),
@@ -2519,9 +2642,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               context: context,
                               initialTime: TimeOfDay.now(),
                             );
-                            if (t != null)
+                            if (!mounted) {
+                              return;
+                            }
+                            if (t != null) {
                               _scheduledTimeController.text =
                                   "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
+                            }
                           },
                         ),
                       ),
@@ -2546,9 +2673,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               context: context,
                               initialTime: TimeOfDay.now(),
                             );
-                            if (t != null)
+                            if (!mounted) {
+                              return;
+                            }
+                            if (t != null) {
                               _actualTimeController.text =
                                   "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
+                            }
                           },
                         ),
                       ),
@@ -2619,7 +2750,12 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               const Duration(days: 365),
                             ),
                           );
-                          if (d != null) setState(() => _selectedDate = d);
+                          if (!mounted) {
+                            return;
+                          }
+                          if (d != null) {
+                            setState(() => _selectedDate = d);
+                          }
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -2663,7 +2799,12 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               const Duration(days: 365),
                             ),
                           );
-                          if (d != null) setState(() => _endDate = d);
+                          if (!mounted) {
+                            return;
+                          }
+                          if (d != null) {
+                            setState(() => _endDate = d);
+                          }
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -2870,9 +3011,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                             context: context,
                             initialTime: TimeOfDay.now(),
                           );
-                          if (t != null)
+                          if (!mounted) {
+                            return;
+                          }
+                          if (t != null) {
                             _startTimeController.text =
                                 "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
+                          }
                         },
                       ),
                     ),
@@ -2890,9 +3035,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                             context: context,
                             initialTime: TimeOfDay.now(),
                           );
-                          if (t != null)
+                          if (!mounted) {
+                            return;
+                          }
+                          if (t != null) {
                             _endTimeController.text =
                                 "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
+                          }
                         },
                       ),
                     ),
@@ -2990,7 +3139,12 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               const Duration(days: 365),
                             ),
                           );
-                          if (d != null) setState(() => _selectedDate = d);
+                          if (!mounted) {
+                            return;
+                          }
+                          if (d != null) {
+                            setState(() => _selectedDate = d);
+                          }
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -3036,9 +3190,13 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                             context: context,
                             initialTime: TimeOfDay.now(),
                           );
-                          if (t != null)
+                          if (!mounted) {
+                            return;
+                          }
+                          if (t != null) {
                             _mealTimeController.text =
                                 "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
+                          }
                         },
                       ),
                     ),
@@ -3071,17 +3229,19 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                         ),
                       )
                       .toList(),
-                  onChanged: (v) => setState(() {
-                    _mealCategory = v!;
-                    _mealType = _mealSubTypes[_mealCategory]![0];
-                    if (_mealCategory != 'Self Meal') {
-                      _expenseAmountController.text = '0';
-                      _restaurantController.clear();
-                      _addressController.clear();
-                      _invoiceNoController.clear();
-                      _receiptImagePaths.clear();
-                    }
-                  }),
+                  onChanged: (v) {
+                    setState(() {
+                      _mealCategory = v!;
+                      _mealType = _mealSubTypes[_mealCategory]![0];
+                      if (_mealCategory != 'Self Meal') {
+                        _expenseAmountController.text = '0';
+                        _restaurantController.clear();
+                        _addressController.clear();
+                        _invoiceNoController.clear();
+                        _receiptImagePaths.clear();
+                      }
+                    });
+                  },
                   icon: const Icon(
                     Icons.keyboard_arrow_down_rounded,
                     color: Colors.black26,
@@ -3116,7 +3276,11 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               )
                               .toList(),
                           onChanged: _mealCategory == 'Self Meal'
-                              ? (v) => setState(() => _mealType = v!)
+                              ? (v) {
+                                  setState(() {
+                                    _mealType = v!;
+                                  });
+                                }
                               : null,
                           icon: const Icon(
                             Icons.keyboard_arrow_down_rounded,
@@ -3188,7 +3352,12 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               const Duration(days: 365),
                             ),
                           );
-                          if (d != null) setState(() => _selectedDate = d);
+                          if (!mounted) {
+                            return;
+                          }
+                          if (d != null) {
+                            setState(() => _selectedDate = d);
+                          }
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -3232,7 +3401,12 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               const Duration(days: 365),
                             ),
                           );
-                          if (d != null) setState(() => _endDate = d);
+                          if (!mounted) {
+                            return;
+                          }
+                          if (d != null) {
+                            setState(() => _endDate = d);
+                          }
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -3307,7 +3481,11 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                             ),
                           )
                           .toList(),
-                  onChanged: (v) => setState(() => _selectedMode = v!),
+                  onChanged: (v) {
+                    setState(() {
+                      _selectedMode = v!;
+                    });
+                  },
                   icon: const Icon(
                     Icons.keyboard_arrow_down_rounded,
                     color: Colors.black26,
@@ -3358,7 +3536,11 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               ),
                             )
                             .toList(),
-                    onChanged: (v) => setState(() => _roomType = v!),
+                    onChanged: (v) {
+                      setState(() {
+                        _roomType = v!;
+                      });
+                    },
                     icon: const Icon(
                       Icons.keyboard_arrow_down_rounded,
                       color: Colors.black26,
@@ -3434,7 +3616,14 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                   firstDate: DateTime(2020),
                   lastDate: DateTime.now().add(const Duration(days: 365)),
                 );
-                if (d != null) setState(() => _selectedDate = d);
+
+                if (!mounted) {
+                  return;
+                }
+
+                if (d != null) {
+                  setState(() => _selectedDate = d);
+                }
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -3799,7 +3988,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
               style: TextButton.styleFrom(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.red.withOpacity(0.2)),
+                  side: BorderSide(color: Colors.red.withValues(alpha: 0.2)),
                 ),
               ),
             ),
@@ -3814,7 +4003,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
               child: ElevatedButton(
                 onPressed: _isSubmitting
                     ? null
-                    : () => _handleAddExpense(finalizeSubmit: true),
+                    : () {
+                        _handleAddExpense(finalizeSubmit: true);
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   shape: RoundedRectangleBorder(
@@ -3855,7 +4046,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
             child: ElevatedButton(
               onPressed: _isSubmitting
                   ? null
-                  : () => _handleAddExpense(finalizeSubmit: false),
+                  : () {
+                      _handleAddExpense(finalizeSubmit: false);
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF7C1D1D),
                 shape: RoundedRectangleBorder(
@@ -3880,7 +4073,11 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
             width: double.infinity,
             height: 60,
             child: ElevatedButton(
-              onPressed: _isSubmitting ? null : () => _handleAddExpense(),
+              onPressed: _isSubmitting
+                  ? null
+                  : () {
+                      _handleAddExpense();
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF7C1D1D),
                 shape: RoundedRectangleBorder(
@@ -3950,7 +4147,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                   ),
                   decoration: BoxDecoration(
                     color: isStartLocked
-                        ? Colors.black.withOpacity(0.05)
+                        ? Colors.black.withValues(alpha: 0.05)
                         : const Color(0xFFF8FAFC),
                     border: Border.all(color: const Color(0xFFE2E8F0)),
                     borderRadius: BorderRadius.circular(14),
@@ -3982,7 +4179,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                       IconButton(
                         onPressed: isStartLocked
                             ? null
-                            : () => _captureOdoPhoto(true),
+                            : () {
+                                _captureOdoPhoto(true);
+                              },
                         icon: Icon(
                           Icons.camera_alt_outlined,
                           size: 16,
@@ -4006,7 +4205,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                   ),
                   decoration: BoxDecoration(
                     color: (isEndDisabled || isEndPreviouslyCaptured)
-                        ? Colors.black.withOpacity(0.05)
+                        ? Colors.black.withValues(alpha: 0.05)
                         : const Color(0xFFF8FAFC),
                     border: Border.all(color: const Color(0xFFE2E8F0)),
                     borderRadius: BorderRadius.circular(14),
@@ -4038,7 +4237,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                       IconButton(
                         onPressed: (isEndDisabled || isEndPreviouslyCaptured)
                             ? null
-                            : () => _captureOdoPhoto(false),
+                            : () {
+                                _captureOdoPhoto(false);
+                              },
                         icon: Icon(
                           Icons.camera_alt_outlined,
                           size: 16,
@@ -4063,7 +4264,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                 style: GoogleFonts.inter(
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFF7C1D1D).withOpacity(0.6),
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.6),
                 ),
               ),
             )
@@ -4075,7 +4276,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                 style: GoogleFonts.inter(
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
-                  color: Colors.blue.withOpacity(0.6),
+                  color: Colors.blue.withValues(alpha: 0.6),
                 ),
               ),
             ),

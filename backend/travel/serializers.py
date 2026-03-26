@@ -211,7 +211,7 @@ class TripOdometerSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
 class ExpenseSerializer(serializers.ModelSerializer):
-    user_name = serializers.ReadOnlyField(source='trip.user.name')
+    user_name = serializers.ReadOnlyField(source='trip.user_name')
     trip_user_id = serializers.ReadOnlyField(source='trip.user.employee_id')
 
     class Meta:
@@ -239,7 +239,7 @@ class TravelClaimSerializer(serializers.ModelSerializer):
     class Meta:
         model = TravelClaim
         fields = [
-            'id', 'trip', 'total_amount', 'approved_amount', 'status',
+            'id', 'trip', 'total_amount', 'approved_amount', 'status', 'expenses', 'user_name',
             'current_approver', 'hierarchy_level', 'submitted_at', 'remarks',
             'payment_mode', 'transaction_id', 'receipt_file', 'payment_date',
             'processed_by', 'processed_by_name', 'finance_remarks',
@@ -248,10 +248,16 @@ class TravelClaimSerializer(serializers.ModelSerializer):
         read_only_fields = ['submitted_at', 'processed_by']
 
     def get_user_name(self, obj):
-        return obj.user_name or (obj.trip.user.name if obj.trip and obj.trip.user else 'Unknown User')
+        # Priority: 1. Claim Snapshot, 2. Trip Snapshot, 3. API Fallback
+        if obj.user_name: return obj.user_name
+        if obj.trip and obj.trip.user_name: return obj.trip.user_name
+        return obj.trip.user.name if obj.trip and obj.trip.user else 'Unknown User'
 
     def get_reporting_manager_name(self, obj):
-        return obj.reporting_manager_name or (obj.trip.user.reporting_manager.name if obj.trip and obj.trip.user and obj.trip.user.reporting_manager else None)
+        # Priority: 1. Claim Snapshot, 2. Trip Snapshot, 3. API Fallback
+        if obj.reporting_manager_name: return obj.reporting_manager_name
+        if obj.trip and obj.trip.reporting_manager_name: return obj.trip.reporting_manager_name
+        return obj.trip.user.reporting_manager.name if obj.trip and obj.trip.user and obj.trip.user.reporting_manager else None
 
 class TravelAdvanceSerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()
@@ -262,10 +268,16 @@ class TravelAdvanceSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_user_name(self, obj):
-        return obj.user_name or (obj.trip.user.name if obj.trip and obj.trip.user else 'Unknown User')
+        # Priority: 1. Advance Snapshot, 2. Trip Snapshot, 3. API Fallback
+        if obj.user_name: return obj.user_name
+        if obj.trip and obj.trip.user_name: return obj.trip.user_name
+        return obj.trip.user.name if obj.trip and obj.trip.user else 'Unknown User'
 
     def get_reporting_manager_name(self, obj):
-        return obj.reporting_manager_name or (obj.trip.user.reporting_manager.name if obj.trip and obj.trip.user and obj.trip.user.reporting_manager else None)
+        # Priority: 1. Advance Snapshot, 2. Trip Snapshot, 3. API Fallback
+        if obj.reporting_manager_name: return obj.reporting_manager_name
+        if obj.trip and obj.trip.reporting_manager_name: return obj.trip.reporting_manager_name
+        return obj.trip.user.reporting_manager.name if obj.trip and obj.trip.user and obj.trip.user.reporting_manager else None
 
 class DisputeSerializer(serializers.ModelSerializer):
     trip_id_display = serializers.CharField(source='trip.trip_id', read_only=True)

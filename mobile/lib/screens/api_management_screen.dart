@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/trip_service.dart';
-import '../services/api_service.dart';
 import 'package:intl/intl.dart';
 
 class ApiManagementScreen extends StatefulWidget {
@@ -14,7 +13,6 @@ class ApiManagementScreen extends StatefulWidget {
 
 class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTickerProviderStateMixin {
   final TripService _tripService = TripService();
-  final ApiService _apiService = ApiService();
   late TabController _tabController;
   
   bool _isLoading = true;
@@ -210,7 +208,7 @@ class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTi
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: (statusCode >= 200 && statusCode < 300) ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                    color: (statusCode >= 200 && statusCode < 300) ? Colors.green.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -240,7 +238,7 @@ class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTi
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: const Color(0xFFF1F5F9)),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 8))],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 20, offset: const Offset(0, 8))],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -304,7 +302,9 @@ class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTi
   }
 
   Future<void> _saveMasterKey() async {
-    if (_masterApiKeyController.text.isEmpty) return;
+    if (_masterApiKeyController.text.isEmpty) {
+      return;
+    }
     
     setState(() => _isSavingMasterKey = true);
     try {
@@ -487,7 +487,7 @@ class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTi
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: const Color(0xFF7C1D1D).withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(color: const Color(0xFF7C1D1D).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
                 child: Text(ep['url_path'] ?? '', style: GoogleFonts.robotoMono(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF7C1D1D))),
               ),
               const Spacer(),
@@ -507,7 +507,7 @@ class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTi
   Widget _statusBadge(bool isActive) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: isActive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(color: isActive ? Colors.green.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
       child: Text(isActive ? 'ACTIVE' : 'INACTIVE', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: isActive ? Colors.green : Colors.red)),
     );
   }
@@ -567,7 +567,9 @@ class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTi
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () async {
-                    if (nameController.text.isEmpty) return;
+                    if (nameController.text.isEmpty) {
+                      return;
+                    }
                     
                     final permissions = {};
                     if (selectedEndpoint != null) {
@@ -576,20 +578,22 @@ class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTi
                       permissions['*'] = ['GET'];
                     }
 
-                    try {
-                      final result = await _tripService.generateAccessKey({
-                        'name': nameController.text,
-                        'rate_limit': int.tryParse(rateLimitController.text) ?? 60,
-                        'permissions': permissions,
-                      });
-                      if (mounted) {
-                        Navigator.pop(context);
-                        _showKeyResultModal(result['key']);
-                        _fetchAllData();
+                      try {
+                        final result = await _tripService.generateAccessKey({
+                          'name': nameController.text,
+                          'rate_limit': int.tryParse(rateLimitController.text) ?? 60,
+                          'permissions': permissions,
+                        });
+                        if (mounted) {
+                          Navigator.pop(context);
+                          _showKeyResultModal(result['key']);
+                          _fetchAllData();
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                        }
                       }
-                    } catch (e) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-                    }
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                   child: Text('GENERATE KEY', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
@@ -652,20 +656,24 @@ class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTi
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () async {
-                  if (nameController.text.isEmpty || pathController.text.isEmpty) return;
-                  try {
-                    await _tripService.createDynamicEndpoint({
-                      'name': nameController.text,
-                      'url_path': pathController.text,
-                      'response_type': 'NONE',
-                    });
-                    if (mounted) {
-                      Navigator.pop(context);
-                      _fetchAllData();
-                    }
-                  } catch (e) {
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                  if (nameController.text.isEmpty || pathController.text.isEmpty) {
+                    return;
                   }
+                    try {
+                      await _tripService.createDynamicEndpoint({
+                        'name': nameController.text,
+                        'url_path': pathController.text,
+                        'response_type': 'NONE',
+                      });
+                      if (mounted) {
+                        Navigator.pop(context);
+                        _fetchAllData();
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                      }
+                    }
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                 child: Text('CREATE ENDPOINT', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),

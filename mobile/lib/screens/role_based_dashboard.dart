@@ -13,8 +13,6 @@ import 'notifications_screen.dart';
 import 'frs_attendance_screen.dart';
 import 'frs_enrollment_screen.dart';
 import 'profile_page.dart';
-import 'guest_house_screen.dart';
-import 'trip_approvals_screen.dart';
 import 'my_trips_screen.dart';
 import 'help_support_screen.dart';
 
@@ -44,7 +42,6 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   bool _isLoadingNotifs = true;
   int _currentIndex = 1; // Default to Dashboard (index 1)
 
-  bool _isAccLoading = false;
   bool _frsVerifiedThisSession = false;
   bool _isFaceEnrolled = false;
   Map<String, dynamic>? _dashboardStats;
@@ -112,7 +109,9 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   }
 
   Future<void> _fetchDashboardData() async {
-    setState(() => _isLoadingStats = true);
+    if (mounted) {
+      setState(() => _isLoadingStats = true);
+    }
     try {
       final stats = await _tripService.fetchDashboardStats();
       if (mounted) {
@@ -130,11 +129,13 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   void _checkFrsStatus() {
     final user = _apiService.getUser();
     if (user != null) {
-      setState(() {
-        _isFaceEnrolled = user['is_face_enrolled'] == true;
-        _empId = (user['employee_id'] ?? user['emp_id'] ?? user['id'] ?? '')
-            .toString();
-      });
+      if (mounted) {
+        setState(() {
+          _isFaceEnrolled = user['is_face_enrolled'] == true;
+          _empId = (user['employee_id'] ?? user['emp_id'] ?? user['id'] ?? '')
+              .toString();
+        });
+      }
     }
   }
 
@@ -143,9 +144,15 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
       context,
       MaterialPageRoute(builder: (context) => const FrsEnrollmentScreen()),
     );
+    if (!mounted) {
+      return;
+    }
     if (result == true) {
       // Refresh status after enrollment
       await _apiService.fetchFreshUser();
+      if (!mounted) {
+        return;
+      }
       _checkFrsStatus();
     }
   }
@@ -164,6 +171,9 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   Future<void> _syncExpenseReminders() async {
     try {
       final trips = await _tripService.fetchTrips();
+      if (!mounted) {
+        return;
+      }
       await ExpenseReminderService.syncTripExpenseReminders(trips);
     } catch (e) {
       debugPrint('Failed to sync expense reminders: $e');
@@ -171,7 +181,9 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   }
 
   Future<void> _fetchNotifications() async {
-    setState(() => _isLoadingNotifs = true);
+    if (mounted) {
+      setState(() => _isLoadingNotifs = true);
+    }
     try {
       final response = await _apiService.get(ApiConstants.notifications);
       if (mounted) {
@@ -299,7 +311,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -328,7 +340,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                               (_frsVerifiedThisSession
                                       ? const Color(0xFF10B981)
                                       : const Color(0xFFBB0633))
-                                  .withOpacity(0.1),
+                                  .withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -424,7 +436,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFFA9052E).withOpacity(0.04),
+                    const Color(0xFFA9052E).withValues(alpha: 0.04),
                     Colors.transparent,
                   ],
                 ),
@@ -440,7 +452,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
               height: 400,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  colors: [Colors.orange.withOpacity(0.03), Colors.transparent],
+                  colors: [Colors.orange.withValues(alpha: 0.03), Colors.transparent],
                 ),
                 shape: BoxShape.circle,
               ),
@@ -455,7 +467,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF3B82F6).withOpacity(0.03),
+                    const Color(0xFF3B82F6).withValues(alpha: 0.03),
                     Colors.transparent,
                   ],
                 ),
@@ -574,7 +586,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFBB0633).withOpacity(0.1),
+                      color: const Color(0xFFBB0633).withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -603,118 +615,6 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
     );
   }
 
-  Widget _buildActionButtons() {
-    final role = widget.userRole.toLowerCase();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Row(
-        children: [
-          if (role == 'guesthouse_manager')
-            Expanded(
-              child: _buildHeaderBtn(
-                'Manage Guest Houses',
-                Icons.hotel,
-                const Color(0xFFBB0633),
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const GuestHouseScreen()),
-                ),
-              ),
-            )
-          else if (role == 'fleet_manager')
-            Expanded(
-              child: _buildHeaderBtn(
-                'Manage Fleet',
-                Icons.directions_car,
-                const Color(0xFFBB0633),
-                () {}, // Fleet screen coming soon
-              ),
-            )
-          else ...[
-            if ([
-              'reporting_authority',
-              'hr',
-              'finance',
-              'admin',
-              'cfo',
-            ].contains(role)) ...[
-              Expanded(
-                child: _buildHeaderBtn(
-                  'Reviews',
-                  Icons.pending_actions,
-                  Colors.amber[800]!,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const TripApprovalsScreen(),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-            ],
-            Expanded(
-              child: _buildHeaderBtn(
-                'New Request',
-                Icons.add_circle_outline,
-                const Color(0xFFBB0633),
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MyTripsScreen()),
-                ), // Or specific create screen
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderBtn(
-    String label,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F1E2A), // Match web's primary action color
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF0F1E2A).withOpacity(0.2),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: Colors.white, size: 20),
-              const SizedBox(width: 10),
-              Text(
-                label,
-                style: GoogleFonts.plusJakartaSans(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                  letterSpacing: 0.2,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildKpiGrid() {
     final kpis = _dashboardStats?['kpis'] as List? ?? [];
@@ -733,7 +633,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFF334155).withOpacity(0.6),
+                  color: const Color(0xFF334155).withValues(alpha: 0.6),
                   letterSpacing: 1.2,
                 ),
               ),
@@ -776,7 +676,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: color.withOpacity(0.3),
+                      color: color.withValues(alpha: 0.3),
                       blurRadius: 15,
                       offset: const Offset(0, 8),
                     ),
@@ -794,7 +694,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                         height: 100,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.white.withValues(alpha: 0.1),
                         ),
                       ),
                     ),
@@ -815,7 +715,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 9,
                                     fontWeight: FontWeight.w800,
-                                    color: Colors.white.withOpacity(0.9),
+                                    color: Colors.white.withValues(alpha: 0.9),
                                     letterSpacing: 0.5,
                                   ),
                                   maxLines: 1,
@@ -837,7 +737,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w700,
-                                    color: Colors.white.withOpacity(0.95),
+                                    color: Colors.white.withValues(alpha: 0.95),
                                   ),
                                 ),
                               ],
@@ -846,10 +746,10 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.18),
+                              color: Colors.white.withValues(alpha: 0.18),
                               borderRadius: BorderRadius.circular(18),
                               border: Border.all(
-                                color: Colors.white.withOpacity(0.1),
+                                color: Colors.white.withValues(alpha: 0.1),
                               ),
                             ),
                             child: Icon(
@@ -980,9 +880,9 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: _getStatusColor(
-                            (item['status'] ?? '').toString(),
-                          ).withOpacity(0.1),
+                            color: _getStatusColor(
+                              (item['status'] ?? '').toString(),
+                            ).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -1007,7 +907,9 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   }
 
   Color _getStatusColor(String? status) {
-    if (status == null) return const Color(0xFF64748B);
+    if (status == null) {
+      return const Color(0xFF64748B);
+    }
     switch (status.toLowerCase()) {
       case 'approved':
       case 'paid':
@@ -1029,12 +931,12 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -1046,7 +948,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -1065,7 +967,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 8,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white.withOpacity(0.9),
+                  color: Colors.white.withValues(alpha: 0.9),
                   letterSpacing: 0.5,
                 ),
               ),
@@ -1091,7 +993,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
         color: const Color(0xFFA9052E),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1107,7 +1009,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
             child: Container(
               width: 240,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
+                color: Colors.white.withValues(alpha: 0.08),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(160),
                   bottomLeft: Radius.circular(160),
@@ -1132,7 +1034,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withValues(alpha: 0.08),
                         blurRadius: 15,
                         offset: const Offset(0, 5),
                       ),
@@ -1169,7 +1071,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white.withOpacity(0.8),
+                          color: Colors.white.withValues(alpha: 0.8),
                         ),
                       ),
                     ],
@@ -1191,7 +1093,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -1199,9 +1101,9 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
       ),
       child: NavigationBarTheme(
         data: NavigationBarThemeData(
-          indicatorColor: const Color(0xFFBB0633).withOpacity(0.1),
-          labelTextStyle: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected)) {
+          indicatorColor: const Color(0xFFBB0633).withValues(alpha: 0.1),
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
               return GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
@@ -1214,8 +1116,8 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
               color: const Color(0xFF64748B),
             );
           }),
-          iconTheme: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected)) {
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
               return const IconThemeData(color: Color(0xFFBB0633), size: 26);
             }
             return const IconThemeData(color: Color(0xFF64748B), size: 24);
@@ -1342,7 +1244,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFBB0633).withOpacity(0.1),
+                    color: const Color(0xFFBB0633).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
@@ -1374,7 +1276,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
@@ -1398,6 +1300,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
         ),
       ],
     ).then((value) {
+      if (!mounted) return;
       if (value == 'profile') {
         setState(() {
           _currentIndex = 2;
@@ -1468,7 +1371,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 15,
               offset: const Offset(0, 8),
             ),
@@ -1487,8 +1390,8 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                 decoration: BoxDecoration(
                   gradient: RadialGradient(
                     colors: [
-                      module.iconColor.withOpacity(0.06),
-                      module.iconColor.withOpacity(0),
+                       module.iconColor.withValues(alpha: 0.06),
+                       module.iconColor.withValues(alpha: 0),
                     ],
                   ),
                   shape: BoxShape.circle,
@@ -1504,10 +1407,10 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: module.iconColor.withOpacity(0.1),
+                      color: module.iconColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: module.iconColor.withOpacity(0.05),
+                        color: module.iconColor.withValues(alpha: 0.05),
                       ),
                     ),
                     child: Center(
@@ -1551,8 +1454,8 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                 child: InkWell(
                   onTap: () => _navigateToModule(module),
                   borderRadius: BorderRadius.circular(24),
-                  splashColor: module.iconColor.withOpacity(0.1),
-                  highlightColor: module.iconColor.withOpacity(0.05),
+                  splashColor: module.iconColor.withValues(alpha: 0.1),
+                  highlightColor: module.iconColor.withValues(alpha: 0.05),
                 ),
               ),
             ),

@@ -58,7 +58,9 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
     }
 
     _processDiscovery();
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _fetchRoutes() async {
@@ -411,8 +413,12 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
     try {
       await _apiService.post('/api/masters/locations/sync/', body: {}, includeAuth: true);
       await _loadAll();
-    } catch (e) { debugPrint("Sync error: $e"); }
-    setState(() => _isLoading = false);
+    } catch (e) {
+      debugPrint("Sync error: $e");
+    }
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   // Placeholder for Routes/Tolls to keep the file clean for this fix

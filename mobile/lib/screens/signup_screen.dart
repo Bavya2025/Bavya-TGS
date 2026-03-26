@@ -23,9 +23,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.initState();
     _videoController = VideoPlayerController.asset('assets/background.mp4')
       ..initialize().then((_) {
-        _videoController.play();
-        _videoController.setLooping(true);
-        setState(() {});
+        if (mounted) {
+          _videoController.play();
+          _videoController.setLooping(true);
+          setState(() {});
+        }
       });
   }
 
@@ -236,7 +238,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFFFC69E).withOpacity(0.4),
+        color: const Color(0xFFFFC69E).withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(12),
       ),
       child: TextFormField(

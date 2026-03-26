@@ -30,10 +30,11 @@ class _TripExpenseFormDetailedScreenState
   bool _isProcessing = false;
   final picker = ImagePicker();
   final TripService _tripService = TripService();
-  bool get isStartFieldsComplete =>
-      _originController.text.isNotEmpty &&
-      _odoStartController.text.isNotEmpty &&
-      _odoStartImg != null;
+  bool get isStartFieldsComplete {
+    return _originController.text.isNotEmpty &&
+        _odoStartController.text.isNotEmpty &&
+        _odoStartImg != null;
+  }
 
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _amountController = TextEditingController();
@@ -125,9 +126,11 @@ class _TripExpenseFormDetailedScreenState
     final type = (_travelSubType == 'Own Car') ? '4 Wheeler' : '2 Wheeler';
     final rate = await _tripService.fetchFuelRate(type);
     if (rate != null) {
-      setState(() {
-        _odoRateController.text = rate.toStringAsFixed(2);
-      });
+      if (mounted) {
+        setState(() {
+          _odoRateController.text = rate.toStringAsFixed(2);
+        });
+      }
     }
   }
 
@@ -187,10 +190,12 @@ class _TripExpenseFormDetailedScreenState
         details['excessBaggage'] == 'Yes' || details['excessBaggage'] == true;
     _isTatkal = details['isTatkal'] == true;
 
-    if (details['bookingDate'] != null)
+    if (details['bookingDate'] != null) {
       _bookingDate = DateTime.tryParse(details['bookingDate']) ?? _bookingDate;
-    if (details['bookingTime'] != null)
+    }
+    if (details['bookingTime'] != null) {
       _bookingTime = _parseTime(details['bookingTime']);
+    }
 
     _mealCategory = details['mealCategory'];
     _mealType = details['mealType'];
@@ -216,21 +221,31 @@ class _TripExpenseFormDetailedScreenState
       _selfieImages = List<String>.from(selfies.map((e) => e.toString()));
     }
 
-    if (details['date'] != null)
+    if (details['date'] != null) {
       _startDate = DateTime.tryParse(details['date']) ?? _startDate;
-    if (details['depDate'] != null)
+    }
+    if (details['depDate'] != null) {
       _startDate = DateTime.tryParse(details['depDate']) ?? _startDate;
-    if (details['arrDate'] != null)
+    }
+    if (details['arrDate'] != null) {
       _endDate = DateTime.tryParse(details['arrDate']) ?? _endDate;
-    if (details['checkIn'] != null)
+    }
+    if (details['checkIn'] != null) {
       _startDate = DateTime.tryParse(details['checkIn']) ?? _startDate;
-    if (details['checkOut'] != null)
+    }
+    if (details['checkOut'] != null) {
       _endDate = DateTime.tryParse(details['checkOut']) ?? _endDate;
+    }
 
-    if (details['depTime'] != null) _startTime = _parseTime(details['depTime']);
-    if (details['arrTime'] != null) _endTime = _parseTime(details['arrTime']);
-    if (details['mealTime'] != null)
+    if (details['depTime'] != null) {
+      _startTime = _parseTime(details['depTime']);
+    }
+    if (details['arrTime'] != null) {
+      _endTime = _parseTime(details['arrTime']);
+    }
+    if (details['mealTime'] != null) {
       _startTime = _parseTime(details['mealTime']);
+    }
 
     if (widget.category == 'Local Travel') {
       _odoRateController.text = (details['odoRate'] ?? '9.0').toString();
@@ -254,13 +269,18 @@ class _TripExpenseFormDetailedScreenState
         ];
       }
 
-      if (details['startDate'] != null)
+      if (details['startDate'] != null) {
         _startDate = DateTime.tryParse(details['startDate']) ?? _startDate;
-      if (details['endDate'] != null)
+      }
+      if (details['endDate'] != null) {
         _endDate = DateTime.tryParse(details['endDate']) ?? _endDate;
-      if (details['startTime'] != null)
+      }
+      if (details['startTime'] != null) {
         _startTime = _parseTime(details['startTime']);
-      if (details['endTime'] != null) _endTime = _parseTime(details['endTime']);
+      }
+      if (details['endTime'] != null) {
+        _endTime = _parseTime(details['endTime']);
+      }
     }
   }
 
@@ -284,7 +304,9 @@ class _TripExpenseFormDetailedScreenState
   }
 
   Future<void> _submitEntry() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
     setState(() => _isProcessing = true);
     try {
@@ -361,13 +383,19 @@ class _TripExpenseFormDetailedScreenState
         }
       }
 
-      Navigator.pop(context, true);
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
     } finally {
-      setState(() => _isProcessing = false);
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     }
   }
 
@@ -851,7 +879,7 @@ class _TripExpenseFormDetailedScreenState
                   dense: true,
                 ),
               ),
-              if (_travelMode == 'Flight')
+              if (_travelMode == 'Flight') ...[
                 Expanded(
                   child: CheckboxListTile(
                     title: Text(
@@ -869,6 +897,7 @@ class _TripExpenseFormDetailedScreenState
                     dense: true,
                   ),
                 ),
+              ],
             ],
           ),
         ],
@@ -898,7 +927,9 @@ class _TripExpenseFormDetailedScreenState
   }
 
   Widget _buildLocalTravelForm() {
-    if (_isTravelo) return _buildTraveloLocalForm();
+    if (_isTravelo) {
+      return _buildTraveloLocalForm();
+    }
     return _buildTripLocalTravelForm();
   }
 
@@ -940,7 +971,7 @@ class _TripExpenseFormDetailedScreenState
             borderRadius: BorderRadius.circular(32),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF2563EB).withOpacity(0.2),
+                color: const Color(0xFF2563EB).withValues(alpha: 0.2),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -955,7 +986,7 @@ class _TripExpenseFormDetailedScreenState
                   Text(
                     'ESTIMATED TOTAL',
                     style: GoogleFonts.plusJakartaSans(
-                      color: Colors.white.withOpacity(0.7),
+                      color: Colors.white.withValues(alpha: 0.7),
                       fontWeight: FontWeight.w800,
                       fontSize: 10,
                       letterSpacing: 1,
@@ -978,7 +1009,7 @@ class _TripExpenseFormDetailedScreenState
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(
@@ -994,7 +1025,7 @@ class _TripExpenseFormDetailedScreenState
                     Text(
                       'DISTANCE',
                       style: GoogleFonts.plusJakartaSans(
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha: 0.7),
                         fontWeight: FontWeight.w800,
                         fontSize: 8,
                         letterSpacing: 0.5,
@@ -1079,16 +1110,20 @@ class _TripExpenseFormDetailedScreenState
             const SizedBox(height: 32),
             Row(
               children: [
-                Expanded(child: Divider(color: Colors.grey.withOpacity(0.1))),
+                Expanded(
+                  child: Divider(color: Colors.grey.withValues(alpha: 0.1)),
+                ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Icon(
                     Icons.arrow_downward_rounded,
                     size: 16,
-                    color: Colors.grey.withOpacity(0.3),
+                    color: Colors.grey.withValues(alpha: 0.3),
                   ),
                 ),
-                Expanded(child: Divider(color: Colors.grey.withOpacity(0.1))),
+                Expanded(
+                  child: Divider(color: Colors.grey.withValues(alpha: 0.1)),
+                ),
               ],
             ),
             const SizedBox(height: 32),
@@ -1254,9 +1289,12 @@ class _TripExpenseFormDetailedScreenState
                         result is Map &&
                         result['path'] != null) {
                       final bytes = await File(result['path']).readAsBytes();
-                      setState(() {
-                        _selfieImages.add('data:image/jpeg;base64,${base64Encode(bytes)}');
-                      });
+                      if (mounted) {
+                        setState(() {
+                          _selfieImages.add(
+                              'data:image/jpeg;base64,${base64Encode(bytes)}');
+                        });
+                      }
                     }
                   },
                   icon: const Icon(Icons.add_a_photo_rounded, size: 16),
@@ -1401,7 +1439,7 @@ class _TripExpenseFormDetailedScreenState
             borderRadius: BorderRadius.circular(32),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0F172A).withOpacity(0.2),
+                color: const Color(0xFF0F172A).withValues(alpha: 0.2),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -1416,7 +1454,7 @@ class _TripExpenseFormDetailedScreenState
                   Text(
                     'ESTIMATED TOTAL',
                     style: GoogleFonts.plusJakartaSans(
-                      color: Colors.white.withOpacity(0.6),
+                      color: Colors.white.withValues(alpha: 0.6),
                       fontWeight: FontWeight.w800,
                       fontSize: 10,
                       letterSpacing: 1,
@@ -1439,7 +1477,7 @@ class _TripExpenseFormDetailedScreenState
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(
@@ -1455,7 +1493,7 @@ class _TripExpenseFormDetailedScreenState
                     Text(
                       'DISTANCE',
                       style: GoogleFonts.plusJakartaSans(
-                        color: Colors.white.withOpacity(0.6),
+                        color: Colors.white.withValues(alpha: 0.6),
                         fontWeight: FontWeight.w800,
                         fontSize: 8,
                         letterSpacing: 0.5,
@@ -1492,16 +1530,20 @@ class _TripExpenseFormDetailedScreenState
             // Functional Divider
             Row(
               children: [
-                Expanded(child: Divider(color: Colors.grey.withOpacity(0.1))),
+                Expanded(
+                  child: Divider(color: Colors.grey.withValues(alpha: 0.1)),
+                ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Icon(
                     Icons.arrow_downward_rounded,
                     size: 16,
-                    color: Colors.grey.withOpacity(0.3),
+                    color: Colors.grey.withValues(alpha: 0.3),
                   ),
                 ),
-                Expanded(child: Divider(color: Colors.grey.withOpacity(0.1))),
+                Expanded(
+                  child: Divider(color: Colors.grey.withValues(alpha: 0.1)),
+                ),
               ],
             ),
             const SizedBox(height: 32),
@@ -1640,10 +1682,12 @@ class _TripExpenseFormDetailedScreenState
                                 initialReport: _jobReportController.text,
                                 initialAttachments: _jobReportAttachments,
                                 onSave: (text, attachments) async {
-                                  setState(() {
-                                    _jobReportController.text = text;
-                                    _jobReportAttachments = attachments;
-                                  });
+                                  if (mounted) {
+                                    setState(() {
+                                      _jobReportController.text = text;
+                                      _jobReportAttachments = attachments;
+                                    });
+                                  }
                                 },
                               ),
                             ),
@@ -1714,7 +1758,7 @@ class _TripExpenseFormDetailedScreenState
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF4F46E5).withOpacity(0.1),
+                          color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
@@ -1780,7 +1824,7 @@ class _TripExpenseFormDetailedScreenState
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: Colors.black.withValues(alpha: 0.04),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -1892,7 +1936,10 @@ class _TripExpenseFormDetailedScreenState
             );
             if (result != null && result is Map) {
               final bytes = await File(result['path']).readAsBytes();
-              setState(() => _incidentals[index]['bill'] = base64Encode(bytes));
+              if (mounted) {
+                setState(
+                    () => _incidentals[index]['bill'] = base64Encode(bytes));
+              }
             }
           },
           child: Container(
@@ -2011,16 +2058,18 @@ class _TripExpenseFormDetailedScreenState
                     );
                     if (result != null && result is Map) {
                       final bytes = await File(result['path']).readAsBytes();
-                      onImg('data:image/jpeg;base64,${base64Encode(bytes)}');
-                      setState(() {
-                        if (isStart) {
-                          _odoStartLat = result['latitude'];
-                          _odoStartLong = result['longitude'];
-                        } else {
-                          _odoEndLat = result['latitude'];
-                          _odoEndLong = result['longitude'];
-                        }
-                      });
+                      if (mounted) {
+                        onImg('data:image/jpeg;base64,${base64Encode(bytes)}');
+                        setState(() {
+                          if (isStart) {
+                            _odoStartLat = result['latitude'];
+                            _odoStartLong = result['longitude'];
+                          } else {
+                            _odoEndLat = result['latitude'];
+                            _odoEndLong = result['longitude'];
+                          }
+                        });
+                      }
                     }
                   },
                   child: Container(
@@ -2299,7 +2348,7 @@ class _TripExpenseFormDetailedScreenState
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -2311,7 +2360,7 @@ class _TripExpenseFormDetailedScreenState
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.05),
+              color: color.withValues(alpha: 0.05),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(24),
                 topRight: Radius.circular(24),
@@ -2375,7 +2424,9 @@ class _TripExpenseFormDetailedScreenState
             color: const Color(0xFF1E293B),
           ),
           onChanged: (v) {
-            if (onChanged != null) onChanged(v);
+            if (onChanged != null) {
+              onChanged(v);
+            }
             setState(() {}); // Trigger calc update
           },
           decoration: InputDecoration(
@@ -2482,7 +2533,9 @@ class _TripExpenseFormDetailedScreenState
               firstDate: DateTime(2023),
               lastDate: DateTime(2030),
             );
-            if (d != null) onType(d);
+            if (d != null) {
+              onType(d);
+            }
           },
           child: Container(
             padding: const EdgeInsets.all(12),
@@ -2536,7 +2589,9 @@ class _TripExpenseFormDetailedScreenState
               context: context,
               initialTime: value,
             );
-            if (t != null) onType(t);
+            if (t != null) {
+              onType(t);
+            }
           },
           child: Container(
             padding: const EdgeInsets.all(12),
@@ -2617,9 +2672,12 @@ class _TripExpenseFormDetailedScreenState
                           result is Map &&
                           result['path'] != null) {
                         final bytes = await File(result['path']).readAsBytes();
-                        setState(() {
-                          _jobReportAttachments.add('data:image/jpeg;base64,${base64Encode(bytes)}');
-                        });
+                        if (mounted) {
+                          setState(() {
+                            _jobReportAttachments.add(
+                                'data:image/jpeg;base64,${base64Encode(bytes)}');
+                          });
+                        }
                       }
                     },
                   ),
@@ -2638,9 +2696,12 @@ class _TripExpenseFormDetailedScreenState
                       );
                       if (image != null) {
                         final bytes = await image.readAsBytes();
-                        setState(() {
-                          _jobReportAttachments.add('data:image/jpeg;base64,${base64Encode(bytes)}');
-                        });
+                        if (mounted) {
+                          setState(() {
+                            _jobReportAttachments.add(
+                                'data:image/jpeg;base64,${base64Encode(bytes)}');
+                          });
+                        }
                       }
                     },
                   ),
@@ -2665,9 +2726,9 @@ class _TripExpenseFormDetailedScreenState
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 24),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.05),
+          color: color.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: color.withOpacity(0.1)),
+          border: Border.all(color: color.withValues(alpha: 0.1)),
         ),
         child: Column(
           children: [

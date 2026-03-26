@@ -91,7 +91,7 @@ class _AppHeaderWidgetState extends State<AppHeaderWidget> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -291,7 +291,7 @@ class _AppHeaderWidgetState extends State<AppHeaderWidget> {
                   itemBuilder: (context, index) {
                     final notif = _notifications[index];
                     return Container(
-                      color: notif.unread ? Colors.orange.withOpacity(0.05) : Colors.transparent,
+                      color: notif.unread ? Colors.orange.withValues(alpha: 0.05) : Colors.transparent,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,7 +362,7 @@ class _AppHeaderWidgetState extends State<AppHeaderWidget> {
           child: Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: _showProfile ? const Color(0xFF7C1D1D).withOpacity(0.1) : Colors.transparent,
+              color: _showProfile ? const Color(0xFF7C1D1D).withValues(alpha: 0.1) : Colors.transparent,
               border: Border.all(
                 color: _showProfile ? const Color(0xFF7C1D1D) : Colors.grey[300]!,
                 width: 1.5,

@@ -42,9 +42,14 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
   }
 
   Future<void> _fetchPolicies() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
     try {
       final response = await _apiService.get(ApiConstants.policies);
+      if (!mounted) {
+        return;
+      }
       
       List<dynamic> list = [];
       if (response is List) {
@@ -61,7 +66,9 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
     } catch (e) {
       debugPrint("Failed to fetch policies: $e");
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Failed to load policies")),
         );
@@ -95,7 +102,9 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
       floatingActionButton: isAdmin ? FloatingActionButton.extended(
-        onPressed: () => _showUploadModal(),
+        onPressed: () {
+          _showUploadModal();
+        },
         backgroundColor: const Color(0xFF0F1E2A),
         elevation: 10,
         icon: const Icon(Icons.upload_file_rounded, color: Colors.white),
@@ -114,7 +123,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
                 height: 400,
                 decoration: BoxDecoration(
                   gradient: RadialGradient(
-                    colors: [const Color(0xFFA9052E).withOpacity(0.03), Colors.transparent],
+                    colors: [const Color(0xFFA9052E).withValues(alpha: 0.03), Colors.transparent],
                   ),
                   shape: BoxShape.circle,
                 ),
@@ -128,7 +137,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
                 height: 350,
                 decoration: BoxDecoration(
                   gradient: RadialGradient(
-                    colors: [const Color(0xFF3B82F6).withOpacity(0.02), Colors.transparent],
+                    colors: [const Color(0xFF3B82F6).withValues(alpha: 0.02), Colors.transparent],
                   ),
                   shape: BoxShape.circle,
                 ),
@@ -153,7 +162,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
             ),
             if (_isProcessing)
               Container(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 child: const Center(child: CircularProgressIndicator(color: Color(0xFFBB0633))),
               ),
           ],
@@ -172,9 +181,9 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15), 
+          color: Colors.white.withValues(alpha: 0.15), 
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -214,7 +223,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
         color: const Color(0xFFA9052E),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -234,7 +243,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
               width: 140,
               height: 140,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
+                color: Colors.white.withValues(alpha: 0.06),
                 shape: BoxShape.circle,
               ),
             ),
@@ -246,7 +255,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.04),
+                color: Colors.white.withValues(alpha: 0.04),
                 shape: BoxShape.circle,
               ),
             ),
@@ -270,7 +279,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.12),
+                              color: Colors.black.withValues(alpha: 0.12),
                               blurRadius: 15,
                               offset: const Offset(0, 5),
                             ),
@@ -289,7 +298,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                                 letterSpacing: 1.5,
                               ),
                             ),
@@ -327,7 +336,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04), 
+            color: Colors.black.withValues(alpha: 0.04), 
             blurRadius: 20, 
             offset: const Offset(0, 8)
           )
@@ -411,7 +420,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
                 )
               ),
               const SizedBox(width: 12),
-              Expanded(child: Divider(color: const Color(0xFFCBD5E1).withOpacity(0.3))),
+              Expanded(child: Divider(color: const Color(0xFFCBD5E1).withValues(alpha: 0.3))),
             ],
           ),
         ),
@@ -439,7 +448,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03), 
+            color: Colors.black.withValues(alpha: 0.03), 
             blurRadius: 15, 
             offset: const Offset(0, 8)
           )
@@ -458,7 +467,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
                 Container(
                   padding: const EdgeInsets.all(14), 
                   decoration: BoxDecoration(
-                    color: const Color(0xFFBB0633).withOpacity(0.1), 
+                    color: const Color(0xFFBB0633).withValues(alpha: 0.1), 
                     borderRadius: BorderRadius.circular(16)
                   ), 
                   child: const Icon(Icons.description_rounded, color: Color(0xFFBB0633), size: 28)
@@ -535,15 +544,23 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
   Future<void> _handleView(dynamic p) async {
     final suffix = _getLanguageSuffix();
     if (p['file_name_$suffix'] == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("This policy is not available in $_selectedLanguage")),
-      );
-      return;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("This policy is not available in $_selectedLanguage")),
+        );
+      }
     }
     
-    setState(() => _isProcessing = true);
+    if (mounted) {
+      setState(() {
+        _isProcessing = true;
+      });
+    }
     try {
       final response = await _apiService.get('${ApiConstants.policies}${p['id']}/');
+      if (!mounted) {
+        return;
+      }
       final base64String = response['file_content_$suffix']?.toString();
       
       if (base64String == null || base64String.isEmpty) {
@@ -558,24 +575,38 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
       
       final bytes = base64Decode(cleanBase64);
       final tempDir = await getTemporaryDirectory();
+      if (!mounted) {
+        return;
+      }
       final fileName = p['file_name_$suffix'] ?? 'policy.pdf';
       final file = File('${tempDir.path}/$fileName');
       await file.writeAsBytes(bytes);
+      if (!mounted) {
+        return;
+      }
       
       final result = await OpenFilex.open(file.path);
       if (result.type != ResultType.done) {
         throw Exception(result.message);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to open document: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to open document: $e")));
+      }
     } finally {
-      if (mounted) setState(() => _isProcessing = false);
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
   Future<void> _handleDownload(dynamic p) async {
     // Similar to view but save to permanent storage or show Toast
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Download logic same as view; opening PDF.")));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Download logic same as view; opening PDF.")));
+    }
     _handleView(p);
   }
 
@@ -586,25 +617,53 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
         title: Text('Delete Policy', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900)),
         content: const Text('Are you sure you want to delete this policy? This action cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey, fontWeight: FontWeight.w700))),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true), 
-            child: Text('Delete', style: GoogleFonts.inter(color: const Color(0xFFEF4444), fontWeight: FontWeight.w700))
+            onPressed: () {
+              Navigator.pop(ctx, false);
+            },
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(color: Colors.grey, fontWeight: FontWeight.w700),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx, true);
+            },
+            child: Text(
+              'Delete',
+              style: GoogleFonts.inter(color: const Color(0xFFEF4444), fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      setState(() => _isProcessing = true);
+      if (mounted) {
+        setState(() {
+          _isProcessing = true;
+        });
+      }
       try {
         await _apiService.delete('${ApiConstants.policies}$id/');
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Policy deleted successfully")));
+        if (!mounted) {
+          return;
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Policy deleted successfully")));
+        }
         _fetchPolicies();
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to delete: $e")));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to delete: $e")));
+        }
       } finally {
-        if (mounted) setState(() => _isProcessing = false);
+        if (mounted) {
+          setState(() {
+            _isProcessing = false;
+          });
+        }
       }
     }
   }
@@ -616,7 +675,9 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _PolicyUploadModal(onSuccess: () => _fetchPolicies()),
+      builder: (ctx) {
+        return _PolicyUploadModal(onSuccess: () => _fetchPolicies());
+      },
     );
   }
 }
@@ -646,10 +707,16 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
       type: FileType.custom,
       allowedExtensions: ['pdf'],
     );
+    if (!mounted) {
+      return;
+    }
 
     if (result != null) {
       final file = File(result.files.single.path!);
       final bytes = await file.readAsBytes();
+      if (!mounted) {
+        return;
+      }
       final base64Content = 'data:application/pdf;base64,${base64Encode(bytes)}';
       final sizeMb = (bytes.length / (1024 * 1024)).toStringAsFixed(1) + ' MB';
 
@@ -665,15 +732,23 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
 
   Future<void> _handleUpload() async {
     if (_titleController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a title")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a title")));
+      }
       return;
     }
     if (_files.values.every((f) => f['content'] == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Select at least one language PDF")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Select at least one language PDF")));
+      }
       return;
     }
 
-    setState(() => _isUploading = true);
+    if (mounted) {
+      setState(() {
+        _isUploading = true;
+      });
+    }
     try {
       final data = {
         'title': _titleController.text,
@@ -690,13 +765,21 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
       };
 
       await _apiService.post(ApiConstants.policies, body: data, includeAuth: true);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Policy published successfully")));
-      widget.onSuccess();
-      Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Policy published successfully")));
+        widget.onSuccess();
+        Navigator.pop(context);
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Upload failed: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Upload failed: $e")));
+      }
     } finally {
-      if (mounted) setState(() => _isUploading = false);
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
     }
   }
 
@@ -724,7 +807,9 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
                   style: GoogleFonts.plusJakartaSans(fontSize: 24, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: -0.8)
                 ),
                 GestureDetector(
-                  onTap: () => Navigator.pop(context),
+                  onTap: () {
+                    Navigator.pop(context);
+                  },
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(color: const Color(0xFFF1F5F9), shape: BoxShape.circle),
@@ -765,7 +850,11 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
                   value: _category,
                   isExpanded: true,
                   icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B)),
-                  onChanged: (val) => setState(() => _category = val!),
+                  onChanged: (val) {
+                    setState(() {
+                      _category = val!;
+                    });
+                  },
                   items: ['General', 'HR Policy', 'Travel Guide'].map((c) => DropdownMenuItem(
                     value: c, 
                     child: Text(c, style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)))
@@ -795,7 +884,7 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
                   backgroundColor: const Color(0xFF0F1E2A), 
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)), 
                   elevation: 8,
-                  shadowColor: const Color(0xFF0F1E2A).withOpacity(0.4),
+                  shadowColor: const Color(0xFF0F1E2A).withValues(alpha: 0.4),
                 ),
                 child: _isUploading 
                   ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
@@ -824,11 +913,13 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
   Widget _buildLangUpload(String code, String label) {
     bool hasFile = _files[code]!['name'] != null;
     return GestureDetector(
-      onTap: () => _pickFile(code),
+      onTap: () {
+        _pickFile(code);
+      },
       child: Container(
         height: 110,
         decoration: BoxDecoration(
-          color: hasFile ? const Color(0xFFBB0633).withOpacity(0.05) : const Color(0xFFF1F5F9).withOpacity(0.5),
+          color: hasFile ? const Color(0xFFBB0633).withValues(alpha: 0.05) : const Color(0xFFF1F5F9).withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: hasFile ? const Color(0xFFBB0633) : const Color(0xFFE2E8F0), 
@@ -845,7 +936,7 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
                 color: hasFile ? const Color(0xFFBB0633) : Colors.white,
                 shape: BoxShape.circle,
                 boxShadow: [
-                  if (!hasFile) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)
+                  if (!hasFile) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 5)
                 ]
               ),
               child: Icon(

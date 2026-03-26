@@ -275,31 +275,28 @@ class TripListCreateView(generics.ListCreateAPIView):
             from rest_framework.exceptions import AuthenticationFailed
             raise AuthenticationFailed("Authentication required.")
         
-        # Admin / Superuser skip approvals
         user_role = user.role.name.lower() if user.role else ''
-        if user_role in ['admin', 'superuser', 'it-admin']:
-            trip = serializer.save(
-                user=user,
-                status='Approved',
-                current_approver=None,
-                hierarchy_level=0,
-                consider_as_local=is_local
-            )
-            label = "Travel" if is_local else "Trip"
-            update_trip_lifecycle(trip, "Auto-Approved", f"{label} request auto-approved for Administrator.")
-            return
-
-        members_data = serializer.validated_data.get('members', [])
-        current_approver, h_level, rm, sm, hod = resolve_approver(user, members_data)
+        is_admin_user = user_role in ['admin', 'superuser', 'it-admin']
         
+        if is_admin_user:
+            # Admins skip manager hierarchy and go straight to HR
+            current_approver = get_hr_head(user)
+            h_level = 0
+            rm = sm = hod = None
+            status_val = 'Pending'
+        else:
+            members_data = serializer.validated_data.get('members', [])
+            current_approver, h_level, rm, sm, hod = resolve_approver(user, members_data)
+            status_val = 'Pending'
+
         try:
             trip = serializer.save(
                 user=user,
-                status='Pending',
+                status=status_val,
                 current_approver=current_approver,
                 hierarchy_level=h_level,
                 consider_as_local=is_local,
-                # Snapshots
+                # Snapshots for resilience
                 user_name=user.name,
                 user_designation=user.designation,
                 user_department=user.department,
@@ -307,9 +304,15 @@ class TripListCreateView(generics.ListCreateAPIView):
                 senior_manager_name=sm.name if sm else None,
                 hod_director_name=hod.name if hod else None
             )
+            
+            label = "Travel" if is_local else "Trip"
+            if is_admin_user:
+                update_trip_lifecycle(trip, "Submitted", f"{label} request submitted by Admin and routed to HR.")
+            else:
+                # normal lifecycle is already handled or will be logged here
+                pass
+
         except Exception as e:
-            # convert DB errors to validation error so frontend sees message
-            # also log full traceback on server for diagnostics
             import traceback
             traceback.print_exc()
             from rest_framework.exceptions import ValidationError
@@ -1264,7 +1267,11 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = getattr(self.request, 'custom_user', None)
         trip = serializer.validated_data.get('trip')
-        if trip and trip.user != user:
+        
+        # Admin Bypass: Admins can save expenses for any trip
+        is_admin = hasattr(user, 'role') and user.role.name.lower() in ['admin', 'superuser']
+        
+        if trip and trip.user != user and not is_admin:
             raise serializers.ValidationError("Unauthorized trip association")
         serializer.save()
 
@@ -1322,29 +1329,43 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
         if trip and trip.user != user:
             raise serializers.ValidationError("Unauthorized trip association")
         
-        reporting_manager = user.reporting_manager
-        senior_manager = user.senior_manager
-        hod_director = user.hod_director
+        user_role = user.role.name.lower() if user.role else ''
+        is_admin_user = user_role in ['admin', 'superuser', 'it-admin']
         
-        # Logic to find first available approver
-        current_approver = reporting_manager
-        h_level = 1
-        
-        if not current_approver:
-            current_approver = senior_manager
-            h_level = 2
-        
-        if not current_approver:
-            current_approver = hod_director
-            h_level = 3
-            
-        if not current_approver:
-            # If no managers at all, go to HR
+        if is_admin_user:
             current_approver = get_hr_head(user)
+            h_level = 0
+            reporting_manager = senior_manager = hod_director = None
+        else:
+            reporting_manager = user.reporting_manager
+            senior_manager = user.senior_manager
+            hod_director = user.hod_director
+            
+            # Logic to find first available approver
+            current_approver = reporting_manager
+            h_level = 1
+            
+            if not current_approver:
+                current_approver = senior_manager
+                h_level = 2
+            
+            if not current_approver:
+                current_approver = hod_director
+                h_level = 3
+                
+            if not current_approver:
+                # If no managers at all, go to HR
+                current_approver = get_hr_head(user)
 
         from django.db.models import Sum
         total_expense_sum = trip.expenses.aggregate(s=Sum('amount'))['s'] or 0
 
+        # Snapshot resolution for resilience during API downtime
+        # Prioritize data from Trip snapshots if available
+        s_user_name = trip.user_name or user.name
+        s_user_designation = trip.user_designation or user.designation
+        s_user_department = trip.user_department or user.department
+        
         claim = serializer.save(
             status='Submitted',
             current_approver=current_approver,
@@ -1353,15 +1374,15 @@ class TravelClaimViewSet(viewsets.ModelViewSet):
             total_amount=total_expense_sum,
             approved_amount=total_expense_sum,
             # Populate snapshots for resilience
-            user_name=user.name,
-            user_designation=user.designation,
-            user_department=user.department,
+            user_name=s_user_name,
+            user_designation=s_user_designation,
+            user_department=s_user_department,
             reporting_manager=reporting_manager,
             senior_manager=senior_manager,
             hod_director=hod_director,
-            reporting_manager_name=reporting_manager.name if reporting_manager else None,
-            senior_manager_name=senior_manager.name if senior_manager else None,
-            hod_director_name=hod_director.name if hod_director else None
+            reporting_manager_name=reporting_manager.name if reporting_manager else (trip.reporting_manager_name if trip else None),
+            senior_manager_name=senior_manager.name if senior_manager else (trip.senior_manager_name if trip else None),
+            hod_director_name=hod_director.name if hod_director else (trip.hod_director_name if trip else None)
         )
         
         if current_approver:
@@ -1428,41 +1449,54 @@ class TravelAdvanceViewSet(viewsets.ModelViewSet):
         if trip and trip.user != user:
             raise serializers.ValidationError("Unauthorized trip association")
             
-        reporting_manager = user.reporting_manager
-        senior_manager = user.senior_manager
-        hod_director = user.hod_director
-
-        # Logic to find first available approver
-        current_approver = reporting_manager
-        h_level = 1
+        user_role = user.role.name.lower() if user.role else ''
+        is_admin_user = user_role in ['admin', 'superuser', 'it-admin']
         
-        if not current_approver:
-            current_approver = senior_manager
-            h_level = 2
-        
-        if not current_approver:
-            current_approver = hod_director
-            h_level = 3
-            
-        if not current_approver:
-            # If no managers at all, go to HR
+        if is_admin_user:
             current_approver = get_hr_head(user)
+            h_level = 0
+            reporting_manager = senior_manager = hod_director = None
+        else:
+            reporting_manager = user.reporting_manager
+            senior_manager = user.senior_manager
+            hod_director = user.hod_director
 
+            # Logic to find first available approver
+            current_approver = reporting_manager
+            h_level = 1
+            
+            if not current_approver:
+                current_approver = senior_manager
+                h_level = 2
+            
+            if not current_approver:
+                current_approver = hod_director
+                h_level = 3
+                
+            if not current_approver:
+                # If no managers at all, go to HR
+                current_approver = get_hr_head(user)
+
+        # Snapshot resolution for resilience during API downtime
+        s_user_name = trip.user_name if trip else user.name
+        s_user_designation = trip.user_designation if trip else user.designation
+        s_user_department = trip.user_department if trip else user.department
+        
         advance = serializer.save(
             status='Submitted',
             current_approver=current_approver,
             hierarchy_level=h_level,
-            submitted_at=timezone.now(),
+            total_advance=serializer.validated_data.get('amount', 0),
             # Populate snapshots for resilience
-            user_name=user.name,
-            user_designation=user.designation,
-            user_department=user.department,
+            user_name=s_user_name,
+            user_designation=s_user_designation,
+            user_department=s_user_department,
             reporting_manager=reporting_manager,
             senior_manager=senior_manager,
             hod_director=hod_director,
-            reporting_manager_name=reporting_manager.name if reporting_manager else None,
-            senior_manager_name=senior_manager.name if senior_manager else None,
-            hod_director_name=hod_director.name if hod_director else None
+            reporting_manager_name=reporting_manager.name if reporting_manager else (trip.reporting_manager_name if trip else None),
+            senior_manager_name=senior_manager.name if senior_manager else (trip.senior_manager_name if trip else None),
+            hod_director_name=hod_director.name if hod_director else (trip.hod_director_name if trip else None)
         )
         
         if current_approver:

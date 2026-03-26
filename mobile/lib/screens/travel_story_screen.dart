@@ -68,12 +68,20 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
     try {
       final taskId = _trip!.claim != null ? "CLAIM-${_trip!.claim!['id']}" : _trip!.tripId;
       await _tripService.performApproval(taskId, action);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$action successful'), backgroundColor: Colors.green));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$action successful'), backgroundColor: Colors.green));
+      }
       _fetchDetails();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to $action: $e'), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Failed to $action: $e'),
+            backgroundColor: Colors.red));
+      }
     } finally {
-      setState(() => _isActionLoading = false);
+      if (mounted) {
+        setState(() => _isActionLoading = false);
+      }
     }
   }
 
@@ -90,10 +98,16 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
           'remarks': remarks,
         },
       );
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item updated'), backgroundColor: Colors.green));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item updated'), backgroundColor: Colors.green));
+      }
       _fetchDetails();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update item: $e'), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Failed to update item: $e'),
+            backgroundColor: Colors.red));
+      }
     }
   }
 
@@ -226,7 +240,9 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
                 child: ElevatedButton(
                   onPressed: isSubmitting ? null : () async {
                     if (amountController.text.isEmpty || purposeController.text.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
+                      }
                       return;
                     }
                     setModalState(() => isSubmitting = true);
@@ -243,7 +259,9 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
                         _fetchDetails();
                       }
                     } catch (e) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                      }
                     } finally {
                       setModalState(() => isSubmitting = false);
                     }
@@ -297,7 +315,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
       style: ElevatedButton.styleFrom(
         backgroundColor: outline ? Colors.white : color,
         foregroundColor: outline ? color : Colors.white,
-        side: outline ? BorderSide(color: color.withOpacity(0.3)) : null,
+        side: outline ? BorderSide(color: color.withValues(alpha: 0.3)) : null,
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: outline ? 0 : 2,
@@ -338,7 +356,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -457,7 +475,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.2),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.2),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -474,7 +492,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 9,
                     fontWeight: FontWeight.w800,
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -490,7 +508,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
               ],
             ),
           ),
-          Container(width: 1, height: 32, color: Colors.white.withOpacity(0.1)),
+          Container(width: 1, height: 32, color: Colors.white.withValues(alpha: 0.1)),
           const SizedBox(width: 20),
           Expanded(
             child: Column(
@@ -501,7 +519,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 9,
                     fontWeight: FontWeight.w800,
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -651,7 +669,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(Icons.account_balance_wallet_rounded, size: 16, color: statusColor),
@@ -683,7 +701,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -710,7 +728,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: primary.withOpacity(0.1)),
+        border: Border.all(color: primary.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
@@ -719,7 +737,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: primary.withOpacity(0.1), blurRadius: 10)],
+              boxShadow: [BoxShadow(color: primary.withValues(alpha: 0.1), blurRadius: 10)],
             ),
             child: Icon(icon, color: primary, size: 20),
           ),
@@ -733,7 +751,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
-                    color: primary.withOpacity(0.7),
+                    color: primary.withValues(alpha: 0.7),
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -823,7 +841,9 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
       children: [
         Container(
           padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10)),
           child: Icon(icon, size: 16, color: color),
         ),
         const SizedBox(width: 12),
@@ -886,7 +906,10 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
                   context,
                   MaterialPageRoute(builder: (context) => TripExpenseFormDetailedScreen(category: 'Local Travel', tripId: widget.tripId)),
                 );
-                if (refresh == true) _fetchDetails();
+                if (!mounted) return;
+                if (refresh == true) {
+                  _fetchDetails();
+                }
               },
               icon: const Icon(Icons.add_circle_rounded, size: 24, color: Color(0xFF0F172A)),
               padding: EdgeInsets.zero,
@@ -934,9 +957,10 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
                 backgroundColor: const Color(0xFF10B981),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 20),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
                 elevation: 4,
-                shadowColor: const Color(0xFF10B981).withOpacity(0.3),
+                shadowColor: const Color(0xFF10B981).withValues(alpha: 0.3),
               ),
             ),
           ),
@@ -1004,7 +1028,9 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.01), blurRadius: 10)],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.01), blurRadius: 10)
+        ],
       ),
       child: Column(
         children: [
@@ -1191,7 +1217,10 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: c.withOpacity(0.1), borderRadius: BorderRadius.circular(6), border: Border.all(color: c.withOpacity(0.2))),
+      decoration: BoxDecoration(
+          color: c.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: c.withValues(alpha: 0.2))),
       child: Text(status.toString().toUpperCase(), style: GoogleFonts.plusJakartaSans(fontSize: 8, fontWeight: FontWeight.w900, color: c)),
     );
   }
@@ -1211,9 +1240,11 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Expense record deleted successfully'), backgroundColor: Color(0xFF0F172A))
-              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Expense record deleted successfully'), backgroundColor: Color(0xFF0F172A))
+                );
+              }
             },
             child: Text('DELETE', style: GoogleFonts.plusJakartaSans(color: Colors.red, fontWeight: FontWeight.w800)),
           ),
@@ -1231,7 +1262,10 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
         color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
-          BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 10)),
+          BoxShadow(
+              color: const Color(0xFF0F172A).withValues(alpha: 0.15),
+              blurRadius: 20,
+              offset: const Offset(0, 10)),
         ],
       ),
       child: Column(
@@ -1267,7 +1301,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
         if (isBadge)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
             child: Text(
               value.toUpperCase(),
               style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white),
@@ -1304,7 +1338,10 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: const Color(0xFFF1F5F9)),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4)),
             ],
           ),
           child: Column(
@@ -1475,7 +1512,10 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 15,
+              offset: const Offset(0, 5)),
         ],
       ),
       child: Column(
@@ -1525,7 +1565,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 4,
-                      shadowColor: const Color(0xFF0F172A).withOpacity(0.3),
+                      shadowColor: const Color(0xFF0F172A).withValues(alpha: 0.3),
                     ),
                   ),
                 ),
@@ -1541,7 +1581,7 @@ class _TravelStoryScreenState extends State<TravelStoryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 8, fontWeight: FontWeight.w800, color: color.withOpacity(0.7), letterSpacing: 1)),
+        Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 8, fontWeight: FontWeight.w800, color: color.withValues(alpha: 0.7), letterSpacing: 1)),
         const SizedBox(height: 2),
         Text(value, style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w900, color: color)),
       ],

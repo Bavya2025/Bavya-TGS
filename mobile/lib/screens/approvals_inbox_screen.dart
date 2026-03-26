@@ -23,12 +23,6 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
   final TripService _tripService = TripService();
   bool _isLoading = true;
   List<Map<String, dynamic>> _tasks = [];
-  Map<String, dynamic> _counts = {
-    'total': 0,
-    'advances': 0,
-    'trips': 0,
-    'claims': 0,
-  };
   String _activeTab = 'pending';
   String _filterType = 'all';
   String _viewType = 'special'; // 'special' or 'monthly'
@@ -56,7 +50,6 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
   Future<void> _fetchData() async {
     setState(() => _isLoading = true);
     try {
-      final counts = await _tripService.fetchApprovalCounts();
       final tasks = await _tripService.fetchApprovals(
         tab: _activeTab,
         type: _filterType,
@@ -65,7 +58,6 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
       );
       if (mounted) {
         setState(() {
-          _counts = counts;
           _tasks = tasks;
           _isLoading = false;
         });
@@ -113,15 +105,18 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
         default:
           verb = '${action}ed';
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Request $verb successfully'),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-      setState(() => _selectedIds.clear());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Request $verb successfully'),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        setState(() => _selectedIds.clear());
+      }
       _fetchData();
     } catch (e) {
       String message = e.toString();
@@ -130,15 +125,18 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
       } else if (e.toString().contains('authorized')) {
         message = 'You are not authorized to perform this action.';
       }
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: const Color(0xFFEF4444),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     }
   }
 
@@ -158,7 +156,7 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFFA9052E).withOpacity(0.02),
+                    const Color(0xFFA9052E).withValues(alpha: 0.02),
                     Colors.transparent,
                   ],
                 ),
@@ -217,7 +215,7 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
               width: 130,
               height: 130,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
             ),
@@ -239,7 +237,7 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(
@@ -258,7 +256,7 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -379,7 +377,7 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
           boxShadow: isActive
               ? [
                   BoxShadow(
-                    color: const Color(0xFF0F1E2A).withOpacity(0.3),
+                    color: const Color(0xFF0F1E2A).withValues(alpha: 0.3),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -433,7 +431,7 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
               border: Border.all(color: const Color(0xFFE2E8F0)),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF0F172A).withOpacity(0.04),
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.04),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -486,7 +484,7 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.03),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.03),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -522,7 +520,7 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
+                          color: statusColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
@@ -727,7 +725,6 @@ class _TaskDetailsContent extends StatefulWidget {
 class _TaskDetailsContentState extends State<_TaskDetailsContent> {
   final TripService _tripService = TripService();
   Map<String, String> itemRemarks = {};
-  bool _isActionLoading = false;
 
   // cached user + roles (mirrors web logic)
   Map<String, dynamic>? _currentUser;
@@ -841,16 +838,18 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
     if (status == 'Rejected') {
       final remark = await _showRemarksDialog();
       if (remark == null || remark.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Rejection reason is mandatory'),
-            backgroundColor: const Color(0xFFEF4444),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Rejection reason is mandatory'),
+              backgroundColor: const Color(0xFFEF4444),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-          ),
-        );
+          );
+        }
         return;
       }
       finalRemark = remark;
@@ -858,7 +857,6 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
       itemRemarks[itemId.toString()] = finalRemark;
     }
 
-    setState(() => _isActionLoading = true);
     try {
       await _tripService.performApproval(
         widget.task['id'],
@@ -869,26 +867,31 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
           'remarks': finalRemark,
         },
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Item ${status.toLowerCase()}ed with feedback'),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-      widget.onRefresh(); // Trigger main screen refresh
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Item ${status.toLowerCase()}ed with feedback'),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        widget.onRefresh(); // Trigger main screen refresh
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update item: $e'),
-          backgroundColor: const Color(0xFFEF4444),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update item: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     } finally {
-      if (mounted) setState(() => _isActionLoading = false);
     }
   }
 
@@ -1289,7 +1292,7 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -1340,7 +1343,7 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                   borderRadius: BorderRadius.circular(18),
                 ),
                 elevation: 8,
-                shadowColor: const Color(0xFF0F1E2A).withOpacity(0.4),
+                shadowColor: const Color(0xFF0F1E2A).withValues(alpha: 0.4),
               ),
             ),
           ),
@@ -1356,7 +1359,7 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -1375,7 +1378,7 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
-            value: paymentMode.isEmpty ? null : paymentMode,
+            initialValue: paymentMode.isEmpty ? null : paymentMode,
             items: [
               const DropdownMenuItem(
                 value: 'BANK_TRANSFER',
@@ -1506,7 +1509,9 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
   }
 
   Widget _detailBox(String label, dynamic value) {
-    if (value == null) return const SizedBox.shrink();
+    if (value == null) {
+      return const SizedBox.shrink();
+    }
     return Container(
       width: 140,
       padding: const EdgeInsets.all(12),
@@ -1708,7 +1713,9 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                   ],
                   () {
                     String description = exp['description']?.toString() ?? '';
-                    if (!description.startsWith('{')) return const SizedBox.shrink();
+                    if (!description.startsWith('{')) {
+                      return const SizedBox.shrink();
+                    }
                     try {
                       final details = jsonDecode(description) as Map<String, dynamic>;
                       if (details['odoStart'] == null &&
@@ -2092,7 +2099,7 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
       height: 60,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
@@ -2104,7 +2111,7 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
               left: 0,
               right: 0,
               child: Container(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withValues(alpha: 0.5),
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Text(
                   label,
