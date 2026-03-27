@@ -194,6 +194,12 @@
 /* Table Styles */
 .smart-grid-container .category-table-wrapper {
     overflow-x: auto;
+    padding: 0 16px 16px;
+}
+
+/* Override: zero out wrapper padding for locked/readonly state */
+.smart-grid-container.registry-locked .category-table-wrapper {
+    padding: 0 16px 16px;
 }
 
 .smart-grid-container .category-table {
@@ -236,6 +242,18 @@
 .smart-grid-container .category-table .category-row-block {
     display: table-row;
     width: 100%;
+}
+
+.smart-grid-container .category-section-container .category-table .category-row-block {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.smart-grid-container .category-section-container .category-table .category-row-block td {
+    padding: 0 !important;
+    width: 100% !important;
+    display: block !important;
 }
 
 .smart-grid-container .category-table .category-row-block td {

@@ -131,7 +131,8 @@ const TripExpenseGrid = ({
     // whether to show the bulk upload button (default true)
     showBulkUpload = true,
     onJobReportClick,
-    hasAdditionalLuggage = false
+    hasAdditionalLuggage = false,
+    itinerary = [] // Planned segments from Tour Plan
 }) => {
     // Master data states
     const [travelModes, setTravelModes] = useState(FALLBACK_TRAVEL_MODES);
@@ -294,8 +295,7 @@ const TripExpenseGrid = ({
                 setStayBookingSources((bookingSourceRes.data || []).filter(item => item.status !== false).map(item => item.name));
             } catch (error) {
                 console.warn('Could not fetch stay booking masters:', error);
-            }
-        };
+            }        };
         fetchStayBookingMasters();
 
         const fetchFoodMasters = async () => {
@@ -338,6 +338,40 @@ const TripExpenseGrid = ({
         fetchFuelRates();
     }, []);
 
+    const mappedItinerary = React.useMemo(() => {
+        if (!itinerary || !Array.isArray(itinerary)) return [];
+        const flat = [];
+        itinerary.forEach(batch => {
+            if (batch.data_json && Array.isArray(batch.data_json)) {
+                batch.data_json.forEach((seg, idx) => {
+                    flat.push({
+                        ...seg,
+                        segId: `${batch.id}-${idx}`,
+                        // Consistency check for field names
+                        activity_date: seg.date || seg.activity_date,
+                        start_location: seg.origin_route || seg.start_location || seg.origin || '',
+                        end_location: seg.destination_route || seg.end_location || seg.destination || ''
+                    });
+                });
+            }
+        });
+        return flat;
+    }, [itinerary]);
+
+    const normalizeDate = (d) => {
+        if (!d) return '';
+        try { return new Date(d).toISOString().split('T')[0]; }
+        catch (e) { return d; }
+    };
+
+    const safeFormatDate = (dateStr) => {
+        if (!dateStr) return '';
+        try {
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+        } catch (e) { return dateStr; }
+    };
+
     // --- DATE RANGE CONSTRAINTS ---
     const getMinDate = () => {
         if (!startDate) return undefined;
@@ -376,7 +410,17 @@ const TripExpenseGrid = ({
         }
 
         if (initialExpenses && initialExpenses.length > 0) {
-            const syncedRows = initialExpenses.map(exp => {
+            const validExpenses = initialExpenses.filter(exp => {
+                if (exp.category === 'Incidental') {
+                    try {
+                        let desc = exp.description;
+                        if (typeof desc === 'string' && desc.startsWith('{')) desc = JSON.parse(desc);
+                        if (desc && desc.notes && desc.notes.startsWith('Added during local travel:')) return false;
+                    } catch(e) {}
+                }
+                return true;
+            });
+            const syncedRows = validExpenses.map(exp => {
                 let details = { description: exp.description || '' };
                 try {
                     if (typeof exp.description === 'string' && exp.description.startsWith('{')) {
@@ -415,10 +459,12 @@ const TripExpenseGrid = ({
                     isSaved: true
                 };
             });
-            // Preserve rows that haven't been saved yet when syncing
+            // Preserve rows that haven't been saved yet when syncing, but avoid duplicating the same row ID
             setRows(currentRows => {
                 const unsavedRows = currentRows.filter(r => !r.isSaved);
-                return [...syncedRows, ...unsavedRows];
+                const unsavedIds = new Set(unsavedRows.map(r => String(r.id)));
+                const filteredSynced = syncedRows.filter(r => !unsavedIds.has(String(r.id)));
+                return [...filteredSynced, ...unsavedRows];
             });
         }
     }, [initialExpenses]);
@@ -514,8 +560,11 @@ const TripExpenseGrid = ({
                 localizedShowToast(`Item #${rowNum}: Please enter a valid numeric amount.`, "error");
                 return false;
             }
-            // require bill if any charge present
-            if (parseFloat(row.amount) > 0 && (!row.bills || row.bills.length === 0)) {
+            // require bill if any charge present (Except for Odometer-based own vehicle trips where ODO photos are the proof)
+            const isOdoBased = (row.nature === 'Local Travel' && ['Own Car', 'Own Bike', 'Self Drive Rental'].includes(row.details?.subType)) ||
+                               (row.nature === 'Travel' && row.details?.mode === 'Intercity Car' && ['Own Car', 'Self Drive Rental'].includes(row.details?.vehicleType));
+            
+            if (parseFloat(row.amount) > 0 && !isOdoBased && (!row.bills || row.bills.length === 0)) {
                 localizedShowToast(`Item #${rowNum}: Please upload a bill as amount is entered.`, "error");
                 return false;
             }
@@ -632,6 +681,29 @@ const TripExpenseGrid = ({
                 } else if (mode === 'Intercity Cab') {
                     if (!provider) { localizedSetRowError(row.id, 'provider', 'Provider / Vendor (Ola/Uber etc) is mandatory.'); return false; }
                     if (!row.timeDetails.boardingTime || !row.timeDetails.actualTime) { localizedSetRowError(row.id, 'time', 'Departure and Arrival times are mandatory for Cab.'); return false; }
+                } else if (mode === 'Intercity Car') {
+                    const { vehicleType, odoStart, odoEnd } = row.details;
+                    if (['Own Car', 'Self Drive Rental'].includes(vehicleType)) {
+                        if (!odoStart || !odoEnd) {
+                            localizedShowToast(`Item #${rowNum}: Both start and end odometer readings are required for ${vehicleType}.`, "error");
+                            return false;
+                        }
+                        if (parseFloat(odoEnd) <= parseFloat(odoStart)) {
+                            localizedShowToast(`Item #${rowNum}: End Odometer should be greater than Start Odometer.`, "error");
+                            return false;
+                        }
+                        if (!row.details.odoStartImg || !row.details.odoEndImg) {
+                            localizedShowToast(`Item #${rowNum}: Please capture both start and end odometer photos for ${vehicleType}.`, "error");
+                            if (!row.details.odoStartImg) localizedSetRowError(row.id, 'odoStartImg', 'Start photo required.');
+                            if (!row.details.odoEndImg) localizedSetRowError(row.id, 'odoEndImg', 'End photo required.');
+                            return false;
+                        }
+                        if (row.details.odoStartImg === row.details.odoEndImg) {
+                            localizedShowToast(`Item #${rowNum}: Start and End Odometer photos cannot be the same.`, "error");
+                            localizedSetRowError(row.id, 'odoEndImg', 'Duplicate photo detected.');
+                            return false;
+                        }
+                    }
                 }
 
                 if (isSelfBooked) {
@@ -762,9 +834,9 @@ const TripExpenseGrid = ({
                     }
                 }
 
-                if (subType === 'Own Car') {
+                if (['Own Car', 'Own Bike', 'Self Drive Rental'].includes(subType)) {
                     if (!odoStart || !odoEnd) {
-                        localizedShowToast(`Item #${rowNum}: Both start and end odometer readings are required for Own Car.`, "error");
+                        localizedShowToast(`Item #${rowNum}: Both start and end odometer readings are required for ${subType}.`, "error");
                         return false;
                     }
                     if (isNaN(parseFloat(odoStart)) || isNaN(parseFloat(odoEnd))) {
@@ -777,14 +849,15 @@ const TripExpenseGrid = ({
                     }
                     // require photos for both start and end readings
                     if (!row.details.odoStartImg || !row.details.odoEndImg) {
-                        localizedShowToast(`Item #${rowNum}: Please capture both start and end odometer photos.`, "error");
-                        if (!row.details.odoStartImg) localizedSetRowError(row.id, 'odoStartImg', 'Start odometer photo required.');
-                        if (!row.details.odoEndImg) localizedSetRowError(row.id, 'odoEndImg', 'End odometer photo required.');
+                        localizedShowToast(`Item #${rowNum}: Please capture both start and end odometer photos for ${subType}.`, "error");
+                        if (!row.details.odoStartImg) localizedSetRowError(row.id, 'odoStartImg', 'Start photo required.');
+                        if (!row.details.odoEndImg) localizedSetRowError(row.id, 'odoEndImg', 'End photo required.');
                         return false;
                     }
-                } else if (['Self Drive Rental', 'Own Bike'].includes(subType)) {
-                    if (odoStart && odoEnd && parseFloat(odoEnd) <= parseFloat(odoStart)) {
-                        localizedShowToast(`Item #${rowNum}: ODO End must be greater than ODO Start.`, "error");
+                    // Prevent same photo for start and end
+                    if (row.details.odoStartImg === row.details.odoEndImg) {
+                        localizedShowToast(`Item #${rowNum}: Start and End Odometer photos cannot be the same. Please upload different photos.`, "error");
+                        localizedSetRowError(row.id, 'odoEndImg', 'Duplicate photo detected.');
                         return false;
                     }
                 }
@@ -1078,7 +1151,7 @@ const TripExpenseGrid = ({
                 }
 
                 // If incidental expense added, create a separate record
-                if (row.nature === 'Local Travel' && row.details.incidentalAmount && parseFloat(row.details.incidentalAmount) > 0) {
+                if (row.nature === 'Local Travel' && row.details.incidentalAmount && parseFloat(row.details.incidentalAmount) > 0 && !row.isSaved) {
                     try {
                         await api.post('/api/expenses/', {
                             trip: tripId,
@@ -1475,6 +1548,16 @@ const TripExpenseGrid = ({
                 }
 
                 const updatedRow = { ...row, [field]: finalValue, isSaved: false };
+                if (field === 'date') {
+                    updatedRow.date = finalValue;
+                    // If start date changes, and end date was same as start date, update end date too
+                    if (!row.endDate || normalizeDate(row.endDate) === normalizeDate(row.date)) {
+                        updatedRow.endDate = finalValue;
+                    }
+                } else if (field === 'endDate') {
+                    updatedRow.endDate = finalValue;
+                }
+
                 if (field === 'nature') {
                     updatedRow.details = { bookedBy: 'Self Booked' };
                     updatedRow.timeDetails = { boardingTime: '', scheduledTime: '', delay: 0, actualTime: '' };
@@ -1531,21 +1614,8 @@ const TripExpenseGrid = ({
                 if (detailField === 'odoStart' || detailField === 'odoEnd' || detailField === 'subType') {
                     const start = parseFloat(newDetails.odoStart || 0);
                     const end = parseFloat(newDetails.odoEnd || 0);
-                    newDetails.totalKm = end >= start ? (end - start).toFixed(2) : 0;
-
-                    // KM Reimbursement for Own vehicles based on state rates
-                    if (row.nature === 'Local Travel' && ['Own Car', 'Own Bike'].includes(newDetails.subType)) {
-                        const is4W = newDetails.subType === 'Own Car';
-                        const vehicleKey = is4W ? '4 Wheeler' : '2 Wheeler';
-                        const rate = fuelRates[vehicleKey];
-
-                        // Only auto-calc if we have a valid distance and a rate
-                        if (!isNaN(start) && !isNaN(end) && end > start && rate) {
-                            const distKm = end - start;
-                            updatedAmount = (distKm * rate).toFixed(2);
-                            newDetails.isAutoCalculated = true;
-                        }
-                    }
+                    const dist = end >= start ? (end - start) : 0;
+                    newDetails.totalKm = dist.toFixed(2);
                 }
 
                 if (detailField === 'checkIn' || detailField === 'checkOut') {
@@ -1714,6 +1784,7 @@ const TripExpenseGrid = ({
     const handleOdoFileChange = (e) => {
         const file = e.target.files[0];
         if (file) {
+            e.target.value = ''; // Reset so onChange fires again for same file
             captureLocation();
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -1737,6 +1808,15 @@ const TripExpenseGrid = ({
                     }));
                     showToast("Selfie captured successfully", "success");
                 } else {
+                    // Immediate Duplicate Check
+                    const currentRow = rows.find(r => r.id === id);
+                    if (currentRow) {
+                        const otherField = field === 'odoStart' ? 'odoEndImg' : 'odoStartImg';
+                        if (currentRow.details[otherField] === reader.result) {
+                            showToast("Duplicate Odometer Photo! Please use unique photos for start and end.", "error");
+                            return;
+                        }
+                    }
                     updateDetails(id, `${field}Img`, reader.result);
                     showToast("Odometer photo captured", "success");
                 }
@@ -2640,11 +2720,11 @@ const TripExpenseGrid = ({
                             <div className="incidental-form-card incidental-amount-card">
                                 <div className="incidental-card-head">
                                     <IndianRupee size={14} />
-                                    <span>Expense</span>
+                                    <span>Expense & Charges</span>
                                 </div>
                                 <div className="incidental-card-body">
                                     <div className="input-with-label-mini">
-                                        <label>Amount</label>
+                                        <label>Amount (Auto/Manual)</label>
                                         <div className="amount-with-currency">
                                             <span className="currency-symbol">₹</span>
                                             <input
@@ -2664,9 +2744,27 @@ const TripExpenseGrid = ({
                             <div className="incidental-form-card">
                                 <div className="incidental-card-head">
                                     <Calendar size={14} />
-                                    <span>Date &amp; Time</span>
+                                    <span>Segment & Date</span>
                                 </div>
                                 <div className="incidental-card-body local-date-time-grid">
+                                    {mappedItinerary.length > 0 && (
+                                        <div className="input-with-label-mini full-width-field" style={{ gridColumn: 'span 2' }}>
+                                            <label>Link to Tour Plan Segment</label>
+                                            <select 
+                                                className="cat-input" 
+                                                value={row.details.segId || ''} 
+                                                onChange={e => updateRow(row.id, 'segId', e.target.value)}
+                                                disabled={isLocked}
+                                            >
+                                                <option value="">-- Select Planned Route --</option>
+                                                {mappedItinerary.map(seg => (
+                                                    <option key={seg.segId} value={seg.segId}>
+                                                        {safeFormatDate(seg.activity_date)}: {seg.start_location} ➔ {seg.end_location}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
                                     <div className="input-with-label-mini">
                                         <label>Start Date *</label>
                                         <input type="date" min={minDate} max={maxDate} className="cat-input" value={row.date || ''} onChange={e => updateRow(row.id, 'date', e.target.value)} disabled={isLocked} />
@@ -3380,8 +3478,8 @@ const TripExpenseGrid = ({
                     )}
                 </div>
 
-                <div className="category-table-wrapper" style={{ margin: '0 -24px' }}>
-                    <table className="category-table" style={{ width: 'calc(100% + 48px)' }}>
+                <div className="category-table-wrapper">
+                    <table className="category-table">
                         <thead>
                             {nature === 'Travel' && null}
                             {nature === 'Local Travel' && null}
@@ -4043,19 +4141,6 @@ const TripExpenseGrid = ({
                                                                     <div className="odo-tracking mt-2" style={{ gridColumn: '1 / -1' }}>
                                                                         {['Own Car', 'Company Car', 'Own Bike', 'Self Drive Rental'].includes(row.details.subType) && (
                                                                             <>
-                                                                                {(() => {
-                                                                                    const is4W = row.details.subType.includes('Car');
-                                                                                    const rate = fuelRates[is4W ? '4 Wheeler' : '2 Wheeler'];
-                                                                                    return (
-                                                                                        <div className="mb-1" style={{ fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.8 }}>
-                                                                                            {rate ? (
-                                                                                                <span className="text-success" style={{ fontWeight: 600 }}>(₹{rate}/km rate active)</span>
-                                                                                            ) : (
-                                                                                                <span className="text-muted italic">(Loading local rates...)</span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    );
-                                                                                })()}
                                                                                 <div className="odo-row mb-2">
                                                                                     <span className="odo-label">Start</span>
                                                                                     <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
@@ -4064,7 +4149,6 @@ const TripExpenseGrid = ({
                                                                                             placeholder="0"
                                                                                             value={row.details.odoStart || ''}
                                                                                             onChange={e => updateDetails(row.id, 'odoStart', e.target.value)}
-                                                                                            className={errors[row.id]?.odoStart ? 'error' : ''}
                                                                                             style={{ paddingRight: '50px', width: '100%' }}
                                                                                         />
                                                                                         <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoStart')}>

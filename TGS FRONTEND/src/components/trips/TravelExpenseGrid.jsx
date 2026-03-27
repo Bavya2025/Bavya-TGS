@@ -1,5 +1,5 @@
 import { formatIndianCurrency } from '../../utils/formatters';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
     Plus,
     Trash2,
@@ -130,7 +130,8 @@ const TravelExpenseGrid = ({
     allowedNatures = null,
     // whether to show the bulk upload button (default true)
     showBulkUpload = true,
-    onJobReportClick
+    onJobReportClick,
+    itinerary = []
 }) => {
     // Master data states
     const [travelModes, setTravelModes] = useState(FALLBACK_TRAVEL_MODES);
@@ -145,6 +146,58 @@ const TravelExpenseGrid = ({
     const [trainProviders, setTrainProviders] = useState([]);
     const [busProviders, setBusProviders] = useState([]);
     const [cabProviders, setCabProviders] = useState([]);
+
+    const parseSafeDate = (d) => {
+        if (!d) return null;
+        let dateObj = new Date(d);
+        if (!isNaN(dateObj.getTime())) return dateObj;
+
+        // Handle DD-MM-YYYY or DD/MM/YYYY
+        if (typeof d === 'string') {
+            const parts = d.split(/[-/]/);
+            if (parts.length === 3) {
+                // If it's DD-MM-YYYY, reorder to YYYY-MM-DD
+                if (parts[0].length === 2 && parts[2].length === 4) {
+                    const reordered = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                    dateObj = new Date(reordered);
+                    if (!isNaN(dateObj.getTime())) return dateObj;
+                }
+            }
+        }
+        return null;
+    };
+
+    const normalizeDate = (d) => {
+        const dateObj = parseSafeDate(d);
+        return dateObj ? dateObj.toISOString().split('T')[0] : d;
+    };
+
+    // Flatten itinerary rows from all batches and filter for valid dates
+    const mappedItinerary = useMemo(() => {
+        if (!itinerary || !Array.isArray(itinerary)) return [];
+        return itinerary.reduce((acc, batch) => {
+            if (batch.data_json && Array.isArray(batch.data_json)) {
+                // Filter out rows without valid activity_date and normalize it
+                const validRows = batch.data_json
+                    .filter(row => (row.date || row.activity_date) && parseSafeDate(row.date || row.activity_date))
+                    .map((row, idx) => ({ 
+                        ...row, 
+                        segId: `${batch.id}-${idx}`, // Unique ID for each segment
+                        activity_date: normalizeDate(row.date || row.activity_date),
+                        start_location: row.origin_route || row.start_location || '',
+                        end_location: row.destination_route || row.end_location || ''
+                    }));
+                return [...acc, ...validRows];
+            }
+            return acc;
+        }, []);
+    }, [itinerary]);
+
+    const safeFormatDate = (d) => {
+        const dateObj = parseSafeDate(d);
+        if (!dateObj) return d || 'Select Date';
+        return dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    };
 
     // Local Masters
     const [localTravelModes, setLocalTravelModes] = useState(FALLBACK_LOCAL_TRAVEL_MODES);
@@ -194,6 +247,9 @@ const TravelExpenseGrid = ({
 
     // Bulk Upload State
     const [bulkModal, setBulkModal] = useState({ visible: false, file: null, uploading: false });
+
+    // Bill Preview State
+    const [billPreview, setBillPreview] = useState({ visible: false, url: null });
 
     useEffect(() => {
         const fetchMasters = async () => {
@@ -286,7 +342,12 @@ const TravelExpenseGrid = ({
     }, []);
 
     // --- DATE RANGE CONSTRAINTS ---
+    // --- DATE RANGE CONSTRAINTS ---
     const getMinDate = () => {
+        if (mappedItinerary && mappedItinerary.length > 0) {
+            const sorted = [...mappedItinerary].sort((a, b) => new Date(a.activity_date) - new Date(b.activity_date));
+            return sorted[0].activity_date;
+        }
         if (!startDate) return undefined;
         try {
             const d = new Date(startDate);
@@ -296,6 +357,10 @@ const TravelExpenseGrid = ({
     };
 
     const getMaxDate = () => {
+        if (mappedItinerary && mappedItinerary.length > 0) {
+            const sorted = [...mappedItinerary].sort((a, b) => new Date(b.activity_date) - new Date(a.activity_date));
+            return sorted[0].activity_date;
+        }
         if (!endDate) return undefined;
         try {
             const d = new Date(endDate);
@@ -323,7 +388,17 @@ const TravelExpenseGrid = ({
         }
 
         if (initialExpenses && initialExpenses.length > 0) {
-            const syncedRows = initialExpenses.map(exp => {
+            const validExpenses = initialExpenses.filter(exp => {
+                if (exp.category === 'Incidental') {
+                    try {
+                        let desc = exp.description;
+                        if (typeof desc === 'string' && desc.startsWith('{')) desc = JSON.parse(desc);
+                        if (desc && desc.notes && desc.notes.startsWith('Added during local travel:')) return false;
+                    } catch(e) {}
+                }
+                return true;
+            });
+            const syncedRows = validExpenses.map(exp => {
                 let details = { description: exp.description || '' };
                 try {
                     if (typeof exp.description === 'string' && exp.description.startsWith('{')) {
@@ -362,10 +437,12 @@ const TravelExpenseGrid = ({
                     isSaved: true
                 };
             });
-            // Preserve rows that haven't been saved yet when syncing
+            // Preserve rows that haven't been saved yet when syncing, avoiding id duplicates
             setRows(currentRows => {
                 const unsavedRows = currentRows.filter(r => !r.isSaved);
-                return [...syncedRows, ...unsavedRows];
+                const unsavedIds = new Set(unsavedRows.map(r => String(r.id)));
+                const filteredSynced = syncedRows.filter(r => !unsavedIds.has(String(r.id)));
+                return [...filteredSynced, ...unsavedRows];
             });
         }
     }, [initialExpenses]);
@@ -443,8 +520,11 @@ const TravelExpenseGrid = ({
                 showToast(`Item #${rowNum}: Please enter a valid numeric amount.`, "error");
                 return false;
             }
-            // require bill if any charge present
-            if (parseFloat(row.amount) > 0 && (!row.bills || row.bills.length === 0)) {
+            // require bill if any charge present (Except for Odometer-based own vehicle trips where ODO photos are the proof)
+            const isOdoBased = (row.nature === 'Local Travel' && ['Own Car', 'Own Bike', 'Self Drive Rental'].includes(row.details?.subType || row.details?.vehicleType)) ||
+                               (row.nature === 'Travel' && row.details?.mode === 'Intercity Car' && ['Own Car', 'Self Drive Rental'].includes(row.details?.vehicleType));
+
+            if (parseFloat(row.amount) > 0 && !isOdoBased && (!row.bills || row.bills.length === 0)) {
                 showToast(`Item #${rowNum}: Please upload a bill as amount is entered.`, "error");
                 return false;
             }
@@ -558,6 +638,29 @@ const TravelExpenseGrid = ({
                 } else if (mode === 'Intercity Cab') {
                     if (!provider) { setRowError(row.id, 'provider', 'Provider / Vendor (Ola/Uber etc) is mandatory.'); return false; }
                     if (!row.timeDetails.boardingTime || !row.timeDetails.actualTime) { setRowError(row.id, 'time', 'Departure and Arrival times are mandatory for Cab.'); return false; }
+                } else if (mode === 'Intercity Car') {
+                    const { vehicleType, odoStart, odoEnd } = row.details;
+                    if (['Own Car', 'Self Drive Rental'].includes(vehicleType)) {
+                        if (!odoStart || !odoEnd) {
+                            showToast(`Item #${rowNum}: Both start and end odometer readings are required for ${vehicleType}.`, "error");
+                            return false;
+                        }
+                        if (parseFloat(odoEnd) <= parseFloat(odoStart)) {
+                            showToast(`Item #${rowNum}: End Odometer should be greater than Start Odometer.`, "error");
+                            return false;
+                        }
+                        if (!row.details.odoStartImg || !row.details.odoEndImg) {
+                            showToast(`Item #${rowNum}: Please capture both start and end odometer photos for ${vehicleType}.`, "error");
+                            if (!row.details.odoStartImg) setRowError(row.id, 'odoStartImg', 'Start photo required.');
+                            if (!row.details.odoEndImg) setRowError(row.id, 'odoEndImg', 'End photo required.');
+                            return false;
+                        }
+                        if (row.details.odoStartImg === row.details.odoEndImg) {
+                            showToast(`Item #${rowNum}: Start and End Odometer photos cannot be the same.`, "error");
+                            setRowError(row.id, 'odoEndImg', 'Duplicate photo detected.');
+                            return false;
+                        }
+                    }
                 }
 
                 if (isSelfBooked) {
@@ -679,9 +782,9 @@ const TravelExpenseGrid = ({
                     }
                 }
 
-                if (subType === 'Own Car') {
+                if (['Own Car', 'Own Bike', 'Self Drive Rental'].includes(subType)) {
                     if (!odoStart || !odoEnd) {
-                        showToast(`Item #${rowNum}: Both start and end odometer readings are required for Own Car.`, "error");
+                        showToast(`Item #${rowNum}: Both start and end odometer readings are required for ${subType}.`, "error");
                         return false;
                     }
                     if (isNaN(parseFloat(odoStart)) || isNaN(parseFloat(odoEnd))) {
@@ -694,14 +797,15 @@ const TravelExpenseGrid = ({
                     }
                     // require photos for both start and end readings
                     if (!row.details.odoStartImg || !row.details.odoEndImg) {
-                        showToast(`Item #${rowNum}: Please capture both start and end odometer photos.`, "error");
-                        if (!row.details.odoStartImg) setRowError(row.id, 'odoStartImg', 'Start odometer photo required.');
-                        if (!row.details.odoEndImg) setRowError(row.id, 'odoEndImg', 'End odometer photo required.');
+                        showToast(`Item #${rowNum}: Please capture both start and end odometer photos for ${subType}.`, "error");
+                        if (!row.details.odoStartImg) setRowError(row.id, 'odoStartImg', 'Start photo required.');
+                        if (!row.details.odoEndImg) setRowError(row.id, 'odoEndImg', 'End photo required.');
                         return false;
                     }
-                } else if (['Self Drive Rental', 'Own Bike'].includes(subType)) {
-                    if (odoStart && odoEnd && parseFloat(odoEnd) <= parseFloat(odoStart)) {
-                        showToast(`Item #${rowNum}: ODO End must be greater than ODO Start.`, "error");
+                    // Prevent same photo for start and end
+                    if (row.details.odoStartImg === row.details.odoEndImg) {
+                        showToast(`Item #${rowNum}: Start and End Odometer photos cannot be the same. Please upload different photos.`, "error");
+                        setRowError(row.id, 'odoEndImg', 'Duplicate photo detected.');
                         return false;
                     }
                 }
@@ -1022,10 +1126,45 @@ const TravelExpenseGrid = ({
 
     const addRow = (nature = '') => {
         const targetNature = nature || activeCategory;
+
+        // Restriction: Only allow number of rows to be same as in approved Tour Plan for Local Travel
+        if (targetNature === 'Local Travel' && mappedItinerary && mappedItinerary.length > 0) {
+            const currentCount = rows.filter(r => r.nature === 'Local Travel').length;
+            if (currentCount >= mappedItinerary.length) {
+                showToast(`Maximum segments reached! Your approved tour plan only allows up to ${mappedItinerary.length} local travel records.`, "warning");
+                return;
+            }
+        }
+
+        const defaultDate = (() => {
+            if (mappedItinerary && mappedItinerary.length > 0) {
+                const usedDates = rows.filter(r => r.nature === targetNature).map(r => normalizeDate(r.date));
+                const available = mappedItinerary.find(d => !usedDates.includes(d.activity_date));
+                return available ? available.activity_date : mappedItinerary[0].activity_date;
+            }
+            return startDate || new Date().toISOString().split('T')[0];
+        })();
+        
+        // Auto-populate from itinerary if possible
+        let autoOrigin = '';
+        let autoDest = '';
+        if (mappedItinerary && mappedItinerary.length > 0) {
+            // Priority: Match by date
+            const match = mappedItinerary.find(b => b.activity_date === defaultDate);
+            if (match) {
+                autoOrigin = match.start_location || '';
+                autoDest = match.end_location || '';
+            } else {
+                // Fallback: If no match for today, use first one as a starting point if it exists
+                autoOrigin = mappedItinerary[0].start_location || '';
+                autoDest = mappedItinerary[0].end_location || '';
+            }
+        }
+
         const newRow = {
             id: Math.random().toString(36).substr(2, 9),
-            date: new Date().toISOString().split('T')[0],
-            endDate: new Date().toISOString().split('T')[0],
+            date: defaultDate,
+            endDate: defaultDate,
             nature: targetNature,
             remarks: '',
             details: {
@@ -1035,10 +1174,12 @@ const TravelExpenseGrid = ({
                 travelStatus: 'Completed',
                 checkInTime: '',
                 checkOutTime: '',
-                selfies: [] // Added for Local Travel
+                selfies: [], // Added for Local Travel
+                origin: autoOrigin,
+                destination: autoDest
             },
             timeDetails: {
-                boardingDate: new Date().toISOString().split('T')[0],
+                boardingDate: defaultDate,
                 boardingTime: '',
                 checkInTime: '',
                 scheduledTime: '',
@@ -1127,6 +1268,40 @@ const TravelExpenseGrid = ({
                 }
 
                 const updatedRow = { ...row, [field]: finalValue, isSaved: false };
+                                // Special handling for segment selection
+                if (field === 'segId' && mappedItinerary && mappedItinerary.length > 0) {
+                    const match = mappedItinerary.find(b => b.segId === finalValue);
+                    if (match) {
+                        // Check for duplicate segment usage
+                        const isDuplicateSegment = prevRows.some(r => r.id !== id && r.nature === row.nature && r.details?.segId === match.segId);
+                        if (isDuplicateSegment) {
+                            showToast(`This segment (${match.start_location} to ${match.end_location}) is already used. Please select another segment.`, "warning");
+                            return row;
+                        }
+
+                        updatedRow.date = match.activity_date;
+                        // For Local Travel, we often default endDate to startDate but allow changing it
+                        if (!row.endDate || normalizeDate(row.endDate) === normalizeDate(row.date)) {
+                            updatedRow.endDate = match.activity_date;
+                        }
+                        updatedRow.details = {
+                            ...updatedRow.details,
+                            segId: match.segId,
+                            origin: match.start_location || '',
+                            destination: match.end_location || ''
+                        };
+                    }
+                } else if (field === 'date') {
+                    updatedRow.date = finalValue;
+                    // If start date changes, and end date was same as start date, update end date too
+                    if (!row.endDate || normalizeDate(row.endDate) === normalizeDate(row.date)) {
+                        updatedRow.endDate = finalValue;
+                    }
+                } else if (field === 'endDate') {
+                    updatedRow.endDate = finalValue;
+                }
+
+
                 if (field === 'nature') {
                     updatedRow.details = { bookedBy: 'Self Booked' };
                     updatedRow.timeDetails = { boardingTime: '', scheduledTime: '', delay: 0, actualTime: '' };
@@ -1150,22 +1325,61 @@ const TravelExpenseGrid = ({
 
                 const newDetails = { ...row.details, [detailField]: value };
 
-                if (detailField === 'odoStart' || detailField === 'odoEnd' || detailField === 'subType') {
+                if (detailField === 'odoStart' || detailField === 'odoEnd' || detailField === 'subType' || detailField === 'origin' || detailField === 'incidentalAmount') {
                     const start = parseFloat(newDetails.odoStart || 0);
                     const end = parseFloat(newDetails.odoEnd || 0);
-                    newDetails.totalKm = end >= start ? (end - start).toFixed(2) : 0;
+                    const dist = end >= start ? (end - start) : 0;
+                    newDetails.totalKm = dist.toFixed(2);
 
-                    // KM Reimbursement for Own vehicles based on state rates
+                    const incidental = parseFloat(newDetails.incidentalAmount || 0);
+
+                    // If it's own vehicle, we need the rate
                     if (row.nature === 'Local Travel' && ['Own Car', 'Own Bike'].includes(newDetails.subType)) {
-                        const is4W = newDetails.subType === 'Own Car';
-                        const vehicleKey = is4W ? '4 Wheeler' : '2 Wheeler';
-                        const rate = fuelRates[vehicleKey];
-
-                        // Only auto-calc if we have a valid distance and a rate
-                        if (!isNaN(start) && !isNaN(end) && end > start && rate) {
-                            const distKm = end - start;
-                            updatedAmount = (distKm * rate).toFixed(2);
-                            newDetails.isAutoCalculated = true;
+                        const vehicleType = newDetails.subType === 'Own Car' ? '4 Wheeler' : '2 Wheeler';
+                        const origin = newDetails.origin || '';
+                        
+                        // If we have a distance, try to fetch/apply rate
+                        if (dist > 0 && origin) {
+                             // Use a local function to fetch and update or use cached
+                             const fetchRateAndCalc = async () => {
+                                 try {
+                                     const res = await api.get(`/api/masters/fuel-rate-masters/resolve-rate/?location=${encodeURIComponent(origin)}&vehicle_type=${encodeURIComponent(vehicleType)}`);
+                                     const rate = res.data.rate_per_km;
+                                     if (rate) {
+                                         const fuelCost = dist * rate;
+                                         setRows(prev => prev.map(r => r.id === id ? { ...r, amount: fuelCost.toFixed(2), details: { ...r.details, isAutoCalculated: true, resolvedRate: rate } } : r));
+                                     } else {
+                                         // If rate is missing, we don't clear the amount if it's already there? 
+                                         // Actually, if it's fuel-based and rate fails, we might just keep what's there or show 0.
+                                         setRows(prev => prev.map(r => r.id === id ? { ...r, amount: '0', details: { ...r.details, isAutoCalculated: false } } : r));
+                                     }
+                                 } catch (error) {
+                                     console.error("Rate resolve error:", error);
+                                     // Fallback to global user rate if available
+                                     const fallbackRate = fuelRates[vehicleType];
+                                     if (fallbackRate) {
+                                         const fuelCost = (dist * fallbackRate);
+                                         setRows(prev => prev.map(r => r.id === id ? { ...r, amount: fuelCost.toFixed(2), details: { ...r.details, isAutoCalculated: true, resolvedRate: fallbackRate } } : r));
+                                     } else {
+                                         setRows(prev => prev.map(r => r.id === id ? { ...r, amount: '0', details: { ...r.details, isAutoCalculated: false } } : r));
+                                     }
+                                 }
+                             };
+                             fetchRateAndCalc();
+                        } else {
+                            // No distance, so fuel cost is 0.
+                            // If incidentalAmount is being updated, we don't want to clear the fuel amount.
+                            // If odoStart/End/subType/origin is updated and dist is 0, then fuel amount should be 0.
+                            if (detailField !== 'incidentalAmount') {
+                                updatedAmount = '0';
+                            }
+                        }
+                    } else {
+                        // Not own vehicle, fuel amount (row.amount) should be based on manual entry or 0
+                        // Incidentals are separate.
+                        // If incidentalAmount is being updated, we don't want to clear the fuel amount.
+                        if (detailField !== 'incidentalAmount') {
+                            updatedAmount = '0';
                         }
                     }
                 }
@@ -1295,6 +1509,7 @@ const TravelExpenseGrid = ({
     const handleOdoFileChange = (e) => {
         const file = e.target.files[0];
         if (file) {
+            e.target.value = ''; // Reset so onChange fires again for same file
             captureLocation();
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -1318,6 +1533,15 @@ const TravelExpenseGrid = ({
                     }));
                     showToast("Selfie captured successfully", "success");
                 } else {
+                    // Immediate Duplicate Check
+                    const currentRow = rows.find(r => r.id === id);
+                    if (currentRow) {
+                        const otherField = field === 'odoStart' ? 'odoEndImg' : 'odoStartImg';
+                        if (currentRow.details[otherField] === reader.result) {
+                            showToast("Duplicate Odometer Photo! Please use unique photos for start and end.", "error");
+                            return;
+                        }
+                    }
                     updateDetails(id, `${field}Img`, reader.result);
                     showToast("Odometer photo captured", "success");
                 }
@@ -1370,8 +1594,7 @@ const TravelExpenseGrid = ({
 
     const previewBill = (bill) => {
         if (!bill) return;
-        const newWindow = window.open();
-        newWindow.document.write(`<img src="${bill}" style="max-width:100%; height:auto;" />`);
+        setBillPreview({ visible: true, url: bill });
     };
 
     const handleSelfieCapture = (id) => {
@@ -1546,13 +1769,68 @@ const TravelExpenseGrid = ({
                                                                     </div>
                                                                 </div>
 
+                                                                {/* MODE & SUBTYPE ROW - Only for Local Travel */}
+                                                                {nature === 'Local Travel' && (
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: '#f8fafc', borderRadius: '10px', padding: '12px 14px', border: '1px solid #e2e8f0' }}>
+                                                                        <div className="input-with-label-mini" style={{ marginBottom: 0 }}>
+                                                                            <label>Travel Mode</label>
+                                                                            <select 
+                                                                                value={row.details.mode || ''} 
+                                                                                onChange={e => updateDetails(row.id, 'mode', e.target.value)} 
+                                                                                className="cat-input" 
+                                                                                disabled={isLocked || isFixedLocal}
+                                                                                style={{ height: '32px', fontSize: '0.8rem' }}
+                                                                            >
+                                                                                <option value="">Select Mode</option>
+                                                                                {localTravelModes.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                            </select>
+                                                                        </div>
+                                                                        <div className="input-with-label-mini" style={{ marginBottom: 0 }}>
+                                                                            <label>Sub-Type</label>
+                                                                            <select 
+                                                                                value={row.details.subType || ''} 
+                                                                                onChange={e => updateDetails(row.id, 'subType', e.target.value)} 
+                                                                                className="cat-input" 
+                                                                                disabled={isLocked || isFixedLocal}
+                                                                                style={{ height: '32px', fontSize: '0.8rem' }}
+                                                                            >
+                                                                                <option value="">Select Sub-Type</option>
+                                                                                {row.details.mode === 'Car / Cab' && localCarSubTypes.map(s => <option key={s} value={s}>{s}</option>)}
+                                                                                {row.details.mode === 'Bike' && localBikeSubTypes.map(s => <option key={s} value={s}>{s}</option>)}
+                                                                                {row.details.mode === 'Public Transport' && (localTravelModes.includes('Public Transport') ? FALLBACK_LOCAL_PT_SUBTYPES : []).map(s => <option key={s} value={s}>{s}</option>)}
+                                                                            </select>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
                                                                 {/* START ROW */}
                                                                 <div style={{ background: '#f8faff', borderRadius: '10px', padding: '12px 14px' }}>
                                                                     <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }}>▶ Start</div>
-                                                                    <div style={{ display: 'grid', gridTemplateColumns: '150px 110px 1fr 110px 110px', gap: '12px', alignItems: 'end' }}>
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: '160px 100px 1fr 100px 100px', gap: '12px', alignItems: 'end' }}>
                                                                         <div className="input-with-label-mini">
                                                                             <label>Date</label>
-                                                                            <input type="date" min={minDate} max={maxDate} value={row.date} onChange={e => updateRow(row.id, 'date', e.target.value)} className="cat-input" disabled={isLocked} />
+                                                                             {mappedItinerary && mappedItinerary.length > 0 ? (
+                                                                                 <select 
+                                                                                     value={row.details?.segId || ''} 
+                                                                                     onChange={e => updateRow(row.id, 'segId', e.target.value)} 
+                                                                                     className="cat-input" 
+                                                                                     disabled={isLocked}
+                                                                                     style={{ height: '32px', fontSize: '0.8rem', fontWeight: 600 }}
+                                                                                 >
+                                                                                     <option value="">Select Segment</option>
+                                                                                     {mappedItinerary.map((seg) => {
+                                                                                         const isUsedByOther = rows.some(r => r.id !== row.id && r.details?.segId === seg.segId);
+                                                                                         if (isUsedByOther) return null;
+                                                                                         return (
+                                                                                             <option key={seg.segId} value={seg.segId}>
+                                                                                                 {safeFormatDate(seg.activity_date)} ({seg.start_location} → {seg.end_location})
+                                                                                             </option>
+                                                                                         );
+                                                                                     })}
+                                                                                 </select>
+                                                                             ) : (
+                                                                                 <input type="date" min={minDate} max={maxDate} value={row.date} onChange={e => updateRow(row.id, 'date', e.target.value)} className="cat-input" disabled={isLocked} />
+                                                                             )}
                                                                         </div>
                                                                         <div className="input-with-label-mini">
                                                                             <label>Time</label>
@@ -1562,31 +1840,55 @@ const TravelExpenseGrid = ({
                                                                             <label>Location</label>
                                                                             <input type="text" placeholder="Start location / Origin" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} className="cat-input" disabled={isLocked} />
                                                                         </div>
-                                                                        <div className="input-with-label-mini">
-                                                                            <label>Odo Reading</label>
-                                                                            <input type="number" placeholder="0" value={row.details.odoStart || ''} onChange={e => updateDetails(row.id, 'odoStart', e.target.value)} className="cat-input" disabled={isLocked} />
-                                                                        </div>
-                                                                        <div className="input-with-label-mini">
-                                                                            <label>Odo Photo</label>
-                                                                            {!isLocked ? (
-                                                                                <button type="button" className="odo-capture-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleOdoCapture(row.id, 'odoStart')}>
-                                                                                    {row.details.odoStartImg ? <Check size={13} style={{ color: '#16a34a' }} /> : <Camera size={13} />}
-                                                                                    <span>{row.details.odoStartImg ? 'Captured' : 'Odo Pic'}</span>
-                                                                                </button>
-                                                                            ) : (
-                                                                                <div style={{ fontSize: '0.7rem', color: row.details.odoStartImg ? '#16a34a' : '#94a3b8' }}>{row.details.odoStartImg ? '✓ Captured' : 'N/A'}</div>
-                                                                            )}
-                                                                        </div>
+                                                                        {(['Own Car', 'Own Bike', 'Self Drive Rental'].includes(row.details.subType)) && (
+                                                                            <>
+                                                                                <div className="input-with-label-mini">
+                                                                                    <label>Odo Reading</label>
+                                                                                    <input type="number" placeholder="0" value={row.details.odoStart || ''} onChange={e => updateDetails(row.id, 'odoStart', e.target.value)} className="cat-input" disabled={isLocked} />
+                                                                                </div>
+                                                                                <div className="input-with-label-mini">
+                                                                                    <label>Odo Photo</label>
+                                                                                    {!isLocked ? (
+                                                                                        <button type="button" className="odo-capture-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleOdoCapture(row.id, 'odoStart')}>
+                                                                                            {row.details.odoStartImg ? <Check size={13} style={{ color: '#16a34a' }} /> : <Camera size={13} />}
+                                                                                            <span>{row.details.odoStartImg ? 'Captured' : 'Odo Pic'}</span>
+                                                                                        </button>
+                                                                                    ) : (
+                                                                                        <div style={{ fontSize: '0.7rem', color: row.details.odoStartImg ? '#16a34a' : '#94a3b8' }}>{row.details.odoStartImg ? '✓ Captured' : 'N/A'}</div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </>
+                                                                        )}
                                                                     </div>
                                                                 </div>
 
                                                                 {/* END ROW */}
                                                                 <div style={{ background: '#f0fdf4', borderRadius: '10px', padding: '12px 14px' }}>
                                                                     <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }}>■ End</div>
-                                                                    <div style={{ display: 'grid', gridTemplateColumns: '150px 110px 1fr 110px 110px', gap: '12px', alignItems: 'end' }}>
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 1fr 100px 100px', gap: '12px', alignItems: 'end' }}>
                                                                         <div className="input-with-label-mini">
                                                                             <label>Date</label>
-                                                                            <input type="date" min={minDate} max={maxDate} value={row.details.endDate || row.date} onChange={e => updateDetails(row.id, 'endDate', e.target.value)} className="cat-input" disabled={isLocked} />
+                                                                            {mappedItinerary && mappedItinerary.length > 0 ? (
+                                                                                <select 
+                                                                                    value={row.details.endDate || row.date} 
+                                                                                    onChange={e => updateDetails(row.id, 'endDate', e.target.value)} 
+                                                                                    className="cat-input" 
+                                                                                    disabled={isLocked}
+                                                                                    style={{ height: '32px', fontSize: '0.8rem', fontWeight: 600 }}
+                                                                                >
+                                                                                    {(() => {
+                                                                                        // For End Date, we allow any planned date, potentially starting from row.date
+                                                                                        const finalOptions = [...new Set([...mappedItinerary.map(d => d.activity_date)])].sort();
+                                                                                        return finalOptions.map(d => (
+                                                                                            <option key={d} value={d}>
+                                                                                                {safeFormatDate(d)}
+                                                                                            </option>
+                                                                                        ));
+                                                                                    })()}
+                                                                                </select>
+                                                                            ) : (
+                                                                                <input type="date" min={minDate} max={maxDate} value={row.details.endDate || row.date} onChange={e => updateDetails(row.id, 'endDate', e.target.value)} className="cat-input" disabled={isLocked} />
+                                                                            )}
                                                                         </div>
                                                                         <div className="input-with-label-mini">
                                                                             <label>Time</label>
@@ -1596,21 +1898,25 @@ const TravelExpenseGrid = ({
                                                                             <label>Location</label>
                                                                             <input type="text" placeholder="End location / Destination" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} className="cat-input" disabled={isLocked} />
                                                                         </div>
-                                                                        <div className="input-with-label-mini">
-                                                                            <label>Odo Reading</label>
-                                                                            <input type="number" placeholder="0" value={row.details.odoEnd || ''} onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)} className="cat-input" disabled={isLocked} />
-                                                                        </div>
-                                                                        <div className="input-with-label-mini">
-                                                                            <label>Odo Photo</label>
-                                                                            {!isLocked ? (
-                                                                                <button type="button" className="odo-capture-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleOdoCapture(row.id, 'odoEnd')}>
-                                                                                    {row.details.odoEndImg ? <Check size={13} style={{ color: '#16a34a' }} /> : <Camera size={13} />}
-                                                                                    <span>{row.details.odoEndImg ? 'Captured' : 'Odo Pic'}</span>
-                                                                                </button>
-                                                                            ) : (
-                                                                                <div style={{ fontSize: '0.7rem', color: row.details.odoEndImg ? '#16a34a' : '#94a3b8' }}>{row.details.odoEndImg ? '✓ Captured' : 'N/A'}</div>
-                                                                            )}
-                                                                        </div>
+                                                                        {(['Own Car', 'Own Bike', 'Self Drive Rental'].includes(row.details.subType)) && (
+                                                                            <>
+                                                                                <div className="input-with-label-mini">
+                                                                                    <label>Odo Reading</label>
+                                                                                    <input type="number" placeholder="0" value={row.details.odoEnd || ''} onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)} className="cat-input" disabled={isLocked} />
+                                                                                </div>
+                                                                                <div className="input-with-label-mini">
+                                                                                    <label>Odo Photo</label>
+                                                                                    {!isLocked ? (
+                                                                                        <button type="button" className="odo-capture-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleOdoCapture(row.id, 'odoEnd')}>
+                                                                                            {row.details.odoEndImg ? <Check size={13} style={{ color: '#16a34a' }} /> : <Camera size={13} />}
+                                                                                            <span>{row.details.odoEndImg ? 'Captured' : 'Odo Pic'}</span>
+                                                                                        </button>
+                                                                                    ) : (
+                                                                                        <div style={{ fontSize: '0.7rem', color: row.details.odoEndImg ? '#16a34a' : '#94a3b8' }}>{row.details.odoEndImg ? '✓ Captured' : 'N/A'}</div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </>
+                                                                        )}
                                                                     </div>
                                                                 </div>
 
@@ -1618,9 +1924,31 @@ const TravelExpenseGrid = ({
                                                                 <div style={{ background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                                                                     {/* Calc bar */}
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', borderBottom: jobReportOpen[row.id] || row.details.jobReport ? '1px solid #e2e8f0' : 'none' }}>
-                                                                        <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
-                                                                            Calc. Odo Expense:&nbsp;
-                                                                            <span style={{ color: '#4f46e5', fontWeight: 800, fontSize: '0.9rem' }}>₹{formatIndianCurrency(parseFloat(row.amount || 0).toFixed(2))}</span>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                                                            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                {row.details.isAutoCalculated && <CheckCircle2 size={14} color="#16a34a" />}
+                                                                                Expense Amount:
+                                                                            </div>
+                                                                            {row.details.isAutoCalculated ? (
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                    <span style={{ color: '#4f46e5', fontWeight: 800, fontSize: '0.95rem' }}>₹{formatIndianCurrency(parseFloat(row.amount || 0).toFixed(2))}</span>
+                                                                                    <span style={{ fontSize: '0.7rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                                                        {row.details.totalKm} KM @ ₹{fuelRates[row.details.subType === 'Own Car' ? '4 Wheeler' : '2 Wheeler']}
+                                                                                    </span>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div style={{ position: 'relative', width: '120px' }}>
+                                                                                    <span style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b' }}>₹</span>
+                                                                                    <input 
+                                                                                        type="text" 
+                                                                                        value={row.amount} 
+                                                                                        onChange={e => updateRow(row.id, 'amount', e.target.value)}
+                                                                                        style={{ width: '100%', padding: '4px 8px 4px 20px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700, outline: 'none' }}
+                                                                                        placeholder="0.00"
+                                                                                        disabled={isLocked}
+                                                                                    />
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                                                             {row.details.jobReport && !jobReportOpen[row.id] && (
@@ -1821,8 +2149,12 @@ const TravelExpenseGrid = ({
                                                                     <div style={{ background: 'linear-gradient(135deg, #4f46e5, #0ea5e9)', borderRadius: '12px', padding: '10px 20px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 }}>
                                                                         <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Day Total</span>
                                                                         <span style={{ fontSize: '1.4rem', fontWeight: 900, color: 'white', lineHeight: 1.1 }}>
-                                                                            ₹{formatIndianCurrency((parseFloat(row.amount || 0) + parseFloat(row.details.incidentalAmount || 0)).toFixed(2))}
-                                                                        </span>
+                                                                             {(() => {
+                                                                                 const fuelAmt = parseFloat(row.amount || 0);
+                                                                                 const incidentalAmt = parseFloat(row.details.incidentalAmount || 0);
+                                                                                 return `₹${formatIndianCurrency((fuelAmt + incidentalAmt).toFixed(2))}`;
+                                                                             })()}
+                                                                         </span>
                                                                     </div>
                                                                 </div>
 
@@ -3111,6 +3443,29 @@ const TravelExpenseGrid = ({
                     </div>
                 </div>
             )}
+        {/* Bill Preview Modal */}
+        {billPreview.visible && (
+            <div className="image-modal-overlay" onClick={() => setBillPreview({ visible: false, url: null })}>
+                <div className="image-modal-container" onClick={e => e.stopPropagation()}>
+                    <div className="image-modal-header">
+                        <h3>Bill Preview</h3>
+                        <button 
+                            onClick={() => setBillPreview({ visible: false, url: null })} 
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }}
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <div className="image-modal-body">
+                        <img 
+                            src={billPreview.url} 
+                            alt="Bill Preview" 
+                            style={{ maxWidth: '100%', maxHeight: 'calc(90vh - 60px)', objectFit: 'contain', borderRadius: '8px' }} 
+                        />
+                    </div>
+                </div>
+            </div>
+        )}
         </div>
     );
 };

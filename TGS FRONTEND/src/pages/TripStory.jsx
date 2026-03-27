@@ -681,6 +681,7 @@ const TripStory = () => {
                             // only show bulk button for full travel requests (TRP-)
                             showBulkUpload={trip.trip_id?.startsWith('TRP-')}
                             onJobReportClick={() => setShowJobReportModal(true)}
+                            itinerary={trip.activity_batches}
                         />
                     )}
                 </div>

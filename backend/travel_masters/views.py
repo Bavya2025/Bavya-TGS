@@ -539,7 +539,7 @@ class FuelRateMasterViewSet(viewsets.ModelViewSet):
         return queryset.order_by('state', 'vehicle_type')
 
     def get_permissions(self):
-        if self.action == 'my_rate':
+        if self.action in ['my_rate', 'resolve_rate']:
             return [IsCustomAuthenticated()]
         return [IsAdmin()]
 
@@ -583,7 +583,7 @@ class FuelRateMasterViewSet(viewsets.ModelViewSet):
             FuelRateMaster.objects.filter(state__icontains=state, vehicle_type__iexact=vehicle_type).first()
         )
 
-        if rate_obj:
+        if (rate_obj):
             return Response({
                 'rate_per_km': float(rate_obj.rate_per_km),
                 'state': rate_obj.state,
@@ -595,6 +595,67 @@ class FuelRateMasterViewSet(viewsets.ModelViewSet):
                 'state': state,
                 'vehicle_type': vehicle_type,
                 'message': f'No fuel rate configured for {state} / {vehicle_type}'
+            })
+
+    @action(detail=False, methods=['get'], url_path='resolve-rate')
+    def resolve_rate(self, request):
+        """
+        Dynamically resolves the fuel rate based on a location name by traversing GIS hierarchy.
+        """
+        location_name = request.query_params.get('location', '').strip()
+        vehicle_type = request.query_params.get('vehicle_type', '4 Wheeler')
+        
+        if not location_name:
+            return Response({'error': 'Location name is required'}, status=400)
+
+        # 1. Find location by name
+        base_name = location_name.split(' - ')[0].strip()
+        loc = (
+            Location.objects.filter(name__iexact=base_name).first() or
+            Location.objects.filter(name__icontains=base_name).first()
+        )
+        
+        if not loc:
+            return Response({'error': f'Location "{location_name}" not found in master data'}, status=404)
+
+        # 2. Traverse up to find the State
+        state_loc = None
+        curr = loc
+        visited = set()
+        
+        while curr and curr.external_id not in visited:
+            visited.add(curr.external_id)
+            if curr.location_type.lower() == 'state':
+                state_loc = curr
+                break
+            if not curr.parent_id:
+                break
+            curr = Location.objects.filter(external_id=curr.parent_id).first()
+
+        if not state_loc:
+            # Fallback: if it's a "District" or "Mandal" and we can't find state, try search for state in name (rare)
+            return Response({'error': f'Could not determine state for "{location_name}" via hierarchy.'}, status=404)
+
+        state_name = state_loc.name
+        
+        # 3. Look up rate for that specific state
+        rate_obj = (
+            FuelRateMaster.objects.filter(state__iexact=state_name, vehicle_type__iexact=vehicle_type).first() or
+            FuelRateMaster.objects.filter(state__icontains=state_name, vehicle_type__iexact=vehicle_type).first()
+        )
+
+        if rate_obj:
+            return Response({
+                'rate_per_km': float(rate_obj.rate_per_km),
+                'state': state_name,
+                'vehicle_type': vehicle_type,
+            })
+        else:
+            return Response({
+                'rate_per_km': None,
+                'state': state_name,
+                'vehicle_type': vehicle_type,
+                'message': f'No fuel rate configured for {state_name} / {vehicle_type}'
             })
 
 class EligibilityRuleViewSet(viewsets.ModelViewSet):

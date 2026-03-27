@@ -1231,7 +1231,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
     permission_classes = [IsCustomAuthenticated]
-    http_method_names = ['get', 'post', 'patch', 'put', 'head', 'options']
+    http_method_names = ['get', 'post', 'patch', 'put', 'delete', 'head', 'options']
 
     def get_queryset(self):
         user = getattr(self.request, 'custom_user', None)

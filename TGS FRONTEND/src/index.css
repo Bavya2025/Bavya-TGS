@@ -16353,10 +16353,11 @@ textarea:focus {
 .smart-grid-container .category-section-container {
   background: white;
   border-radius: 16px;
-  padding: 1.5rem;
+  padding: 0;
   margin-bottom: 2rem;
   border: 1px solid #e2e8f0;
   animation: slideInGrid 0.4s ease-out;
+  overflow: hidden;
 }
 
 .smart-grid-container .cat-header-box {
@@ -17407,7 +17408,7 @@ textarea:focus {
   padding: 12px 16px;
   background: #fff7ed;
   color: #9a3412;
-  border: 1px solid #fed7aa;
+  border: 1px solid #ffedd5;
   border-radius: 12px;
   font-size: 0.85rem;
 }
@@ -21118,6 +21119,7 @@ input:checked + .toggle-slider:before {
     border-radius: 16px;
     border: 1px solid #edf2f7;
     overflow: hidden;
+    padding: 0;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
     transition: transform 0.3s ease;
 }
@@ -21221,14 +21223,15 @@ input:checked + .toggle-slider:before {
 /* Card-style rows (Travel, Local, Food, Accommodation, Incidental) -
    reset TD padding so the card shell fills 100% of the table row */
 .smart-grid-container .category-table .category-row-block {
-    display: table-row;
-    width: 100%;
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .smart-grid-container .category-table .category-row-block td {
     padding: 0 !important;
     width: 100% !important;
-    display: block;
+    display: block !important;
 }
 
 .smart-grid-container .incidental-entry-shell-full {

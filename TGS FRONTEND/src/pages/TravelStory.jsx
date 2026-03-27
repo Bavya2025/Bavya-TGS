@@ -711,6 +711,7 @@ const TravelStory = () => {
                             tripStatus={travel.status}
                             claimStatus={travel.claim?.status}
                             allowedNatures={['Local Travel']}
+                            itinerary={travel.activity_batches}
                             // only show bulk button for full travel requests (TRP-)
                             showBulkUpload={false}
                             onJobReportClick={() => setShowJobReportModal(true)}

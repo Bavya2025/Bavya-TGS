@@ -354,7 +354,17 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
         }
 
         if (initialExpenses && initialExpenses.length > 0) {
-            const syncedRows = initialExpenses.map(exp => {
+            const validExpenses = initialExpenses.filter(exp => {
+                if (exp.category === 'Incidental') {
+                    try {
+                        let desc = exp.description;
+                        if (typeof desc === 'string' && desc.startsWith('{')) desc = JSON.parse(desc);
+                        if (desc && desc.notes && desc.notes.startsWith('Added during local travel:')) return false;
+                    } catch(e) {}
+                }
+                return true;
+            });
+            const syncedRows = validExpenses.map(exp => {
                 let details = { description: exp.description || '' };
                 try {
                     if (typeof exp.description === 'string' && exp.description.startsWith('{')) {
@@ -386,10 +396,12 @@ const DynamicExpenseGrid = ({ tripId, startDate, endDate, initialExpenses = [], 
                     isSaved: true
                 };
             });
-            // Preserve rows that haven't been saved yet when syncing
+            // Preserve rows that haven't been saved yet when syncing, avoiding id duplicates
             setRows(currentRows => {
                 const unsavedRows = currentRows.filter(r => !r.isSaved);
-                return [...syncedRows, ...unsavedRows];
+                const unsavedIds = new Set(unsavedRows.map(r => String(r.id)));
+                const filteredSynced = syncedRows.filter(r => !unsavedIds.has(String(r.id)));
+                return [...filteredSynced, ...unsavedRows];
             });
         }
     }, [initialExpenses]);
