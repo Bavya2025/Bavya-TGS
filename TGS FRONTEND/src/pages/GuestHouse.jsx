@@ -1233,7 +1233,7 @@ const GuestHouse = () => {
     const filteredGuestHouses = guestHouses.filter(gh => gh.name.toLowerCase().includes(searchQuery.toLowerCase()) || gh.address.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return (
-        <div className="gh-page animate-fade-in">
+        <div className="gh-page">
             {topLevelView === 'requests' ? (
                 <>
                     <div className="gh-header-section">

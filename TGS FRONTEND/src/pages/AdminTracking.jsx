@@ -88,7 +88,7 @@ const AdminTracking = () => {
         load();
         const timer = setInterval(fetchActiveUsers, 30000);
         return () => clearInterval(timer);
-    }, []);
+    }, [trackingType]); // Refresh when type changes!
 
     const fetchUsers = async () => {
         try {
@@ -103,17 +103,19 @@ const AdminTracking = () => {
             }));
             setUsers(formatted);
         } catch (error) {
-            console.error('Fetch users failed', error);
+            showToast("Fetch users failed", "error");
         }
     };
 
     const fetchActiveUsers = async () => {
         setIsLoadingActive(true);
         try {
-            const res = await api.get('/api/team/live-tracking/');
+            const res = await api.get('/api/team/live-tracking/', {
+                params: { type: trackingType }
+            });
             setActiveUsers(res.data || []);
         } catch (error) {
-            console.error('Fetch active failed', error);
+            showToast("Fetch active failed", "error");
         } finally {
             setIsLoadingActive(false);
         }
@@ -126,7 +128,6 @@ const AdminTracking = () => {
         try {
             // First attempt with current selected type
             const endpoint = trackingType === 'daily' ? '/api/daily-tracking/' : '/api/field-tracking/';
-            console.log('Fetching from:', endpoint, 'for user:', user.id);
             
             let res = await api.get(endpoint, { params: { user: user.id, date: selectedDate } });
             let points = Array.isArray(res.data) ? res.data : (res.data?.results || []);
@@ -134,7 +135,6 @@ const AdminTracking = () => {
             // AUTOMATIC FALLBACK: If no data, try the other type automatically
             if (points.length === 0) {
                 const altEndpoint = trackingType === 'daily' ? '/api/field-tracking/' : '/api/daily-tracking/';
-                console.log('No data in primary, trying fallback:', altEndpoint);
                 res = await api.get(altEndpoint, { params: { user: user.id, date: selectedDate } });
                 points = Array.isArray(res.data) ? res.data : (res.data?.results || []);
                 
@@ -153,7 +153,6 @@ const AdminTracking = () => {
             setTrackingPoints(sorted);
             showToast(`Loaded ${sorted.length} path points`, "success");
         } catch (error) {
-            console.error('Tracking fetch failed:', error);
             showToast("Sync Error", "error");
         } finally {
             setIsLoading(false);
@@ -189,14 +188,14 @@ const AdminTracking = () => {
         <div className="admin-tracking-container" style={{ padding: '20px', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <style>
                 {`
-                    .override-visible { overflow: visible !important; z-index: 5000 !important; }
+                    .override-visible { overflow: visible !important; z-index: 900 !important; }
                     .searchable-select-dropdown { 
                         max-height: 480px !important; 
                         overflow-y: auto !important; 
                         position: absolute !important;
                         background: #ffffff !important;
                         box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important;
-                        z-index: 99999 !important;
+                        z-index: 999 !important;
                         display: block !important;
                     }
                     .searchable-select-item { height: 45px !important; min-height: 45px !important; }
@@ -229,8 +228,28 @@ const AdminTracking = () => {
                     <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="form-control" style={{ height: '50px', fontWeight: '700' }} />
                 </div>
 
-                <button onClick={() => fetchTrackingData()} disabled={isLoading || !selectedUser} className="btn-primary" style={{ height: '50px', borderRadius: '12px', background: '#0d9488', fontSize: '14px' }}>
-                    {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Play size={20} />} VISUALIZE TRACK
+                <button 
+                    onClick={() => {
+                        console.log('Visualize button clicked for:', selectedUser);
+                        fetchTrackingData();
+                    }}
+                    disabled={isLoading || !selectedUser}
+                    className="btn-primary" 
+                    style={{ 
+                        height: '50px', 
+                        borderRadius: '12px', 
+                        background: selectedUser ? '#0d9488' : '#94a3b8', 
+                        fontSize: '14px',
+                        cursor: selectedUser ? 'pointer' : 'not-allowed',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '10px',
+                        width: '100%'
+                    }}
+                >
+                    {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Play size={20} />} 
+                    {isLoading ? 'SEARCHING PATH...' : 'VISUALIZE TRACK'}
                 </button>
             </div>
 

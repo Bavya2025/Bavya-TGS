@@ -2891,8 +2891,22 @@ class UserDailyTrackingViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user, device_id=device_id)
 
     def get_queryset(self):
-        user = self.request.user
-        queryset = UserDailyTracking.objects.filter(user=user)
+        user = getattr(self.request, 'custom_user', None)
+        if not user:
+            return UserDailyTracking.objects.none()
+            
+        queryset = UserDailyTracking.objects.all()
+        
+        # Security: Only Admins/Managers can view other people's tracking
+        user_role = user.role.name.lower() if user.role else ''
+        is_privileged = user_role in ['admin', 'manager', 'it-admin', 'superuser']
+        target_user_id = self.request.query_params.get('user')
+        
+        if is_privileged and target_user_id:
+            queryset = queryset.filter(user_id=target_user_id)
+        else:
+            queryset = queryset.filter(user=user)
+            
         date_str = self.request.query_params.get('date')
         if date_str:
             queryset = queryset.filter(timestamp__date=date_str)
@@ -2908,8 +2922,22 @@ class FieldTrackingViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user, device_id=device_id)
 
     def get_queryset(self):
-        user = self.request.user
-        queryset = FieldTracking.objects.filter(user=user)
+        user = getattr(self.request, 'custom_user', None)
+        if not user:
+            return FieldTracking.objects.none()
+            
+        queryset = FieldTracking.objects.all()
+        
+        # Security: Only Admins/Managers can view other people's tracking
+        user_role = user.role.name.lower() if user.role else ''
+        is_privileged = user_role in ['admin', 'manager', 'it-admin', 'superuser']
+        target_user_id = self.request.query_params.get('user')
+        
+        if is_privileged and target_user_id:
+            queryset = queryset.filter(user_id=target_user_id)
+        else:
+            queryset = queryset.filter(user=user)
+
         date_str = self.request.query_params.get('date')
         if date_str:
             queryset = queryset.filter(timestamp__date=date_str)
@@ -2924,41 +2952,47 @@ class TeamLiveTrackingView(APIView):
         if not user:
             return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
             
+        tracking_type = request.query_params.get('type', 'daily')
         user_role = user.role.name.lower() if user and user.role else ''
         is_admin = user_role in ['admin', 'it-admin', 'superuser']
         
-        # Get active trips for today
-        today = timezone.now().date()
-        trips = Trip.objects.filter(
-            start_date__lte=today,
-            end_date__gte=today,
-            status__in=['Approved', 'Journey Started', 'On Route']
-        ).select_related('user')
-        
-        if not is_admin:
-            # Filter by reporting manager hierarchy if not admin
-            trips = trips.filter(
-                Q(user__reporting_manager=user) | 
-                Q(user__senior_manager=user) | 
-                Q(user__hod_director=user) |
-                Q(current_approver=user)
-            ).distinct()
-
         results = []
-        for trip in trips:
-            latest = TripTracking.objects.filter(trip=trip).order_by('-timestamp').first()
-            if latest:
-                results.append({
-                    'trip_id': trip.trip_id,
-                    'employee_name': trip.user.name or trip.user.username or f"User {trip.user.employee_id or trip.user.id}",
-                    'employee_id': trip.user.employee_id,
-                    'destination': trip.destination,
-                    'purpose': trip.purpose,
-                    'latitude': latest.latitude,
-                    'longitude': latest.longitude,
-                    'last_updated': latest.timestamp.isoformat(),
-                    'consider_as_local': trip.consider_as_local,
-                    'is_logged_out': not trip.user.is_active
-                })
+        today = timezone.now().date()
+
+        if tracking_type == 'field':
+            # Official Trips logic
+            trips = Trip.objects.filter(
+                start_date__lte=today,
+                end_date__gte=today,
+                status__in=['Approved', 'Journey Started', 'On Route']
+            ).select_related('user')
+            
+            if not is_admin:
+                trips = trips.filter(Q(user__reporting_manager=user) | Q(user__senior_manager=user))
+
+            for trip in trips:
+                latest = TripTracking.objects.filter(trip=trip).order_by('-timestamp').first()
+                if latest:
+                    results.append({
+                        'employee_name': trip.user.name or trip.user.username,
+                        'employee_id': trip.user.employee_id,
+                        'destination': trip.destination,
+                        'last_updated': latest.timestamp.isoformat(),
+                        'type': 'field'
+                    })
+        else:
+            # Daily Tracking logic
+            daily_logs = UserDailyTracking.objects.filter(timestamp__date=today).values('user').distinct()
+            for log in daily_logs:
+                u_id = log['user']
+                latest = UserDailyTracking.objects.filter(user_id=u_id, timestamp__date=today).order_by('-timestamp').first()
+                if latest:
+                    results.append({
+                        'employee_name': latest.user.name or latest.user.username,
+                        'employee_id': latest.user.employee_id,
+                        'destination': 'Office/Daily',
+                        'last_updated': latest.timestamp.isoformat(),
+                        'type': 'daily'
+                    })
         
         return Response(results)

@@ -13,6 +13,7 @@ import {
     Edit,
     Trash2,
     ArrowLeft,
+    ArrowRight,
     Phone,
     Calendar,
     Save,
@@ -24,9 +25,15 @@ import {
     Contact,
     Fuel,
     LocateFixed,
-    Shield
+    Shield,
+    Settings,
+    Globe,
+    User,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
 import Modal from '../components/Modal';
+import SearchableSelect from '../components/SearchableSelect';
 
 const Fleet = () => {
     const { showToast } = useToast();
@@ -206,13 +213,17 @@ const Fleet = () => {
                     id: booking.id,
                     vehicleId: vehicle.id,
                     plateNumber: vehicle.plate_number,
-                    status: booking.booking_type || 'Official',
+                    driverId: booking.driver || '',
+                    driverName: booking.driver_name || '',
+                    trip: booking.trip || '',
+                    bookingType: booking.booking_type || 'Official',
+                    status: (booking.remarks || '').startsWith('[STATUS:') ? booking.remarks.split(']')[0].replace('[STATUS:', '') : 'Confirmed',
                     startDate,
                     endDate,
                     details: booking.requester_name || '-',
                     checkIn: new Date(startDate).toLocaleDateString(),
                     checkOut: new Date(endDate).toLocaleDateString(),
-                    remarks: booking.remarks || ''
+                    remarks: (booking.remarks || '').startsWith('[STATUS:') ? booking.remarks.split(']').slice(1).join(']').trim() : (booking.remarks || '')
                 });
             });
         });
@@ -233,13 +244,31 @@ const Fleet = () => {
     };
 
     useEffect(() => {
-        if (isAdmin) fetchHubs();
+        if (isAdmin) {
+            fetchHubs();
+            fetchFleetRequests(); // Load count immediately
+        }
     }, [isAdmin]);
 
     const [selectedHub, setSelectedHub] = useState(null);
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState('vehicles');
+    const [topLevelView, setTopLevelView] = useState('hubs'); // 'hubs' or 'requests'
     const [fleetRequests, setFleetRequests] = useState([]);
+    const [manualSelections, setManualSelections] = useState({}); // { trip_id: hub_id }
+    
+    // CALENDAR STATES
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const realToday = new Date(); realToday.setHours(0,0,0,0);
+    const [days, setDays] = useState([]);
+
+    useEffect(() => {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const numDays = new Date(year, month + 1, 0).getDate();
+        setDays(Array.from({ length: numDays }, (_, i) => i + 1));
+    }, [currentDate]);
+
 
     const fetchFleetRequests = async () => {
         try {
@@ -326,7 +355,10 @@ const Fleet = () => {
     const [editingItemId, setEditingItemId] = useState(null);
 
     const [hubFormData, setHubFormData] = useState({
-        name: '', address: '', location: '', pincode: '', isActive: true, latitude: '', longitude: '', image: '', description: ''
+        name: '', address: '', location: '', pincode: '', isActive: true, 
+        latitude: '', longitude: '', image: '', description: '',
+        continent_id: '', country_id: '', state_id: '', district_id: '',
+        mandal_id: '', cluster_id: '', visiting_location_id: ''
     });
 
     const [itemFormData, setItemFormData] = useState({
@@ -338,6 +370,108 @@ const Fleet = () => {
     const [suggestedHub, setSuggestedHub] = useState(null);   // matched existing hub
     const [showCreateHubPrompt, setShowCreateHubPrompt] = useState(false);
     const [newHubForTransfer, setNewHubForTransfer] = useState({ name: '', address: '', pincode: '' });
+
+    // --- GEO HIERARCHY STATES ---
+    const [fullHierarchy, setFullHierarchy] = useState([]);
+    const [geoLoading, setGeoLoading] = useState(false);
+    const [geoError, setGeoError] = useState(null);
+    const [continents, setContinents] = useState([]);
+    const [countries, setCountries] = useState([]);
+    const [states, setStates] = useState([]);
+    const [districts, setDistricts] = useState([]);
+    const [mandals, setMandals] = useState([]);
+    const [clusters, setClusters] = useState([]);
+    const [visitingLocations, setVisitingLocations] = useState([]);
+
+    const fetchFullHierarchy = async (forceRefetch = false) => {
+        if (fullHierarchy.length > 0 && !geoError && !forceRefetch) return;
+        setGeoLoading(true);
+        try {
+            const res = await api.get("/api/masters/locations/live_hierarchy/");
+            const data = res.data.results || res.data.data || res.data;
+            setFullHierarchy(Array.isArray(data) ? data : []);
+        } catch (err) {
+            setGeoError("Geo-load failed");
+        } finally {
+            setGeoLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (showHubModal) fetchFullHierarchy();
+    }, [showHubModal]);
+
+    useEffect(() => {
+        if (fullHierarchy.length > 0) setContinents(fullHierarchy.map(c => ({ id: c.id, name: c.name })));
+    }, [fullHierarchy]);
+
+    const getFilterName = (val) => {
+        if (!val) return '';
+        if (typeof val === 'object') return (val.name || '').trim().toLowerCase();
+        return String(val).trim().toLowerCase();
+    };
+
+    const getChildren = (type, filters) => {
+        if (!fullHierarchy || !fullHierarchy.length) return [];
+        let data = fullHierarchy;
+        if (type === 'continent') return data;
+        const continent = data.find(c => getFilterName(c) === getFilterName(filters.continent_name));
+        const countries = continent?.children || continent?.countries || [];
+        if (type === 'country') return countries;
+        const country = countries.find(c => getFilterName(c) === getFilterName(filters.country_name));
+        const states = country?.states || country?.state || country?.children || [];
+        if (type === 'state') return states;
+        const state = states.find(s => getFilterName(s) === getFilterName(filters.state_name));
+        const districts = state?.districts || state?.district || state?.children || [];
+        if (type === 'district') return districts;
+        const district = districts.find(d => getFilterName(d) === getFilterName(filters.district_name));
+        const mandals = district?.mandals || district?.mandal || district?.children || [];
+        if (type === 'mandal') return mandals;
+        const mandal = mandals.find(m => getFilterName(m) === getFilterName(filters.mandal_name));
+        const clusters = [...(mandal?.clusters || []), ...(mandal?.children || [])];
+        if (type === 'cluster') return clusters;
+
+        const cluster = clusters.find(c => getFilterName(c) === getFilterName(filters.cluster_name));
+        const visitingLocations = cluster?.visiting_locations || cluster?.locations || [];
+        if (type === 'visitingLocation') return visitingLocations;
+
+        return [];
+    };
+
+    useEffect(() => {
+        if (!showHubModal) return;
+        const filters = {
+            continent_name: continents.find(c => c.id === hubFormData.continent_id)?.name,
+            country_name: countries.find(c => c.id === hubFormData.country_id)?.name,
+            state_name: states.find(s => s.id === hubFormData.state_id)?.name,
+            district_name: districts.find(d => d.id === hubFormData.district_id)?.name,
+            mandal_name: mandals.find(m => m.id === hubFormData.mandal_id)?.name,
+            cluster_name: clusters.find(c => c.id === hubFormData.cluster_id)?.name,
+        };
+        setCountries(getChildren('country', filters));
+        setStates(getChildren('state', filters));
+        setDistricts(getChildren('district', filters));
+        setMandals(getChildren('mandal', filters));
+        setClusters(getChildren('cluster', filters));
+        setVisitingLocations(getChildren('visitingLocation', filters));
+    }, [hubFormData.continent_id, hubFormData.country_id, hubFormData.state_id, hubFormData.district_id, hubFormData.mandal_id, hubFormData.cluster_id, continents, fullHierarchy, showHubModal]);
+
+    const handleLocationSelect = (type, selectedOpt) => {
+        const idMap = { continent: 'continent_id', country: 'country_id', state: 'state_id', district: 'district_id', mandal: 'mandal_id', cluster: 'cluster_id', visiting_location: 'visiting_location_id' };
+        const fieldName = idMap[type];
+        const selectedValue = selectedOpt ? (selectedOpt.id || '') : '';
+        setHubFormData(prev => {
+            const newState = { ...prev, [fieldName]: selectedValue };
+            if (type === 'continent') { newState.country_id = ''; newState.state_id = ''; newState.district_id = ''; newState.mandal_id = ''; newState.cluster_id = ''; newState.visiting_location_id = ''; }
+            if (type === 'country') { newState.state_id = ''; newState.district_id = ''; newState.mandal_id = ''; newState.cluster_id = ''; newState.visiting_location_id = ''; }
+            if (type === 'state') { newState.district_id = ''; newState.mandal_id = ''; newState.cluster_id = ''; newState.visiting_location_id = ''; }
+            if (type === 'district') { newState.mandal_id = ''; newState.cluster_id = ''; newState.visiting_location_id = ''; }
+            if (type === 'mandal') { newState.cluster_id = ''; newState.visiting_location_id = ''; }
+            if (type === 'cluster') { newState.visiting_location_id = ''; }
+            if ((type === 'cluster' || type === 'mandal' || type === 'visiting_location') && selectedOpt) { newState.location = selectedOpt.name; }
+            return newState;
+        });
+    };
 
     const handleHubSearch = (query) => {
         setHubSearchQuery(query);
@@ -387,15 +521,71 @@ const Fleet = () => {
     const inputRef = useRef(null);
 
     const [bookingData, setBookingData] = useState({
-        vehicleId: '', plateNumber: '', status: 'Confirmed', employeeName: '', tripId: '', checkInDate: '', checkOutDate: '', remarks: ''
+        vehicleId: '', plateNumber: '', status: 'Confirmed', employeeName: '', tripId: '', checkInDate: '', checkOutDate: '', remarks: '', driverId: ''
     });
 
-    const [currentDate, setCurrentDate] = useState(new Date());
-    const realToday = new Date();
-    realToday.setHours(0, 0, 0, 0);
+    useEffect(() => {
+        const fetchTrips = async () => {
+            if (!showTripResults) return;
+            setIsLoadingTrips(true);
+            try {
+                const encodedSearch = tripSearch ? btoa(tripSearch) : '';
+                const params = encodedSearch ? { search: encodedSearch } : {};
+                const response = await api.get('/api/trips/search/', { params });
+                const results = Array.isArray(response.data) ? response.data : (response.data.results || []);
+                const mapped = results.map(t => ({
+                    id: t.trip_id,
+                    trip_id: t.trip_id,
+                    title: t.purpose,
+                    employee: t.trip_leader || 'N/A',
+                    dept: t.department || 'Admin',
+                    startDate: t.start_date,
+                    endDate: t.end_date,
+                    user: t.user
+                }));
+                setTrips(mapped);
+            } catch (err) { } finally { setIsLoadingTrips(false); }
+        };
+        const timer = setTimeout(fetchTrips, 300);
+        return () => clearTimeout(timer);
+    }, [tripSearch, showTripResults]);
 
-    const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+    const handleBookingSave = async () => {
+        if (!bookingData.vehicleId) return;
+        if (bookingTab === 'Official' && !bookingData.tripId) { showToast('Please link a Trip ID', 'warning'); return; }
+
+        const isMaintenance = bookingTab === 'Maintenance';
+        const finalRemarks = isMaintenance ? `[MAINTENANCE] ${bookingData.remarks || ''}` : bookingData.remarks;
+        
+        try {
+            const payload = {
+                trip: bookingData.tripId,
+                booking_type: bookingTab,
+                start_date: bookingData.checkInDate,
+                end_date: bookingData.checkOutDate,
+                requester_name: isMaintenance ? 'Service Dept' : (bookingData.employeeName || 'Other'),
+                remarks: finalRemarks,
+                driver: isMaintenance ? null : (bookingData.driverId || null)
+            };
+
+            await api.post(`/api/fleet/vehicles/${bookingData.vehicleId}/bookings/`, payload);
+            
+            // If maintenance, update vehicle status globally
+            if (isMaintenance) {
+                await api.patch(`/api/fleet/vehicles/${bookingData.vehicleId}/`, { status: 'maintenance' });
+            }
+
+            showToast(`Vehicle ${bookingData.plateNumber} ${isMaintenance ? 'sent for Maintenance' : 'Booked Successfully'}!`, 'success');
+            setShowBookingModal(false);
+            if (selectedHub) {
+                const res = await api.get(`/api/fleet/hub/${selectedHub.id}/`);
+                setSelectedHub(normalizeHub(res.data));
+            }
+            fetchHubs();
+        } catch (err) {
+            showToast(getApiErrorMessage(err, 'Booking failed'), 'error');
+        }
+    };
 
     const changeMonth = (offset) => {
         setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
@@ -409,15 +599,22 @@ const Fleet = () => {
     const handleEditHub = (hub) => {
         setEditingId(hub.id);
         setHubFormData({
-            name: hub.name,
-            address: hub.address,
+            name: hub.name || '',
+            address: hub.address || '',
             location: hub.location || '',
-            pincode: hub.pincode,
+            pincode: hub.pincode || '',
             isActive: hub.isActive,
             latitude: hub.latitude || '',
             longitude: hub.longitude || '',
             image: hub.image || '',
-            description: hub.description || ''
+            description: hub.description || '',
+            continent_id: hub.continent_id || '',
+            country_id: hub.country_id || '',
+            state_id: hub.state_id || '',
+            district_id: hub.district_id || '',
+            mandal_id: hub.mandal_id || '',
+            cluster_id: hub.cluster_id || '',
+            visiting_location_id: hub.visiting_location_id || ''
         });
         setFormErrors({});
         setShowHubModal(true);
@@ -464,11 +661,17 @@ const Fleet = () => {
             address: hubFormData.address,
             location: hubFormData.location || hubFormData.address,
             pincode: hubFormData.pincode,
-            is_active: hubFormData.isActive,
             latitude: hubFormData.latitude || null,
             longitude: hubFormData.longitude || null,
-            image: hubFormData.image || null,
-            description: hubFormData.description || ''
+            is_active: hubFormData.isActive,
+            description: hubFormData.description || '',
+            continent_id: hubFormData.continent_id,
+            country_id: hubFormData.country_id,
+            state_id: hubFormData.state_id,
+            district_id: hubFormData.district_id,
+            mandal_id: hubFormData.mandal_id,
+            cluster_id: hubFormData.cluster_id,
+            visiting_location_id: hubFormData.visiting_location_id
         };
 
         const promise = editingId ? api.put(`/api/fleet/hub/${editingId}/`, payload) : api.post('/api/fleet/hub/', payload);
@@ -539,57 +742,332 @@ const Fleet = () => {
         }
     };
 
-    const renderTabContent = () => {
-        if (activeTab === 'requests') {
+    const renderCalendarView = () => {
+        if (!selectedHub) return null;
+        
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        
+        // Pre-calculate mapping for performance
+        const hubEvents = mapBookingsToEvents(selectedHub);
+
+        // Filter events for the monthly log
+        const monthlyEvents = hubEvents.filter(event => {
+            const startStr = event.startDate.slice(0, 10);
+            const endStr = event.endDate.slice(0, 10);
+            const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+            const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+            const fmtStart = new Date(startStr);
+            const fmtEnd = new Date(endStr);
+            return fmtStart <= monthEnd && fmtEnd >= monthStart;
+        });
+
+        if (!selectedHub.vehicles || selectedHub.vehicles.length === 0) {
             return (
-                <div className="gh-list-section">
-                    <div className="gh-sub-header"><h3>Employee Fleet Requests</h3><button className="btn-refresh-pill" onClick={fetchFleetRequests}>REFRESH</button></div>
-                    <div className="gh-item-list">
-                        {fleetRequests.length > 0 ? fleetRequests.map(req => {
-                            // Match destination to a hub by location/address (same as GH pattern)
-                            const matchingHub = fleetHubs.find(h =>
-                                h.location?.toLowerCase().includes(req.destination?.toLowerCase()) ||
-                                h.address?.toLowerCase().includes(req.destination?.toLowerCase()) ||
-                                req.destination?.toLowerCase().includes(h.name?.toLowerCase()) ||
-                                req.destination?.toLowerCase().includes(h.location?.toLowerCase())
-                            );
-
-                            // Check if matching hub has at least 1 available vehicle
-                            const hasAvailableVehicle = matchingHub &&
-                                (matchingHub.vehicles || []).some(v => (v.status || '').toLowerCase() === 'available');
-
-                            return (
-                                <div key={req.trip_id} className="gh-list-item request-card-premium">
-                                    <div className="item-info">
-                                        <div className="request-header" style={{ marginBottom: '8px' }}>
-                                            <span className="trip-id-tag-mini">{req.trip_id}</span>
-                                            <span className={`badge ${hasAvailableVehicle ? 'pending' : 'rejected'}`} style={{ fontSize: '10px', padding: '4px 8px' }}>
-                                                {hasAvailableVehicle ? 'VEHICLE AVAILABLE' : 'NO VEHICLE FOUND'}
-                                            </span>
-                                        </div>
-                                        <h4 style={{ fontSize: '1.05rem', fontWeight: 800 }}>{req.trip_leader} - {req.purpose}</h4>
-                                        <div className="request-meta-grid">
-                                            <div className="meta-item"><MapPin size={14} /> <span>Dest: {req.destination}</span></div>
-                                            <div className="meta-item"><Calendar size={14} /> <span>{req.start_date} - {req.end_date}</span></div>
-                                        </div>
-                                        {matchingHub && (
-                                            <p className="request-note">Hub: {matchingHub.name} — {matchingHub.address}</p>
-                                        )}
-                                    </div>
-                                    <div className="actions-cell-vertical">
-                                        {hasAvailableVehicle ? (
-                                            <button className="btn-primary-mini" onClick={() => openAssignModal(req)}>Assign Vehicle</button>
-                                        ) : (
-                                            <button className="btn-danger-mini" onClick={() => handleNoVehicleNotify(req)}>Inform: No Vehicle at Location</button>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        }) : <div className="empty-state-vsmall mt-4"><p>No active fleet requests.</p></div>}
+                <div className="gh-list-section mt-4">
+                    <div className="calendar-container">
+                        <div className="calendar-controls">
+                            <h3>{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h3>
+                            <div className="calendar-nav">
+                                <button onClick={() => changeMonth(-1)}>&lt;</button>
+                                <button onClick={() => changeMonth(1)}>&gt;</button>
+                            </div>
+                        </div>
+                        <div style={{ padding: '5rem 2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                            <div className="mb-3" style={{ opacity: 0.15 }}><MapPin size={48} /></div>
+                            <h3 style={{ color: '#64748b', fontWeight: 600 }}>No Vehicles in this Hub</h3>
+                            <p style={{ color: '#94a3b8' }}>Please add vehicles to see availability on the calendar.</p>
+                        </div>
                     </div>
                 </div>
             );
         }
+
+        return (
+            <div className="gh-list-section mt-4">
+                <div className="calendar-container">
+                    <div className="calendar-controls">
+                        <h3>{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h3>
+                        <div className="calendar-nav">
+                            <button onClick={() => changeMonth(-1)}>&lt;</button>
+                            <button onClick={() => changeMonth(1)}>&gt;</button>
+                        </div>
+                        <div className="calendar-legend">
+                            <span className="legend-item"><span className="dot available"></span> Available</span>
+                            <span className="legend-item"><span className="dot occupied"></span> Occupied</span>
+                            <span className="legend-item"><span className="dot maintenance"></span> Maintenance</span>
+                        </div>
+                    </div>
+
+                    <div className="calendar-grid-wrapper">
+                        <table className="calendar-table">
+                            <thead>
+                                <tr>
+                                    <th className="room-col-header" style={{ width: '220px' }}>Vehicle Detail</th>
+                                    {days.map(d => {
+                                        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), d);
+                                        const isToday = date.toDateString() === realToday.toDateString();
+                                        return (
+                                            <th key={d} className={`date-header ${isToday ? 'current-day' : ''}`}>
+                                                <div className="date-num">{d}</div>
+                                                <div className="day-name">{date.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
+                                            </th>
+                                        );
+                                    })}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {selectedHub.vehicles.map(v => (
+                                    <tr key={v.id}>
+                                        <td className="room-cell">
+                                            <div className="room-name">{v.plate_number}</div>
+                                            <span className="room-type">{v.type || v.model_name}</span>
+                                        </td>
+                                        {days.map(d => {
+                                            const { status, color } = getStatusForDate(v.id, d, hubEvents);
+                                            const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), d);
+                                            const isToday = date.toDateString() === realToday.toDateString();
+                                            const isPast = date.getTime() < realToday.getTime() && !isToday;
+                                            
+                                            // Handle cell-color mapping same as GH
+                                            const cellColorClass = status === 'available' ? 'available' : status;
+
+                                            return (
+                                                <td key={d} 
+                                                    className={`status-cell ${cellColorClass} ${isPast ? 'past' : ''} ${isToday ? 'today-cell' : ''}`}
+                                                    onClick={() => !isPast && handleCalendarCellClick(v, d)}
+                                                >
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="event-log-container mt-4">
+                        <h3>Monthly Fleet Event Log</h3>
+                        <table className="event-log-table">
+                            <thead>
+                                <tr>
+                                    <th>VEHICLE</th>
+                                    <th>MODEL</th>
+                                    <th>REQUESTER / BOOKED BY</th>
+                                    <th>ALLOCATION PERIOD</th>
+                                    <th>TYPE</th>
+                                    <th>STATUS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {monthlyEvents.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-muted)' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                                                <Calendar size={32} style={{ opacity: 0.35 }} />
+                                                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>No Fleet Events This Month</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    monthlyEvents.map(e => (
+                                        <tr key={e.id}>
+                                            <td style={{ fontWeight: 800, color: 'var(--primary)' }}>{e.vehiclePlate}</td>
+                                            <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{e.vehicleModel}</td>
+                                            <td>
+                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    <span style={{ fontWeight: 600 }}>{e.details}</span>
+                                                    {e.driverName && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Driver: {e.driverName}</span>}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div style={{ fontSize: '0.8rem' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><ArrowRight size={10} color="var(--success)" /> {e.startDate.slice(0, 16).replace('T', ' ')}</div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><ArrowLeft size={10} color="var(--error)" /> {e.endDate.slice(0, 16).replace('T', ' ')}</div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span style={{ 
+                                                    padding: '4px 10px', 
+                                                    borderRadius: '6px', 
+                                                    fontSize: '0.7rem', 
+                                                    fontWeight: 800, 
+                                                    textTransform: 'uppercase',
+                                                    background: e.bookingType === 'Maintenance' ? '#fef2f2' : (e.bookingType === 'Official' ? '#f0f9ff' : '#f8fafc'),
+                                                    color: e.bookingType === 'Maintenance' ? '#ef4444' : (e.bookingType === 'Official' ? '#0ea5e9' : '#64748b')
+                                                }}>
+                                                    {e.bookingType}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span className={`status-pill ${e.status.toLowerCase().replace(' ', '-')}`}>
+                                                    <span className="dot-small"></span> {e.status}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const getStatusForDate = (vehicleId, day, hubEvents) => {
+        const dateStr = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        const match = hubEvents.find(e => {
+            if (String(e.vehicleId) !== String(vehicleId)) return false;
+            return dateStr >= e.startDate.slice(0,10) && dateStr <= e.endDate.slice(0,10);
+        });
+
+        if (match) {
+            const mStatus = (match.status || '').toLowerCase();
+            const status = mStatus === 'maintenance' ? 'maintenance' : 'occupied';
+            return { status, color: status };
+        }
+        return { status: 'available', color: 'available' };
+    };
+
+    const handleCalendarCellClick = (v, day) => {
+        const clickedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+        clickedDate.setHours(0, 0, 0, 0);
+        if (clickedDate.getTime() < realToday.getTime()) return;
+
+        const dateStr = `${clickedDate.getFullYear()}-${String(clickedDate.getMonth() + 1).padStart(2, '0')}-${String(clickedDate.getDate()).padStart(2, '0')}`;
+        const hubEvents = mapBookingsToEvents(selectedHub);
+        const existingEvent = hubEvents.find(e => e.vehicleId === v.id && dateStr >= e.startDate.slice(0,10) && dateStr <= e.endDate.slice(0,10));
+
+        if (existingEvent) {
+             setBookingData({
+                vehicleId: v.id,
+                plateNumber: v.plate_number,
+                status: existingEvent.status || 'Confirmed',
+                employeeName: existingEvent.details || '',
+                tripId: existingEvent.trip || '',
+                checkInDate: existingEvent.startDate.slice(0,16),
+                checkOutDate: existingEvent.endDate.slice(0,16),
+                remarks: existingEvent.remarks || '',
+                driverId: existingEvent.driverId || ''
+            });
+        } else {
+            // New booking from calendar click
+            setBookingData({
+                vehicleId: v.id,
+                plateNumber: v.plate_number,
+                status: 'Confirmed',
+                employeeName: '',
+                tripId: '',
+                checkInDate: dateStr + 'T00:00',
+                checkOutDate: dateStr + 'T23:59',
+                remarks: '',
+                driverId: ''
+            });
+        }
+        setShowBookingModal(true);
+    };
+
+    const renderTabContent = () => {
+        if (activeTab === 'requests') {
+            return (
+                <div className="gh-list-section">
+                    <div className="gh-sub-header"><h3>Fleet Requests {selectedHub ? `(@ ${selectedHub.name})` : '(Global)'}</h3><button className="btn-refresh-pill" onClick={fetchFleetRequests}>REFRESH</button></div>
+                    <div className="gh-item-list">
+                        {(() => {
+                            // Filter requests: if selectedHub exists, only show ones matching this hub.
+                            // Else show all.
+                            const filteredForView = fleetRequests.filter(req => {
+                                const reqOrigin = req.source || req.origin;
+                                if (selectedHub) {
+                                    return selectedHub.location?.toLowerCase().includes(reqOrigin?.toLowerCase()) ||
+                                           selectedHub.address?.toLowerCase().includes(reqOrigin?.toLowerCase()) ||
+                                           reqOrigin?.toLowerCase().includes(selectedHub.name?.toLowerCase()) ||
+                                           manualSelections[req.trip_id] === String(selectedHub.id);
+                                }
+                                return true;
+                            });
+
+                            if (filteredForView.length === 0) return <div className="empty-state-card-vsmall">No pending vehicle requests {selectedHub ? `for ${selectedHub.name}` : ''} found.</div>;
+
+                            return filteredForView.map(req => {
+                                const reqOrigin = req.source || req.origin;
+                                const matchingHub = fleetHubs.find(h =>
+                                    h.location?.toLowerCase().includes(reqOrigin?.toLowerCase()) ||
+                                    h.address?.toLowerCase().includes(reqOrigin?.toLowerCase()) ||
+                                    reqOrigin?.toLowerCase().includes(h.name?.toLowerCase())
+                                );
+
+                            const manualHubId = manualSelections[req.trip_id];
+                            const manuallyChosenHub = manualHubId ? fleetHubs.find(h => String(h.id) === String(manualHubId)) : null;
+
+                            const finalHub = manuallyChosenHub || matchingHub;
+                            const hasAvailable = finalHub && (finalHub.vehicles || []).some(v => (v.status || '').toLowerCase() === 'available');
+
+                            return (
+                                <div key={req.trip_id} className="gh-list-item request-card-premium">
+                                    <div className="item-info">
+                                        <div className="request-header">
+                                            <span className="trip-id-tag-mini">{req.trip_id}</span>
+                                            <span className={`badge ${finalHub ? (hasAvailable ? 'pending' : 'rejected') : 'rejected'}`}>
+                                                {finalHub ? (hasAvailable ? 'VEHICLE AT HUB' : 'NO VEHICLES @ HUB') : 'NO HUB IN CITY'}
+                                            </span>
+                                        </div>
+                                        <h4 className="mt-2">{req.trip_leader} - {req.purpose}</h4>
+                                        <div className="request-meta-grid">
+                                            <div className="meta-item"><MapPin size={14} /> <span style={{ fontWeight: 800 }}>{req.source || req.origin}</span> → <span>{req.destination}</span></div>
+                                            <div className="meta-item"><Calendar size={14} /> <span>{req.start_date} - {req.end_date}</span></div>
+                                        </div>
+                                        
+                                        {!matchingHub && (
+                                            <div className="hub-fallback-selector mt-2">
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <select 
+                                                        className="input-field-mini" 
+                                                        value={manualHubId || ''} 
+                                                        onChange={(e) => setManualSelections({ ...manualSelections, [req.trip_id]: e.target.value })}
+                                                        style={{ flex: 1, padding: '4px 8px', borderRadius: '8px', fontSize: '0.75rem' }}
+                                                    >
+                                                        <option value="">Select an Alternative Hub...</option>
+                                                        {fleetHubs.map(h => (
+                                                            <option key={h.id} value={h.id}>{h.name} ({h.location})</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {finalHub && <p className="hub-tag-small mt-1">Target Hub: {finalHub.name}</p>}
+                                    </div>
+                                    <div className="actions-cell-vertical">
+                                        {finalHub ? (
+                                            <button className="btn-primary-mini" onClick={() => { 
+                                                setSelectedHub(finalHub); 
+                                                setBookingTab('Official');
+                                                setBookingData({
+                                                    ...bookingData,
+                                                    vehicleId: '', // User will select in modal
+                                                    tripId: req.trip_id,
+                                                    employeeName: req.trip_leader,
+                                                    remarks: req.purpose,
+                                                    checkInDate: req.start_date.includes('T') ? req.start_date : req.start_date + 'T00:00',
+                                                    checkOutDate: req.end_date.includes('T') ? req.end_date : req.end_date + 'T23:59',
+                                                    status: 'Confirmed'
+                                                });
+                                                setTripSearch(req.trip_id);
+                                                setShowBookingModal(true);
+                                            }}>Allocate Resource</button>
+                                        ) : (
+                                            <button className="btn-danger-mini" onClick={() => handleNoVehicleNotify(req)}>No Facility: Notify</button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })})()}
+                    </div>
+                </div>
+            );
+        }
+
+        if (activeTab === 'calendar') return renderCalendarView();
 
         if (!selectedHub) return null;
         const list = selectedHub[activeTab] || [];
@@ -663,8 +1141,19 @@ const Fleet = () => {
     const filteredHubs = fleetHubs.filter(h => h.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return (
-        <div className="gh-page animate-fade-in">
-            {selectedHub ? (
+        <div className="gh-page">
+            {topLevelView === 'requests' ? (
+                <>
+                    <div className="gh-header-section">
+                        <div className="header-left">
+                            <h1 className="welcome-text">Fleet Requests</h1>
+                            <p className="welcome-subtext">Manage active vehicle requirements from employees</p>
+                        </div>
+                        <button className="btn-secondary" onClick={() => setTopLevelView('hubs')}>View Fleet Hubs</button>
+                    </div>
+                    {renderTabContent()}
+                </>
+            ) : selectedHub ? (
                 <>
                     <div className="gh-details-header">
                         <div className="gh-details-left">
@@ -679,6 +1168,7 @@ const Fleet = () => {
                         {[
                             { id: 'vehicles', icon: CarFront, label: 'Vehicles' },
                             { id: 'drivers', icon: Contact, label: 'Drivers' },
+                            { id: 'calendar', icon: Calendar, label: 'Availability' },
                             { id: 'requests', icon: Mail, label: 'Fleet Requests' }
                         ].map(t => (
                             <button key={t.id} className={`gh-tab ${activeTab === t.id ? 'active' : ''}`} onClick={() => setActiveTab(t.id)}><t.icon size={16} /> {t.label}</button>
@@ -691,10 +1181,16 @@ const Fleet = () => {
                     <div className="gh-header-section">
                         <div className="header-left">
                             <h1 className="welcome-text">Fleet Management</h1>
+                            <p className="welcome-subtext">Manage corporate vehicles and drivers</p>
                         </div>
-                        <button className="btn-primary" onClick={() => { setEditingId(null); setHubFormData({ name: '', address: '', location: '', pincode: '', isActive: true, latitude: '', longitude: '', image: '', description: '' }); setShowHubModal(true); }}>
-                            <Plus size={18} /> Add Fleet Hub
-                        </button>
+                        <div className="header-actions">
+                            <button className="btn-secondary mr-2" onClick={() => { setTopLevelView('requests'); setActiveTab('requests'); }}>
+                                <Mail size={18} /> View Requests ({fleetRequests.length})
+                            </button>
+                            <button className="btn-primary" onClick={() => { setEditingId(null); setHubFormData({ name: '', address: '', location: '', pincode: '', isActive: true, latitude: '', longitude: '', image: '', description: '' }); setShowHubModal(true); }}>
+                                <Plus size={18} /> Add Fleet Hub
+                            </button>
+                        </div>
                     </div>
                     <div className="gh-search-bar premium-card">
                         <Search size={20} className="search-icon" />
@@ -731,7 +1227,7 @@ const Fleet = () => {
                                 </div>
                             </div>
                         )) : (
-                            <div className="no-data-full-page animate-fade-in">
+                            <div className="no-data-full-page">
                                 <div className="no-data-inner">
                                     <div className="no-data-icon-box">
                                         <Shield size={64} />
@@ -756,39 +1252,64 @@ const Fleet = () => {
                             <button onClick={() => setShowHubModal(false)} className="close-btn"><X size={24} /></button>
                         </div>
                         <div className="modal-body">
-                            <div className="form-grid">
-                                <div className="form-group full">
-                                    <label>Hub Name*</label>
-                                    <input className={`input-field ${formErrors.name ? 'error' : ''}`} name="name" value={hubFormData.name} onChange={handleHubInputChange} placeholder="e.g. Hyderabad Main Hub" />
-                                    {formErrors.name && <span className="error-text">{formErrors.name}</span>}
-                                </div>
-                                <div className="form-group full">
-                                    <label>Full Address*</label>
-                                    <textarea className={`input-field ${formErrors.address ? 'error' : ''}`} name="address" rows={2} value={hubFormData.address} onChange={handleHubInputChange} placeholder="Street address, landmark, city..." />
-                                    {formErrors.address && <span className="error-text">{formErrors.address}</span>}
-                                </div>
-                                <div className="form-group">
-                                    <label>Pincode*</label>
-                                    <input className={`input-field ${formErrors.pincode ? 'error' : ''}`} name="pincode" value={hubFormData.pincode} onChange={handleHubInputChange} maxLength={6} placeholder="6-digit code" />
-                                    {formErrors.pincode && <span className="error-text">{formErrors.pincode}</span>}
-                                </div>
-                                <div className="form-group">
-                                    <label>Status</label>
-                                    <div className="toggle-switch-group">
-                                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: hubFormData.isActive ? 'var(--success)' : 'var(--text-muted)' }}>{hubFormData.isActive ? 'Active' : 'Standby'}</span>
-                                        <label className="toggle-switch">
-                                            <input type="checkbox" name="isActive" checked={hubFormData.isActive} onChange={handleHubInputChange} />
-                                            <span className="slider round"></span>
-                                        </label>
+                            <div className="form-section-premium">
+                                <h4 className="section-title">General Information</h4>
+                                <div className="form-grid">
+                                    <div className="form-group full">
+                                        <label>Hub Name*</label>
+                                        <input className={`input-field ${formErrors.name ? 'error' : ''}`} name="name" value={hubFormData.name} onChange={handleHubInputChange} placeholder="e.g. Hyderabad Main Hub" />
+                                        {formErrors.name && <span className="error-text">{formErrors.name}</span>}
+                                    </div>
+                                    <div className="form-group full">
+                                        <label>Full Address*</label>
+                                        <textarea className={`input-field ${formErrors.address ? 'error' : ''}`} name="address" rows={2} value={hubFormData.address} onChange={handleHubInputChange} placeholder="Street address, landmark, city..." />
+                                        {formErrors.address && <span className="error-text">{formErrors.address}</span>}
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Pincode*</label>
+                                        <input className={`input-field ${formErrors.pincode ? 'error' : ''}`} name="pincode" value={hubFormData.pincode} onChange={handleHubInputChange} maxLength={6} placeholder="6-digit code" />
+                                        {formErrors.pincode && <span className="error-text">{formErrors.pincode}</span>}
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Hub Status</label>
+                                        <div className="toggle-switch-group">
+                                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: hubFormData.isActive ? 'var(--success)' : 'var(--text-muted)' }}>{hubFormData.isActive ? 'Active' : 'Standby'}</span>
+                                            <label className="toggle-switch">
+                                                <input type="checkbox" name="isActive" checked={hubFormData.isActive} onChange={handleHubInputChange} />
+                                                <span className="slider round"></span>
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="form-group">
-                                    <label>Latitude (optional)</label>
-                                    <input className="input-field" name="latitude" value={hubFormData.latitude} onChange={handleHubInputChange} placeholder="e.g. 17.3850" />
+                            </div>
+
+                            <div className="form-section-premium mt-3">
+                                <div className="section-title"><Globe size={16} /> GEOGRAPHIC MAPPING</div>
+                                <div className="form-grid gh-form-grid-2col">
+                                    <div className="form-group"><label>Continent</label><SearchableSelect options={continents} value={continents.find(c => c.id === hubFormData.continent_id)} onChange={v => handleLocationSelect('continent', v)} loading={geoLoading} /></div>
+                                    <div className="form-group"><label>Country</label><SearchableSelect options={countries} value={countries.find(c => c.id === hubFormData.country_id)} onChange={v => handleLocationSelect('country', v)} disabled={!hubFormData.continent_id} /></div>
+                                    <div className="form-group"><label>State / Province</label><SearchableSelect options={states} value={states.find(s => s.id === hubFormData.state_id)} onChange={v => handleLocationSelect('state', v)} disabled={!hubFormData.country_id} /></div>
+                                    <div className="form-group"><label>District / Region</label><SearchableSelect options={districts} value={districts.find(d => d.id === hubFormData.district_id)} onChange={v => handleLocationSelect('district', v)} disabled={!hubFormData.state_id} /></div>
+                                    <div className="form-group"><label>Mandal / Sub-district</label><SearchableSelect options={mandals} value={mandals.find(m => m.id === hubFormData.mandal_id)} onChange={v => handleLocationSelect('mandal', v)} disabled={!hubFormData.district_id} /></div>
+                                    <div className="form-group"><label>City / Admin Cluster</label><SearchableSelect options={clusters} value={clusters.find(c => c.id === hubFormData.cluster_id)} onChange={v => handleLocationSelect('cluster', v)} disabled={!hubFormData.mandal_id} /></div>
+                                    <div className="form-group gh-form-section-full">
+                                        <label>Exact Visiting Landmark / Location</label>
+                                        <SearchableSelect options={visitingLocations} value={visitingLocations.find(l => l.id === hubFormData.visiting_location_id)} onChange={v => handleLocationSelect('visiting_location', v)} disabled={!hubFormData.cluster_id} />
+                                    </div>
                                 </div>
-                                <div className="form-group">
-                                    <label>Longitude (optional)</label>
-                                    <input className="input-field" name="longitude" value={hubFormData.longitude} onChange={handleHubInputChange} placeholder="e.g. 78.4867" />
+                            </div>
+
+                            <div className="form-section-premium mt-3">
+                                <h4 className="section-title">Coordination Metadata</h4>
+                                <div className="form-grid">
+                                    <div className="form-group">
+                                        <label>Latitude (optional)</label>
+                                        <input className="input-field" name="latitude" value={hubFormData.latitude} onChange={handleHubInputChange} placeholder="e.g. 17.3850" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Longitude (optional)</label>
+                                        <input className="input-field" name="longitude" value={hubFormData.longitude} onChange={handleHubInputChange} placeholder="e.g. 78.4867" />
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -802,119 +1323,304 @@ const Fleet = () => {
 
             {showItemModal && (
                 <div className="modal-overlay">
-                    <div className="modal-content gh-modal premium-card">
-                        <div className="modal-header"><h2>{editingItemId ? 'Edit' : 'Add'} {activeTab === 'vehicles' ? 'Vehicle' : 'Driver'}</h2><button onClick={() => setShowItemModal(false)} className="close-btn"><X size={20} /></button></div>
-                        <div className="modal-body">
+                    <div className="modal-content gh-modal premium-card" style={{ width: '650px', maxWidth: '95vw', padding: 0 }}>
+                        <div className="modal-header" style={{ padding: '1.5rem', background: 'white' }}>
+                            <div className="modal-title">
+                                <div style={{ width: '40px', height: '40px', background: '#f0f9ff', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', marginRight: '1rem' }}>
+                                    {activeTab === 'vehicles' ? <CarFront size={22} color="#0ea5e9" /> : <User size={22} color="#0ea5e9" />}
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>{editingItemId ? 'Edit' : 'Add New'} {activeTab === 'vehicles' ? 'Vehicle Resource' : 'Fleet Driver'}</h2>
+                                    <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '0.2rem 0 0 0' }}>Configure global {activeTab === 'vehicles' ? 'vehicle' : 'driver'} parameters</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowItemModal(false)} className="close-btn"><X size={24} /></button>
+                        </div>
+
+                        <div className="modal-body scrollbar-thin" style={{ padding: '1.5rem', background: '#f8fafc', maxHeight: '75vh', overflowY: 'auto' }}>
                             {activeTab === 'vehicles' ? (
                                 <>
-                                    <div className="form-group">
-                                        <label>Plate Number*</label>
-                                        <input className={`input-field ${formErrors.plate_number ? 'error' : ''}`} value={itemFormData.plate_number} onChange={e => setItemFormData({ ...itemFormData, plate_number: e.target.value })} placeholder="e.g. TS 09 EA 1234" />
-                                        {formErrors.plate_number && <span className="error-text">{formErrors.plate_number}</span>}
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Model Name*</label>
-                                        <input className={`input-field ${formErrors.name ? 'error' : ''}`} value={itemFormData.name} onChange={e => setItemFormData({ ...itemFormData, name: e.target.value })} placeholder="e.g. Toyota Innova" />
-                                        {formErrors.name && <span className="error-text">{formErrors.name}</span>}
-                                    </div>
-                                    <div className="form-row">
-                                        <div className="form-group" style={{ flex: 1 }}>
-                                            <label>Vehicle Type</label>
-                                            <select className="input-field" value={itemFormData.type} onChange={e => setItemFormData({ ...itemFormData, type: e.target.value })}>
-                                                <option value="sedan">Sedan (4 to 5)</option>
-                                                <option value="suv">SUV (6 to 7)</option>
-                                                <option value="pickup">Pickup</option>
-                                                <option value="ambulance">Ambulance</option>
-                                            </select>
-                                        </div>
-                                        <div className="form-group" style={{ flex: 1 }}>
-                                            <label>Fuel Type</label>
-                                            <select className="input-field" value={itemFormData.fuel_type} onChange={e => setItemFormData({ ...itemFormData, fuel_type: e.target.value })}>
-                                                <option value="diesel">Diesel</option>
-                                                <option value="petrol">Petrol</option>
-                                                <option value="ev">Electric</option>
-                                                <option value="cng">CNG</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div className="form-row">
-                                        <div className="form-group" style={{ flex: 1 }}>
-                                            <label>Capacity</label>
-                                            <input type="number" className="input-field" value={itemFormData.capacity} onChange={e => setItemFormData({ ...itemFormData, capacity: e.target.value })} min={1} max={20} />
-                                        </div>
-                                        <div className="form-group" style={{ flex: 1 }}>
-                                            <label>Status</label>
-                                            <select className="input-field" value={itemFormData.status} onChange={e => setItemFormData({ ...itemFormData, status: e.target.value })}>
-                                                <option value="Available">Available</option>
-                                                <option value="Maintenance">Maintenance</option>
-                                            </select>
+                                    <div className="form-section-premium">
+                                        <div className="section-title"><Car size={16} /> BASIC SPECIFICATIONS</div>
+                                        <div className="form-grid gh-form-grid-2col">
+                                            <div className="form-group">
+                                                <label>Plate Number*</label>
+                                                <input className={`input-field ${formErrors.plate_number ? 'error' : ''}`} value={itemFormData.plate_number} onChange={e => setItemFormData({ ...itemFormData, plate_number: e.target.value })} placeholder="TS 09 EA 1234" />
+                                                {formErrors.plate_number && <span className="error-text">{formErrors.plate_number}</span>}
+                                            </div>
+                                            <div className="form-group">
+                                                <label>Model / Brand*</label>
+                                                <input className={`input-field ${formErrors.name ? 'error' : ''}`} value={itemFormData.name} onChange={e => setItemFormData({ ...itemFormData, name: e.target.value })} placeholder="Toyota Innova Crysta" />
+                                                {formErrors.name && <span className="error-text">{formErrors.name}</span>}
+                                            </div>
+                                            <div className="form-group">
+                                                <label>Vehicle Type</label>
+                                                <select className="input-field" value={itemFormData.type} onChange={e => setItemFormData({ ...itemFormData, type: e.target.value })} style={{ borderRadius: '10px' }}>
+                                                    <option value="sedan">Premium Sedan (4+1)</option>
+                                                    <option value="suv">Luxury SUV (6+1)</option>
+                                                    <option value="pickup">Off-road Pickup</option>
+                                                    <option value="ambulance">Emergency Medical</option>
+                                                </select>
+                                            </div>
+                                            <div className="form-group">
+                                                <label>Fuel Consumption Type</label>
+                                                <select className="input-field" value={itemFormData.fuel_type} onChange={e => setItemFormData({ ...itemFormData, fuel_type: e.target.value })} style={{ borderRadius: '10px' }}>
+                                                    <option value="diesel">Turbo Diesel</option>
+                                                    <option value="petrol">Premium Petrol</option>
+                                                    <option value="ev">Full Electric (EV)</option>
+                                                    <option value="cng">Economic CNG</option>
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Hub / Location Transfer */}
-                                    {editingItemId && (
-                                        <div className="form-group">
-                                            <label>Location / Hub</label>
-                                            <div style={{ position: 'relative' }}>
-                                                <input
-                                                    className="input-field"
-                                                    placeholder={`Current: ${selectedHub?.name || 'Unknown'} — type to change`}
-                                                    value={hubSearchQuery}
-                                                    onChange={e => handleHubSearch(e.target.value)}
-                                                />
+                                    <div className="form-section-premium mt-3">
+                                        <div className="section-title"><Settings size={16} /> OPERATIONAL CONFIG</div>
+                                        <div className="form-grid gh-form-grid-2col">
+                                            <div className="form-group">
+                                                <label>Maximum Seating Capacity</label>
+                                                <input type="number" className="input-field" value={itemFormData.capacity} onChange={e => setItemFormData({ ...itemFormData, capacity: e.target.value })} min={1} max={25} />
                                             </div>
-                                            {suggestedHub && (
-                                                <div className="service-alert info" style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem' }}>
-                                                    <MapPin size={14} />
-                                                    <p>Will be moved to: <strong>{suggestedHub.name}</strong> — {suggestedHub.address}</p>
+                                            <div className="form-group">
+                                                <label>Global Status</label>
+                                                <select className="input-field" value={itemFormData.status} onChange={e => setItemFormData({ ...itemFormData, status: e.target.value })} style={{ borderRadius: '10px' }}>
+                                                    <option value="Available">Available for Duty</option>
+                                                    <option value="Maintenance">Under Maintenance</option>
+                                                    <option value="Inactive">Retired (Off-field)</option>
+                                                </select>
+                                            </div>
+                                            <div className="form-group gh-form-section-full">
+                                                <label>Location / Hub Assignment</label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <div className="search-input-wrapper">
+                                                        <MapPin size={16} className="search-icon" style={{ left: '15px' }} />
+                                                        <input
+                                                            className="input-field"
+                                                            style={{ paddingLeft: '45px' }}
+                                                            placeholder={`Current Assignment: ${selectedHub?.name || 'Central Inventory'} — type to change`}
+                                                            value={hubSearchQuery}
+                                                            onChange={e => handleHubSearch(e.target.value)}
+                                                        />
+                                                    </div>
                                                 </div>
-                                            )}
-                                            {showCreateHubPrompt && (
-                                                <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'var(--bg-secondary, #f8fafc)', borderRadius: '10px', border: '1px dashed var(--primary)' }}>
-                                                    <p style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>No hub found for "{hubSearchQuery}". Create one?</p>
-                                                    <div className="form-group" style={{ marginBottom: '0.5rem' }}>
-                                                        <input className="input-field" placeholder="Hub Name*" value={newHubForTransfer.name} onChange={e => setNewHubForTransfer(p => ({ ...p, name: e.target.value }))} />
+                                                {suggestedHub && (
+                                                    <div className="service-alert info" style={{ marginTop: '0.75rem', border: '1.5px solid #bae6fd', background: '#f0f9ff' }}>
+                                                        <MapPin size={16} />
+                                                        <p>Resource will be moved to: <strong>{suggestedHub.name}</strong> — {suggestedHub.address}</p>
                                                     </div>
-                                                    <div className="form-group" style={{ marginBottom: '0.5rem' }}>
-                                                        <input className="input-field" placeholder="Address*" value={newHubForTransfer.address} onChange={e => setNewHubForTransfer(p => ({ ...p, address: e.target.value }))} />
+                                                )}
+                                                {showCreateHubPrompt && (
+                                                    <div className="form-section-premium mt-3 bg-light" style={{ borderStyle: 'dashed' }}>
+                                                        <p style={{ fontWeight: 800, color: 'var(--primary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Plus size={18} /> INITIALIZE NEW HUB?</p>
+                                                        <div className="form-grid gh-form-grid-2col">
+                                                            <div className="form-group">
+                                                                <input className="input-field" placeholder="Hub Name*" value={newHubForTransfer.name} onChange={e => setNewHubForTransfer(p => ({ ...p, name: e.target.value }))} />
+                                                            </div>
+                                                            <button className="btn-primary" onClick={handleTransferToNewHub} style={{ height: '44px', borderRadius: '10px' }}>Assign New</button>
+                                                        </div>
                                                     </div>
-                                                    <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-                                                        <input className="input-field" placeholder="Pincode*" value={newHubForTransfer.pincode} onChange={e => setNewHubForTransfer(p => ({ ...p, pincode: e.target.value }))} />
-                                                    </div>
-                                                    <button className="btn-primary" style={{ width: '100%' }} onClick={handleTransferHubCreate}>Create Hub &amp; Transfer Vehicle</button>
-                                                </div>
-                                            )}
+                                                )}
+                                            </div>
                                         </div>
-                                    )}
+                                    </div>
                                 </>
                             ) : (
                                 <>
-                                    <div className="form-group">
-                                        <label>Driver Name*</label>
-                                        <input className={`input-field ${formErrors.name ? 'error' : ''}`} value={itemFormData.name} onChange={e => setItemFormData({ ...itemFormData, name: e.target.value })} placeholder="Full Name" />
-                                        {formErrors.name && <span className="error-text">{formErrors.name}</span>}
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Phone*</label>
-                                        <input className={`input-field ${formErrors.phone ? 'error' : ''}`} value={itemFormData.phone} onChange={e => setItemFormData({ ...itemFormData, phone: e.target.value })} maxLength={10} placeholder="10-digit mobile" />
-                                        {formErrors.phone && <span className="error-text">{formErrors.phone}</span>}
-                                    </div>
-                                    <div className="form-group">
-                                        <label>License Number</label>
-                                        <input className="input-field" value={itemFormData.license_number} onChange={e => setItemFormData({ ...itemFormData, license_number: e.target.value })} placeholder="DL Number" />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Status</label>
-                                        <select className="input-field" value={itemFormData.status} onChange={e => setItemFormData({ ...itemFormData, status: e.target.value })}>
-                                            <option value="Available">Available</option>
-                                            <option value="On Leave">On Leave</option>
-                                            <option value="Duty">On Duty</option>
-                                        </select>
+                                    <div className="form-section-premium">
+                                        <div className="section-title"><User size={16} /> PERSONAL DOSSIER</div>
+                                        <div className="form-grid gh-form-grid-2col">
+                                            <div className="form-group">
+                                                <label>Full Driver Name*</label>
+                                                <input className={`input-field ${formErrors.name ? 'error' : ''}`} value={itemFormData.name} onChange={e => setItemFormData({ ...itemFormData, name: e.target.value })} placeholder="John Doe" />
+                                                {formErrors.name && <span className="error-text">{formErrors.name}</span>}
+                                            </div>
+                                            <div className="form-group">
+                                                <label>Primary Contact (Mobile)*</label>
+                                                <input className={`input-field ${formErrors.phone ? 'error' : ''}`} value={itemFormData.phone} onChange={e => setItemFormData({ ...itemFormData, phone: e.target.value })} maxLength={10} placeholder="+91 00000 00000" />
+                                                {formErrors.phone && <span className="error-text">{formErrors.phone}</span>}
+                                            </div>
+                                            <div className="form-group">
+                                                <label>Government License (DL)*</label>
+                                                <input className="input-field" value={itemFormData.license_number} onChange={e => setItemFormData({ ...itemFormData, license_number: e.target.value })} placeholder="State-wide code" />
+                                            </div>
+                                            <div className="form-group">
+                                                <label>Current Status</label>
+                                                <select className="input-field" value={itemFormData.status} onChange={e => setItemFormData({ ...itemFormData, status: e.target.value })} style={{ borderRadius: '10px' }}>
+                                                    <option value="Available">Available (On-field)</option>
+                                                    <option value="On Leave">On Scheduled Leave</option>
+                                                    <option value="Duty">Currently on Trip</option>
+                                                </select>
+                                            </div>
+                                        </div>
                                     </div>
                                 </>
                             )}
                         </div>
-                        <div className="modal-footer"><button className="btn-secondary" onClick={() => setShowItemModal(false)}>Cancel</button><button className="btn-primary" onClick={handleSaveItem}>Save Item</button></div>
+                        <div className="modal-footer" style={{ padding: '1.5rem', background: 'white' }}>
+                            <button className="btn-secondary" onClick={() => setShowItemModal(false)}>Discard</button>
+                            <button className="btn-primary" onClick={handleSaveItem} style={{ minWidth: '150px', padding: '0.875rem 1.5rem', borderRadius: '12px' }}>
+                                <Save size={18} /> {editingItemId ? 'Update Entry' : 'Add entry'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showBookingModal && (
+                <div className="modal-overlay">
+                    <div className="modal-content gh-modal premium-card" style={{ width: '750px', maxWidth: '95vw', padding: 0, overflow: 'hidden' }}>
+                        <div className="modal-header" style={{ padding: '1.5rem', background: 'white', borderBottom: 'none' }}>
+                            <div className="modal-title">
+                                <div style={{ width: '40px', height: '40px', background: '#fef2f2', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', marginRight: '1rem' }}>
+                                    <Car size={22} color="#ef4444" />
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>Allocate Fleet Resource</h2>
+                                    <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '0.2rem 0 0 0' }}>Assign vehicle and driver for trip requirements</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowBookingModal(false)} className="close-btn"><X size={24} /></button>
+                        </div>
+
+                        <div className="booking-form-tabs">
+                            <button className={`form-tab ${bookingTab === 'Official' ? 'active' : ''}`} onClick={() => setBookingTab('Official')}>Official Trip</button>
+                            <button 
+                                className={`form-tab maintenance ${bookingTab === 'Maintenance' ? 'active' : ''}`} 
+                                onClick={() => !bookingData.tripId && setBookingTab('Maintenance')}
+                                style={{ opacity: bookingData.tripId ? 0.5 : 1, cursor: bookingData.tripId ? 'not-allowed' : 'pointer' }}
+                                title={bookingData.tripId ? "Cannot switch to Maintenance while allocating a Trip" : ""}
+                            >Vehicle Maintenance</button>
+                            <button 
+                                className={`form-tab personal ${bookingTab === 'Personal' ? 'active' : ''}`} 
+                                onClick={() => !bookingData.tripId && setBookingTab('Personal')}
+                                style={{ opacity: bookingData.tripId ? 0.5 : 1, cursor: bookingData.tripId ? 'not-allowed' : 'pointer' }}
+                                title={bookingData.tripId ? "Cannot switch to Personal while allocating a Trip" : ""}
+                            >Personal/Other</button>
+                        </div>
+
+                        <div className="modal-body scrollbar-thin" style={{ padding: '1.5rem', background: '#f8fafc', maxHeight: '70vh', overflowY: 'auto' }}>
+                            {bookingTab === 'Official' && (
+                                <div className="form-section-premium" style={{ marginBottom: '1.5rem' }}>
+                                    <div className="section-title"><Search size={16} /> SEARCH & LINK TRIP</div>
+                                    <div className="form-group trip-search-box" style={{ position: 'relative' }}>
+                                        <div className="search-input-wrapper">
+                                            <Search size={18} className="search-icon" />
+                                            <input
+                                                ref={inputRef}
+                                                type="text"
+                                                className="input-field"
+                                                style={{ height: '50px', fontSize: '1rem', borderRadius: '12px' }}
+                                                placeholder="Search by Trip ID, Employee or Destination..."
+                                                value={tripSearch}
+                                                onChange={(e) => { setTripSearch(e.target.value); setShowTripResults(true); }}
+                                                onFocus={() => setShowTripResults(true)}
+                                            />
+                                        </div>
+                                        {showTripResults && (
+                                            <div className="trip-search-dropdown scrollbar-thin" ref={dropdownRef} style={{ left: 0, right: 0 }}>
+                                                {isLoadingTrips ? (
+                                                    <div className="search-loading" style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>Searching Trips...</div>
+                                                ) : trips.length > 0 ? (
+                                                    trips.map(t => (
+                                                        <div key={t.id} className="search-result-item" onClick={() => {
+                                                            setBookingData({ ...bookingData, tripId: t.id, employeeName: t.employee, remarks: t.title });
+                                                            setTripSearch(t.trip_id);
+                                                            setShowTripResults(false);
+                                                        }}>
+                                                            <div className="result-header">
+                                                                <span className="result-id">{t.trip_id}</span>
+                                                                <span className="result-dept">{t.dept}</span>
+                                                            </div>
+                                                            <div className="result-main">
+                                                                <p className="result-emp">{t.employee}</p>
+                                                                <p className="result-purpose">{t.title}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="search-empty" style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>No active trip requests found</div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="form-section-premium">
+                                <div className="section-title"><Car size={16} /> RESOURCE DETAILS</div>
+                                <div className="form-grid gh-form-grid-2col">
+                                    <div className="form-group">
+                                        <label>Selected Vehicle</label>
+                                        {!bookingData.vehicleId ? (
+                                            <select 
+                                                className="input-field" 
+                                                style={{ borderRadius: '10px' }}
+                                                onChange={(e) => {
+                                                    const v = selectedHub?.vehicles?.find(veh => String(veh.id) === e.target.value);
+                                                    if (v) setBookingData({ ...bookingData, vehicleId: v.id, plateNumber: v.plate_number });
+                                                }}
+                                            >
+                                                <option value="">-- Choose Available Vehicle --</option>
+                                                {selectedHub?.vehicles?.filter(v => (v.status || '').toLowerCase() === 'available').map(v => (
+                                                    <option key={v.id} value={v.id}>{v.plate_number} — {v.model_name}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <div className="input-field disabled" style={{ background: '#f1f5f9', fontWeight: 800, border: '1.5px solid #e2e8f0' }}>
+                                                {bookingData.plateNumber}
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {bookingTab !== 'Maintenance' && (
+                                        <>
+                                            <div className="form-group">
+                                                <label>Assign Driver</label>
+                                                <select className="input-field" value={bookingData.driverId || ''} onChange={(e) => setBookingData({ ...bookingData, driverId: e.target.value })} style={{ borderRadius: '10px' }}>
+                                                    <option value="">-- No Driver Assigned --</option>
+                                                    {selectedHub?.drivers?.filter(d => (d.status || d.availability || '').toLowerCase() === 'available' || d.id === bookingData.driverId).map(d => (
+                                                        <option key={d.id} value={d.id}>{d.name} ({d.phone})</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="form-group">
+                                                <label>{bookingTab === 'Official' ? 'Employee Name' : 'Requested By'}</label>
+                                                <input className="input-field" value={bookingData.employeeName} onChange={(e) => setBookingData({ ...bookingData, employeeName: e.target.value })} placeholder="Full Name" />
+                                            </div>
+                                            <div className="form-group">
+                                                <label>Status</label>
+                                                <input className="input-field" value={bookingData.status} onChange={(e) => setBookingData({ ...bookingData, status: e.target.value })} placeholder="Confirmed" />
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="form-section-premium" style={{ marginTop: '1.5rem' }}>
+                                <div className="section-title"><Calendar size={16} /> ALLOCATION PERIOD</div>
+                                <div className="form-grid gh-form-grid-2col">
+                                    <div className="form-group">
+                                        <label>Start DateTime *</label>
+                                        <input type="datetime-local" className="input-field" value={bookingData.checkInDate} onChange={(e) => setBookingData({ ...bookingData, checkInDate: e.target.value })} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>End DateTime *</label>
+                                        <input type="datetime-local" className="input-field" value={bookingData.checkOutDate} onChange={(e) => setBookingData({ ...bookingData, checkOutDate: e.target.value })} />
+                                    </div>
+                                    <div className="form-group gh-form-section-full">
+                                        <label>Allocation Remarks / Notes</label>
+                                        <textarea className="input-field" rows={2} value={bookingData.remarks} onChange={(e) => setBookingData({ ...bookingData, remarks: e.target.value })} placeholder="Maintenance notes or specific trip requirements..." />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="modal-footer" style={{ padding: '1.5rem', background: 'white', borderTop: 'none' }}>
+                            <button className="btn-secondary" onClick={() => setShowBookingModal(false)}>Discard</button>
+                            <button className="btn-primary" onClick={handleBookingSave} style={{ minWidth: '180px', padding: '0.875rem 1.5rem', borderRadius: '12px' }}>
+                                <Save size={18} /> {bookingTab === 'Maintenance' ? 'Save Maintenance' : 'Confirm Allocation'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -951,12 +1657,12 @@ const Fleet = () => {
                             </div>
                             <div className="date-row">
                                 <div className="form-group">
-                                    <label>Start Date *</label>
-                                    <input type="date" className="input-field" value={assignForm.startDate} onChange={e => setAssignForm(p => ({ ...p, startDate: e.target.value }))} />
+                                    <label>Start Allocation *</label>
+                                    <input type="datetime-local" className="input-field" value={assignForm.startDate} onChange={e => setAssignForm(p => ({ ...p, startDate: e.target.value }))} />
                                 </div>
                                 <div className="form-group">
-                                    <label>End Date *</label>
-                                    <input type="date" className="input-field" value={assignForm.endDate} onChange={e => setAssignForm(p => ({ ...p, endDate: e.target.value }))} />
+                                    <label>End Release *</label>
+                                    <input type="datetime-local" className="input-field" value={assignForm.endDate} onChange={e => setAssignForm(p => ({ ...p, endDate: e.target.value }))} />
                                 </div>
                             </div>
                             <div className="form-group">

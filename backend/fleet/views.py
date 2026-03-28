@@ -43,12 +43,13 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
             # Notify the trip owner
             if trip_obj and trip_obj.user:
-                driver_info = f" Driver: {booking.driver.name}." if booking.driver else ""
+                driver_info = f" Driver: {booking.driver.name} (Contact: {booking.driver.phone})." if booking.driver else ""
                 Notification.objects.create(
                     user=trip_obj.user,
                     title="Vehicle Confirmed",
                     message=f"Vehicle {vehicle.plate_number} ({vehicle.model_name}) has been allocated for your trip {trip_obj.trip_id} to {trip_obj.destination}.{driver_info}",
-                    type='info'
+                    type='info',
+                    trip_id=trip_obj.trip_id
                 )
 
             return Response(VehicleBookingSerializer(booking).data, status=status.HTTP_201_CREATED)
