@@ -241,14 +241,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: const Color(0xFFF1F5F9)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
           ),
           child: Row(
             children: [
               Container(
                 width: 48,
                 height: 48,
-                decoration: BoxDecoration(color: (isUser ? const Color(0xFF22C55E) : const Color(0xFF7C1D1D)).withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(color: (isUser ? const Color(0xFF22C55E) : const Color(0xFF7C1D1D)).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
                 child: Center(child: Icon(isUser ? Icons.how_to_reg_rounded : Icons.person_add_rounded, color: isUser ? const Color(0xFF22C55E) : const Color(0xFF7C1D1D), size: 24)),
               ),
               const SizedBox(width: 16),
@@ -279,7 +279,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     if (isUser) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(color: const Color(0xFF22C55E).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(color: const Color(0xFF22C55E).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

@@ -190,6 +190,7 @@ class TripTracking(models.Model):
     timestamp = models.DateTimeField(default=timezone.now)
     accuracy = models.FloatField(null=True, blank=True)
     speed = models.FloatField(null=True, blank=True)
+    device_id = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         ordering = ['timestamp']
@@ -198,6 +199,43 @@ class TripTracking(models.Model):
 
     def __str__(self):
         return f"Tracking for {self.trip_id} at {self.timestamp}"
+
+
+class UserDailyTracking(models.Model):
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='daily_tracking')
+    latitude = models.DecimalField(max_digits=20, decimal_places=10)
+    longitude = models.DecimalField(max_digits=20, decimal_places=10)
+    timestamp = models.DateTimeField(default=timezone.now)
+    accuracy = models.FloatField(null=True, blank=True)
+    speed = models.FloatField(null=True, blank=True)
+    device_id = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = "User Daily Tracking"
+        verbose_name_plural = "User Daily Tracking Logs"
+
+    def __str__(self):
+        return f"Daily Log: {self.user.name} at {self.timestamp}"
+
+
+class FieldTracking(models.Model):
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='field_tracking')
+    latitude = models.DecimalField(max_digits=20, decimal_places=10)
+    longitude = models.DecimalField(max_digits=20, decimal_places=10)
+    timestamp = models.DateTimeField(default=timezone.now)
+    accuracy = models.FloatField(null=True, blank=True)
+    speed = models.FloatField(null=True, blank=True)
+    device_id = models.CharField(max_length=255, null=True, blank=True)
+    activity_type = models.CharField(max_length=100, default='Field Activity')
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = "Field Tracking"
+        verbose_name_plural = "Field Tracking Logs"
+
+    def __str__(self):
+        return f"Field Log: {self.user.name} at {self.timestamp}"
 
 
 class Expense(SoftDeleteModel):

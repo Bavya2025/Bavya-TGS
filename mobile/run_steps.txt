@@ -1,0 +1,22 @@
+How to Build the Mobile APK:
+To generate the production APK for deployment, run the following commands in your terminal from the e:\TGS-V1.1\mobile directory:
+
+Clean and Refresh Dependencies:
+
+bash
+flutter clean
+flutter pub get
+
+Generate Release APK:
+bash
+flutter build apk --release
+
+The generated file will be located at: build/app/outputs/flutter-apk/app-release.apk
+
+Platform Specifics (If needed for older devices):
+
+bash
+flutter build apk --split-per-abi
+TIP
+
+Testing Tip: For testing the background tracking, ensure the user has granted "Allow all the time" location permissions on the physical device. The tracking will trigger based on the intervals you set in the new Web Admin Settings page.

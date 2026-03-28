@@ -43,6 +43,7 @@ class Trip {
   final bool hasVehicleBooking;
   final bool considerAsLocal;
   final String? userBaseLocation;
+  final String? currentApproverName;
 
   Trip({
     required this.id,
@@ -87,6 +88,7 @@ class Trip {
     this.hasVehicleBooking = false,
     this.considerAsLocal = false,
     this.userBaseLocation,
+    this.currentApproverName,
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {
@@ -168,6 +170,7 @@ class Trip {
       hasVehicleBooking: json['has_vehicle_booking'] ?? false,
       considerAsLocal: json['consider_as_local'] ?? false,
       userBaseLocation: json['user_base_location'],
+      currentApproverName: json['current_approver_name']?.toString() ?? json['current_approver']?.toString(),
     );
   }
 

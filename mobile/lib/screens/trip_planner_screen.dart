@@ -7,7 +7,7 @@ class TripPlannerScreen extends StatefulWidget {
   const TripPlannerScreen({super.key, required this.tripId});
 
   @override
-  _TripPlannerScreenState createState() => _TripPlannerScreenState();
+  State<TripPlannerScreen> createState() => _TripPlannerScreenState();
 }
 
 class _TripPlannerScreenState extends State<TripPlannerScreen> {
@@ -31,7 +31,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
               height: 500,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  colors: [const Color(0xFFA9052E).withOpacity(0.04), Colors.transparent],
+                  colors: [const Color(0xFFA9052E).withValues(alpha: 0.04), Colors.transparent],
                 ),
                 shape: BoxShape.circle,
               ),
@@ -45,7 +45,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
               height: 400,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  colors: [const Color(0xFF3B82F6).withOpacity(0.03), Colors.transparent],
+                  colors: [const Color(0xFF3B82F6).withValues(alpha: 0.03), Colors.transparent],
                 ),
                 shape: BoxShape.circle,
               ),
@@ -85,7 +85,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
         color: const Color(0xFFA9052E),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -104,7 +104,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
               width: 140,
               height: 140,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
             ),
@@ -137,7 +137,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.2,
                           ),
                         ),
@@ -167,9 +167,9 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.of(context).padding.bottom),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.withOpacity(0.1))),
+        border: Border(top: BorderSide(color: Colors.grey.withValues(alpha: 0.1))),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, -5)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, -5)),
         ],
       ),
       child: InkWell(
@@ -182,7 +182,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0F1E2A).withOpacity(0.2),
+                color: const Color(0xFF0F1E2A).withValues(alpha: 0.2),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -209,7 +209,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
       ),
       child: Column(
         children: [
-          ...members.map((m) => _memberRow(m)).toList(),
+          ...members.map((m) => _memberRow(m)),
           const SizedBox(height: 12),
           InkWell(
             onTap: () {},
@@ -274,7 +274,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
             decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFF1F5F9))),
             child: Stack(
               children: [
-                Center(child: Icon(Icons.location_on_rounded, size: 40, color: Colors.red.withOpacity(0.1))),
+                Center(child: Icon(Icons.location_on_rounded, size: 40, color: Colors.red.withValues(alpha: 0.1))),
                 Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
@@ -385,7 +385,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
   Widget _plannerCard({required String title, required IconData icon, Widget? headerAction, required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 10))], border: Border.all(color: const Color(0xFFF1F5F9))),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20, offset: const Offset(0, 10))], border: Border.all(color: const Color(0xFFF1F5F9))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -393,7 +393,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(children: [Icon(icon, size: 20, color: const Color(0xFF0B2844)), const SizedBox(width: 10), Text(title, style: GoogleFonts.interTight(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)))]),
-              if (headerAction != null) headerAction,
+              ?headerAction,
             ],
           ),
           const SizedBox(height: 20),

@@ -53,13 +53,14 @@ class _FaceUpdateRequestsScreenState extends State<FaceUpdateRequestsScreen> {
         _fetchRequests();
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         messenger.showSnackBar(
           SnackBar(
             content: Text('Action failed: $e'),
             backgroundColor: Colors.red,
           ),
         );
+      }
     }
   }
 
@@ -79,7 +80,7 @@ class _FaceUpdateRequestsScreenState extends State<FaceUpdateRequestsScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFFA9052E).withOpacity(0.02),
+                    const Color(0xFFA9052E).withValues(alpha: 0.02),
                     Colors.transparent,
                   ],
                 ),
@@ -136,7 +137,7 @@ class _FaceUpdateRequestsScreenState extends State<FaceUpdateRequestsScreen> {
               width: 130,
               height: 130,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
             ),
@@ -158,7 +159,7 @@ class _FaceUpdateRequestsScreenState extends State<FaceUpdateRequestsScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(
@@ -177,7 +178,7 @@ class _FaceUpdateRequestsScreenState extends State<FaceUpdateRequestsScreen> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -252,7 +253,7 @@ class _FaceUpdateRequestsScreenState extends State<FaceUpdateRequestsScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 15,
             offset: const Offset(0, 4),
           ),
@@ -264,7 +265,7 @@ class _FaceUpdateRequestsScreenState extends State<FaceUpdateRequestsScreen> {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: const Color(0xFFBB0633).withOpacity(0.1),
+                backgroundColor: const Color(0xFFBB0633).withValues(alpha: 0.1),
                 child: Text(
                   request['employee_name'][0].toUpperCase(),
                   style: const TextStyle(
@@ -353,7 +354,7 @@ class _FaceUpdateRequestsScreenState extends State<FaceUpdateRequestsScreen> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                     elevation: 8,
-                    shadowColor: const Color(0xFF0F1E2A).withOpacity(0.4),
+                    shadowColor: const Color(0xFF0F1E2A).withValues(alpha: 0.4),
                   ),
                   child: Text(
                     'APPROVE',

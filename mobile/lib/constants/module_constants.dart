@@ -9,6 +9,7 @@ import '../screens/api_management_screen.dart';
 import '../screens/login_history_screen.dart';
 import '../screens/admin_audit_logs_screen.dart';
 import '../screens/job_report_screen.dart';
+import '../screens/debug_logs_screen.dart';
 import 'package:flutter/material.dart';
 import '../models/module_model.dart';
 import '../screens/my_trips_screen.dart';
@@ -211,6 +212,15 @@ class ModuleConstants {
       destinationScreen: () => const AdminAuditLogsScreen(),
     ),
     NavigationModule(
+      title: 'System Logs',
+      description: 'Error diagnostics',
+      icon: Icons.terminal_rounded,
+      backgroundColor: const Color(0xFFFFF8E1),
+      iconColor: const Color(0xFFFFA000),
+      allowedRoles: ['admin'],
+      destinationScreen: () => const DebugLogsScreen(),
+    ),
+    NavigationModule(
       title: 'Job Report',
       description: 'Activity consolidated',
       icon: Icons.assignment_turned_in_rounded,
@@ -238,7 +248,7 @@ class ModuleConstants {
       icon: Icons.gps_fixed_rounded,
       backgroundColor: const Color(0xFFE0F2FE),
       iconColor: const Color(0xFF0369A1),
-      allowedRoles: allRoles, // Global per instructions
+      allowedRoles: ['admin', 'reporting_authority', 'hr', 'management', 'cfo'],
       destinationScreen: () => const TeamTripDetailsScreen(),
     ),
     NavigationModule(
@@ -247,7 +257,7 @@ class ModuleConstants {
       icon: Icons.security_rounded,
       backgroundColor: const Color(0xFFFEE2E2),
       iconColor: const Color(0xFFBB0633),
-      allowedRoles: allRoles, // Global per instructions
+      allowedRoles: ['admin', 'reporting_authority', 'hr', 'management', 'cfo'],
       destinationScreen: () => const FrsRequestsHubScreen(),
     ),
   ];
@@ -292,16 +302,19 @@ class ModuleConstants {
     if (rawRole == 'admin') return 'admin';
     if (department.contains('finance') ||
         designation.contains('finance') ||
-        rawRole == 'finance')
+        rawRole == 'finance') {
       return 'finance';
+    }
     if (department.contains('hr') ||
         designation.contains('hr') ||
-        rawRole == 'hr')
+        rawRole == 'hr') {
       return 'hr';
+    }
     if (department.contains('cfo') ||
         designation.contains('cfo') ||
-        rawRole == 'cfo')
+        rawRole == 'cfo') {
       return 'cfo';
+    }
 
     // Fuzzy mapping for reporting_authority (backend specific)
     final normalized = rawRole.replaceAll(RegExp(r'[^a-z0-9_]'), '');

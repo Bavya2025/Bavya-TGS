@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from core.views import hash_password
 from core.models import Role, User
-from .models import SystemConfig, APIKeyHistory, SystemErrorLog
+from .models import SystemConfig, APIKeyHistory, SystemErrorLog, MobileTrackingConfig
 from .services import fetch_employee_data, fetch_geo_data
 from core.permissions import IsCustomAuthenticated, IsAdmin
 from .utils import encrypt_key, decrypt_key
@@ -358,8 +358,12 @@ class UserListView(APIView):
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from django.utils import timezone
-from .models import AccessKey, APILog, DynamicEndpoint, DynamicSubmission
-from .serializers import AccessKeySerializer, AccessKeyListSerializer, APILogSerializer, DynamicEndpointSerializer, DynamicSubmissionSerializer
+from .models import AccessKey, APILog, DynamicEndpoint, DynamicSubmission, MobileTrackingConfig
+from .serializers import (
+    AccessKeySerializer, AccessKeyListSerializer, APILogSerializer, 
+    DynamicEndpointSerializer, DynamicSubmissionSerializer,
+    MobileTrackingConfigSerializer
+)
 from .utils import encrypt_key
 from rest_framework.views import APIView
 from travel.models import Trip
@@ -702,5 +706,35 @@ class RetryNotificationView(APIView):
             return Response({'error': 'Record not found'}, status=404)
         except Exception as e:
             return Response({'error': str(e)}, status=400)
+
+
+class TrackingConfigView(APIView):
+    permission_classes = [IsCustomAuthenticated]
+
+    def get(self, request):
+        config = MobileTrackingConfig.objects.first()
+        if not config:
+            config = MobileTrackingConfig.objects.create()
+        serializer = MobileTrackingConfigSerializer(config)
+        return Response(serializer.data)
+
+    def post(self, request):
+        # Admin check
+        user = getattr(request, 'custom_user', None)
+        role_name = (user.role.name if user and user.role else '').lower()
+        is_admin = any(keyword in role_name for keyword in ['admin', 'superuser', 'it admin'])
+        
+        if not is_admin:
+            return Response({'error': 'Only admins can update tracking config'}, status=403)
+        
+        config = MobileTrackingConfig.objects.first()
+        if not config:
+            config = MobileTrackingConfig.objects.create()
+            
+        serializer = MobileTrackingConfigSerializer(config, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
 
         

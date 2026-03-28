@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import '../models/trip_model.dart';
 import '../services/trip_service.dart';
 
@@ -77,7 +76,7 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
               height: 500,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  colors: [const Color(0xFFA9052E).withOpacity(0.04), Colors.transparent],
+                  colors: [const Color(0xFFA9052E).withValues(alpha: 0.04), Colors.transparent],
                 ),
                 shape: BoxShape.circle,
               ),
@@ -91,7 +90,7 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
               height: 350,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  colors: [const Color(0xFF3B82F6).withOpacity(0.03), Colors.transparent],
+                  colors: [const Color(0xFF3B82F6).withValues(alpha: 0.03), Colors.transparent],
                 ),
                 shape: BoxShape.circle,
               ),
@@ -139,7 +138,7 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
           ),
           if (_isLoading)
             Container(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               child: const Center(child: CircularProgressIndicator(color: Color(0xFFBB0633))),
             ),
         ],
@@ -153,7 +152,7 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFA9052E),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, 8)),
         ],
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(36),
@@ -168,7 +167,7 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
             child: Container(
               width: 140,
               height: 140,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), shape: BoxShape.circle),
             ),
           ),
           SafeArea(
@@ -198,7 +197,7 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                                 letterSpacing: 1.2,
                               ),
                             ),
@@ -230,9 +229,9 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Text(
         status.toUpperCase(),
@@ -266,7 +265,7 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(0, 10))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -316,13 +315,13 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 20, color: color.withOpacity(0.8)),
+          Icon(icon, size: 20, color: color.withValues(alpha: 0.8)),
           const SizedBox(height: 12),
           Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 9, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8))),
           const SizedBox(height: 2),
@@ -338,7 +337,7 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(28),
-        boxShadow: [BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 8))],
+        boxShadow: [BoxShadow(color: const Color(0xFF0F172A).withValues(alpha: 0.2), blurRadius: 15, offset: const Offset(0, 8))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -354,7 +353,7 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
           Row(
             children: [
               Expanded(child: _telemetrySubTile('START', '${_trip!.odometer!['start_odo_reading']} KM')),
-              Container(width: 1, height: 40, color: Colors.white.withOpacity(0.1)),
+              Container(width: 1, height: 40, color: Colors.white.withValues(alpha: 0.1)),
               Expanded(child: _telemetrySubTile('END', '${_trip!.odometer!['end_odo_reading'] ?? 'ACTIVE'}')),
             ],
           ),
@@ -385,7 +384,7 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), shape: BoxShape.circle),
             child: const Icon(Icons.help_outline_rounded, color: Colors.blue, size: 20),
           ),
           const SizedBox(width: 16),
@@ -410,7 +409,7 @@ class _TripSummaryScreenState extends State<TripSummaryScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, size: 16, color: color),
           ),
           const SizedBox(width: 16),

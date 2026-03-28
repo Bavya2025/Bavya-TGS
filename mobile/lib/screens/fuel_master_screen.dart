@@ -279,10 +279,13 @@ class _FuelMasterScreenState extends State<FuelMasterScreen> {
                               } else {
                                 await _apiService.post('/api/masters/fuel-rate-masters/', body: data);
                               }
+                              if (!context.mounted) return;
                               Navigator.pop(context);
                               _fetchData();
                             } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                              }
                             }
                           },
                           style: ElevatedButton.styleFrom(
@@ -452,7 +455,7 @@ class _FuelMasterScreenState extends State<FuelMasterScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFBB0633),
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: const Color(0xFFBB0633).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
+                  boxShadow: [BoxShadow(color: const Color(0xFFBB0633).withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))],
                 ),
                 child: const Icon(Icons.local_gas_station_rounded, color: Colors.white, size: 24),
               ),
@@ -509,7 +512,7 @@ class _FuelMasterScreenState extends State<FuelMasterScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: color, size: 18),
           ),
           const SizedBox(height: 16),
@@ -555,7 +558,7 @@ class _FuelMasterScreenState extends State<FuelMasterScreen> {
           Text('CONFIGURE RATES', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.2)),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: const Color(0xFFBB0633).withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(color: const Color(0xFFBB0633).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
             child: Text('${_rates.length} Rates', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFFBB0633))),
           ),
         ],
@@ -595,7 +598,7 @@ class _FuelMasterScreenState extends State<FuelMasterScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: (is4W ? Colors.indigo : Colors.purple).withOpacity(0.05),
+              color: (is4W ? Colors.indigo : Colors.purple).withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(is4W ? Icons.directions_car_rounded : Icons.motorcycle_rounded, color: is4W ? Colors.indigo : Colors.purple, size: 24),
@@ -610,9 +613,9 @@ class _FuelMasterScreenState extends State<FuelMasterScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: (is4W ? Colors.indigo : Colors.purple).withOpacity(0.05),
+                    color: (is4W ? Colors.indigo : Colors.purple).withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: (is4W ? Colors.indigo : Colors.purple).withOpacity(0.1)),
+                    border: Border.all(color: (is4W ? Colors.indigo : Colors.purple).withValues(alpha: 0.1)),
                   ),
                   child: Text(vehicleType.toUpperCase(), style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: is4W ? Colors.indigo : Colors.purple)),
                 ),
@@ -674,6 +677,7 @@ class _FuelMasterScreenState extends State<FuelMasterScreen> {
         await _apiService.delete('/api/masters/fuel-rate-masters/$id/');
         _fetchData();
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
       }
     }

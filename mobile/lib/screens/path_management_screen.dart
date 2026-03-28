@@ -142,7 +142,7 @@ class _PathManagementScreenState extends State<PathManagementScreen> {
                 color: isStart ? Colors.green : (isEnd ? Colors.indigo : Colors.blue),
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)],
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)],
               ),
             ),
             if (!isEnd) Container(width: 2, height: 20, color: const Color(0xFFE2E8F0)),
@@ -181,7 +181,7 @@ class _PathManagementScreenState extends State<PathManagementScreen> {
   Widget _buildSmallIconButton(IconData icon, Color color, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
-      child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, size: 16, color: color)),
+      child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(icon, size: 16, color: color)),
     );
   }
 

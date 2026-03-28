@@ -110,6 +110,7 @@ const Header = () => {
         { title: 'CFO Room', icon: <BarChart3 size={18} />, path: '/cfo-war-room', roles: ['cfo', 'admin'] },
         { title: 'User Management', icon: <Users size={18} />, path: '/employees', roles: ['admin'] },
         { title: 'Registration Requests', icon: <UserPlus size={18} />, path: '/registration-requests', roles: ['admin', 'hr'] },
+        { title: 'Tracking Monitor', icon: <MapPin size={18} />, path: '/tracking', roles: ['admin'] },
         { title: 'Guest Houses', icon: <Building2 size={18} />, path: '/guesthouse', roles: ['admin', 'cfo', 'guesthousemanager'] },
         { title: 'Fleet Management', icon: <Car size={18} />, path: '/fleet', roles: ['admin', 'guesthousemanager'] },
         { title: 'API Management', icon: <Settings size={18} />, path: '/api-management', roles: ['admin'] },

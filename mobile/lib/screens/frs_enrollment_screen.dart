@@ -67,10 +67,12 @@ class _FrsEnrollmentScreenState extends State<FrsEnrollmentScreen> {
       
       if (mounted) {
         await ApiService().fetchFreshUser();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(response['message'] ?? 'Face enrolled successfully')),
-        );
-        Navigator.of(context).pop(true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(response['message'] ?? 'Face enrolled successfully')),
+          );
+          Navigator.of(context).pop(true);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -108,7 +110,7 @@ class _FrsEnrollmentScreenState extends State<FrsEnrollmentScreen> {
               height: 400,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  colors: [const Color(0xFFA9052E).withOpacity(0.04), Colors.transparent],
+                  colors: [const Color(0xFFA9052E).withValues(alpha: 0.04), Colors.transparent],
                 ),
                 shape: BoxShape.circle,
               ),
@@ -122,7 +124,7 @@ class _FrsEnrollmentScreenState extends State<FrsEnrollmentScreen> {
               height: 450,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  colors: [const Color(0xFF3B82F6).withOpacity(0.03), Colors.transparent],
+                  colors: [const Color(0xFF3B82F6).withValues(alpha: 0.03), Colors.transparent],
                 ),
                 shape: BoxShape.circle,
               ),
@@ -145,7 +147,7 @@ class _FrsEnrollmentScreenState extends State<FrsEnrollmentScreen> {
                           border: Border.all(color: const Color(0xFFF1F5F9)),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF0F172A).withOpacity(0.03),
+                              color: const Color(0xFF0F172A).withValues(alpha: 0.03),
                               blurRadius: 20,
                               offset: const Offset(0, 8),
                             ),
@@ -186,7 +188,7 @@ class _FrsEnrollmentScreenState extends State<FrsEnrollmentScreen> {
                             border: Border.all(color: const Color(0xFFBB0633), width: 3),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFBB0633).withOpacity(0.2),
+                                color: const Color(0xFFBB0633).withValues(alpha: 0.2),
                                 blurRadius: 25,
                                 spreadRadius: -5,
                               ),
@@ -207,7 +209,7 @@ class _FrsEnrollmentScreenState extends State<FrsEnrollmentScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 20),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                             elevation: 8,
-                            shadowColor: const Color(0xFF0F1E2A).withOpacity(0.4),
+                            shadowColor: const Color(0xFF0F1E2A).withValues(alpha: 0.4),
                           ),
                           child: _isCapturing 
                               ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
@@ -259,7 +261,7 @@ class _FrsEnrollmentScreenState extends State<FrsEnrollmentScreen> {
               width: 130,
               height: 130,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
             ),
@@ -277,7 +279,7 @@ class _FrsEnrollmentScreenState extends State<FrsEnrollmentScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(Icons.person_add_rounded, color: Colors.white, size: 24),
@@ -292,7 +294,7 @@ class _FrsEnrollmentScreenState extends State<FrsEnrollmentScreen> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.5,
                           ),
                         ),

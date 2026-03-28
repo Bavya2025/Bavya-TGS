@@ -78,6 +78,7 @@ const Sidebar = () => {
             items: [
                 { title: 'CFO Room', icon: <BarChart3 size={18} />, path: '/cfo-war-room', roles: ['cfo', 'admin'] },
                 { title: 'User Management', icon: <Users size={18} />, path: '/employees', roles: ['admin'] },
+                { title: 'Tracking Monitor', icon: <MapPin size={18} />, path: '/tracking', roles: ['admin'] },
                 { title: 'Registration Requests', icon: <UserPlus size={18} />, path: '/registration-requests', roles: ['admin', 'hr'] },
                 { title: 'API Management', icon: <Settings size={18} />, path: '/api-management', roles: ['admin'] },
                 { title: 'System Errors', icon: <AlertTriangle size={18} />, path: '/system-errors', roles: ['admin'] },

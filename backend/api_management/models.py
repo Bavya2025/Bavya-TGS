@@ -113,3 +113,22 @@ class SystemErrorLog(models.Model):
 
     class Meta:
         ordering = ['-timestamp']
+
+
+class MobileTrackingConfig(models.Model):
+    interval_minutes = models.IntegerField(default=15, help_text="Frequency of location updates")
+    distance_filter = models.IntegerField(default=100, help_text="Minimum distance in meters to trigger update")
+    is_active = models.BooleanField(default=True, help_text="Global switch for mobile tracking")
+    daily_tracking_active = models.BooleanField(default=True, help_text="Enable tracking even when no trip is active")
+    
+    latest_version = models.CharField(max_length=20, default="1.0.0", help_text="The most recent version of the mobile app")
+    update_url = models.URLField(max_length=500, blank=True, null=True, help_text="Direct link to download the latest APK")
+    
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Global Mobility Config ({self.interval_minutes}m)"
+
+    class Meta:
+        verbose_name = "Mobile Tracking Configuration"
+        verbose_name_plural = "Mobile Tracking Configurations"

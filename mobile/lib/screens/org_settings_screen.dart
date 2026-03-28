@@ -128,7 +128,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> with SingleTicker
         child: Column(
           children: [
             _buildTableHeader(),
-            ..._eligibilityData.map((data) => _buildTableRow(data)).toList(),
+            ..._eligibilityData.map((data) => _buildTableRow(data)),
           ],
         ),
       ),
@@ -217,7 +217,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> with SingleTicker
   Widget _rowAction(IconData icon, Color color) {
     return Padding(
       padding: const EdgeInsets.only(left: 8),
-      child: Icon(icon, size: 18, color: color.withOpacity(0.7)),
+      child: Icon(icon, size: 18, color: color.withValues(alpha: 0.7)),
     );
   }
 

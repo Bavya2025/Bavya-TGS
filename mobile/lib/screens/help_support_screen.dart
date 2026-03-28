@@ -226,7 +226,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               fontSize: 14,
-              color: Colors.white.withOpacity(0.8),
+              color: Colors.white.withValues(alpha: 0.8),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -237,7 +237,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))
+                BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 10))
               ],
             ),
             child: TextField(
@@ -292,7 +292,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: const Color(0xFFF1F5F9)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
           ),
           child: Column(
             children: [
@@ -320,7 +320,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        ..._faqs.map((faq) => _buildFAQGroup(faq)).toList(),
+        ..._faqs.map((faq) => _buildFAQGroup(faq)),
       ],
     );
   }
@@ -356,7 +356,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       children: [
         Text('Contact Support Teams', style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
         const SizedBox(height: 16),
-        ..._contactMethods.map((method) => _buildContactCard(method)).toList(),
+        ..._contactMethods.map((method) => _buildContactCard(method)),
       ],
     );
   }

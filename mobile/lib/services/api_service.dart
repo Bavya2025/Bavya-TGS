@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
 import 'logger_service.dart';
+import 'location_tracking_service.dart';
 
 /// Centralized API Service for handling all HTTP requests
 /// Provides consistent error handling, authentication, and request/response management
@@ -92,6 +93,23 @@ class ApiService {
 
   /// Clear token on logout — removes from memory AND SharedPreferences.
   Future<void> clearToken() async {
+    // Explicitly grab final tracking position and kill tracking service BEFORE token is destroyed
+    await LocationTrackingService.stopTracking();
+
+    try {
+      if (_authToken != null) {
+        // Use raw http.post to avoid hitting _handleResponse which could trigger infinite clearToken() loops on 401
+        final uri = _buildUri(ApiConstants.authLogout);
+        await http.post(
+          uri,
+          headers: _buildHeaders(includeAuth: true),
+          body: jsonEncode({}),
+        ).timeout(const Duration(seconds: 3));
+      }
+    } catch (e) {
+      LoggerService.log('Silent API logout failure: $e');
+    }
+
     _authToken = null;
     _currentUser = null;
     final prefs = await SharedPreferences.getInstance();
@@ -382,38 +400,41 @@ class ApiService {
     }
 
     try {
-      final data = response.body.isEmpty ? {} : jsonDecode(response.body);
+      final decoded = (response.body.isEmpty || response.body == 'null')
+          ? <String, dynamic>{}
+          : jsonDecode(response.body);
+      
+      // The data can be a Map or a List for various API endpoints
+      final dynamic data = (decoded is Map || decoded is List) 
+          ? decoded 
+          : <String, dynamic>{'message': response.body};
 
       switch (response.statusCode) {
         case 200:
         case 201:
           return data;
         case 400:
-          throw BadRequestException(_extractMessage(data, 'Bad request'));
+          final Map<String, dynamic> errorMap = (data is Map) ? Map<String, dynamic>.from(data) : <String, dynamic>{'detail': data.toString()};
+          throw BadRequestException(_extractMessage(errorMap, 'Bad request'));
         case 401:
           clearToken(); // clear persisted session on auth failure
-          throw UnauthorizedException(
-            _extractMessage(data, 'Unauthorized. Please login again.'),
-          );
+          final Map<String, dynamic> errorMap = (data is Map) ? Map<String, dynamic>.from(data) : <String, dynamic>{'detail': data.toString()};
+          throw UnauthorizedException(_extractMessage(errorMap, 'Unauthorized. Please login again.'));
         case 403:
           throw ForbiddenException(_extractMessage(data, 'Access forbidden'));
         case 404:
           throw NotFoundException(_extractMessage(data, 'Resource not found'));
         case 500:
-          throw ServerException(
-            _extractMessage(data, 'Server error. Please try again later.'),
-          );
+          throw ServerException(_extractMessage(data, 'Server error. Please try again later.'));
         default:
           throw Exception('Unknown error. Status: ${response.statusCode}');
       }
     } on FormatException {
       // Response was not valid JSON
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return response.body;
+        return <String, dynamic>{'message': response.body};
       }
-      throw Exception(
-        'Invalid server response (status ${response.statusCode})',
-      );
+      throw Exception('Invalid server response (status ${response.statusCode})');
     } catch (e) {
       rethrow;
     }

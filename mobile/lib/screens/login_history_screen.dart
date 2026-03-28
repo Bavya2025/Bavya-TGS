@@ -134,7 +134,7 @@ class _LoginHistoryScreenState extends State<LoginHistoryScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 4))
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 20, offset: const Offset(0, 4))
         ],
       ),
       child: TextField(
@@ -182,7 +182,7 @@ class _LoginHistoryScreenState extends State<LoginHistoryScreen> {
             border: Border.all(color: const Color(0xFFF1F5F9)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.01),
+                color: Colors.black.withValues(alpha: 0.01),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -198,7 +198,7 @@ class _LoginHistoryScreenState extends State<LoginHistoryScreen> {
                 },
                 contentPadding: const EdgeInsets.all(16),
                 leading: CircleAvatar(
-                  backgroundColor: const Color(0xFF700B34).withOpacity(0.1),
+                  backgroundColor: const Color(0xFF700B34).withValues(alpha: 0.1),
                   child: Text(
                     (log['user_name'] ?? '?').toString().toUpperCase().substring(0, 1),
                     style: GoogleFonts.plusJakartaSans(
@@ -274,8 +274,8 @@ class _LoginHistoryScreenState extends State<LoginHistoryScreen> {
         children: [
           const Divider(height: 1),
           const SizedBox(height: 16),
-          _buildDetailRow('Login Time', DateFormat('PPpp').format(DateTime.parse(log['login_time']))),
-          _buildDetailRow('Logout Time', log['logout_time'] != null ? DateFormat('PPpp').format(DateTime.parse(log['logout_time'])) : 'Currently Active'),
+          _buildDetailRow('Login Time', DateFormat('MMM dd, yyyy, hh:mm a').format(DateTime.parse(log['login_time']))),
+          _buildDetailRow('Logout Time', log['logout_time'] != null ? DateFormat('MMM dd, yyyy, hh:mm a').format(DateTime.parse(log['logout_time'])) : 'Currently Active'),
           const SizedBox(height: 16),
           Text(
             'Session Activities',
@@ -285,7 +285,7 @@ class _LoginHistoryScreenState extends State<LoginHistoryScreen> {
           if (activities.isEmpty)
             Text('No activities recorded', style: GoogleFonts.inter(fontSize: 11, color: Colors.black26, fontStyle: FontStyle.italic))
           else
-            ...activities.map((act) => _buildActivityItem(act)).toList(),
+            ...activities.map((act) => _buildActivityItem(act)),
         ],
       ),
     );
@@ -317,7 +317,7 @@ class _LoginHistoryScreenState extends State<LoginHistoryScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: actionColor.withOpacity(0.1),
+              color: actionColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
@@ -355,7 +355,7 @@ class _LoginHistoryScreenState extends State<LoginHistoryScreen> {
         children: [
           Text('$label:', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w700)),
           const SizedBox(width: 8),
-          Text(value, style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF475569), fontWeight: FontWeight.w600)),
+          Expanded(child: Text(value, style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF475569), fontWeight: FontWeight.w600))),
         ],
       ),
     );

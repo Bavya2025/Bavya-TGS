@@ -101,9 +101,10 @@ class _JobReportScreenState extends State<JobReportScreen> {
     });
   }
 
-  Future<void> _handleBatchAction(int batchId, String action) async {
+  Future<void> _handleBatchAction(String batchId, String action) async {
     try {
       await _tripService.handleBulkBatchAction(batchId, action);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Batch ${action}d successfully')),
       );
@@ -204,9 +205,9 @@ class _JobReportScreenState extends State<JobReportScreen> {
   Widget _buildBatchSection(String title, List<Map<String, dynamic>> batches, Color color, bool isActionable) {
     return Container(
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
+        color: color.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -264,7 +265,7 @@ class _JobReportScreenState extends State<JobReportScreen> {
               children: [
                 if (isActionable) ...[
                   TextButton(
-                    onPressed: () => _handleBatchAction(batch['id'], 'reject'),
+                    onPressed: () => _handleBatchAction(batch['id'].toString(), 'reject'),
                     child: Text(
                       'Reject',
                       style: GoogleFonts.inter(
@@ -276,7 +277,7 @@ class _JobReportScreenState extends State<JobReportScreen> {
                   ),
                   const SizedBox(width: 8),
                   TextButton(
-                    onPressed: () => _handleBatchAction(batch['id'], 'approve'),
+                    onPressed: () => _handleBatchAction(batch['id'].toString(), 'approve'),
                     child: Text(
                       'Approve Batch',
                       style: GoogleFonts.inter(
@@ -355,7 +356,7 @@ class _JobReportScreenState extends State<JobReportScreen> {
             scrollDirection: Axis.horizontal,
             child: DataTable(
               headingRowHeight: 45,
-              dataRowHeight: 50,
+              dataRowMinHeight: 50,
               columnSpacing: 24,
               horizontalMargin: 16,
               headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
@@ -416,7 +417,7 @@ class _JobReportScreenState extends State<JobReportScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -426,7 +427,7 @@ class _JobReportScreenState extends State<JobReportScreen> {
       child: Column(
         children: [
           DropdownButtonFormField<String>(
-            value: _selectedEmployee,
+            initialValue: _selectedEmployee,
             decoration: _inputDecoration('Employee Name', Icons.person),
             items: [
               const DropdownMenuItem(value: '', child: Text('All Employees')),
@@ -507,7 +508,7 @@ class _JobReportScreenState extends State<JobReportScreen> {
           padding: const EdgeInsets.all(40.0),
           child: Column(
             children: [
-              Icon(Icons.dashboard_outlined, size: 64, color: Colors.grey.withOpacity(0.3)),
+              Icon(Icons.dashboard_outlined, size: 64, color: Colors.grey.withValues(alpha: 0.3)),
               const SizedBox(height: 16),
               Text('No Records Found', style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold)),
               Text('Try adjusting filters', style: GoogleFonts.inter(color: Colors.grey)),
@@ -744,7 +745,7 @@ class _JobReportScreenState extends State<JobReportScreen> {
   InputDecoration _inputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(icon, size: 20, color: const Color(0xFFBB0633).withOpacity(0.7)),
+      prefixIcon: Icon(icon, size: 20, color: const Color(0xFFBB0633).withValues(alpha: 0.7)),
       filled: true,
       fillColor: const Color(0xFFF8FAFC),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -757,7 +758,7 @@ class _JobReportScreenState extends State<JobReportScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

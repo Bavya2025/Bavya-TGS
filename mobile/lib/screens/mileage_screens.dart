@@ -139,7 +139,7 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF7C1D1D).withOpacity(0.05),
+                  color: const Color(0xFF7C1D1D).withValues(alpha: 0.05),
                   blurRadius: 20,
                 ),
               ],
@@ -279,7 +279,7 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -363,7 +363,7 @@ class CaptureOdometerScreen extends StatefulWidget {
   });
 
   @override
-  _CaptureOdometerScreenState createState() => _CaptureOdometerScreenState();
+  State<CaptureOdometerScreen> createState() => _CaptureOdometerScreenState();
 }
 
 class _CaptureOdometerScreenState extends State<CaptureOdometerScreen> {
@@ -387,6 +387,7 @@ class _CaptureOdometerScreenState extends State<CaptureOdometerScreen> {
   Future<void> _getImage() async {
     final Position? position = await _determinePosition();
     if (position == null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Location services required for watermark.'),
@@ -418,7 +419,7 @@ class _CaptureOdometerScreenState extends State<CaptureOdometerScreen> {
         final paint = Paint();
 
         canvas.drawImage(image, Offset.zero, paint);
-        final rectPaint = Paint()..color = Colors.black.withOpacity(0.5);
+        final rectPaint = Paint()..color = Colors.black.withValues(alpha: 0.5);
         canvas.drawRect(
           Rect.fromLTWH(
             0,
@@ -690,7 +691,7 @@ class MileageOngoingScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withOpacity(0.05),
+                color: const Color(0xFF10B981).withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -725,7 +726,7 @@ class MileageOngoingScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: Colors.black.withValues(alpha: 0.02),
                     blurRadius: 20,
                   ),
                 ],
@@ -830,7 +831,7 @@ class MileageSummaryScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
+                    color: Colors.black.withValues(alpha: 0.03),
                     blurRadius: 30,
                   ),
                 ],

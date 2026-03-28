@@ -9,13 +9,14 @@ import '../constants/module_constants.dart';
 import 'role_based_dashboard.dart';
 import 'forgot_password_screen.dart';
 import 'signup_screen.dart';
-import 'frs_enrollment_screen.dart';
+import '../services/device_service.dart';
+import '../services/permission_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
@@ -61,14 +62,23 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
+    // Mandatory Permission Check (Camera & Location)
+    bool hasPermissions = await PermissionService.checkMandatoryPermissions();
+    if (!hasPermissions && mounted) {
+       setState(() => _isLoading = false);
+       PermissionService.showPermissionMissingDialog(context);
+       return; // Block login
+    }
+
     try {
       final apiService = ApiService();
       final response = await apiService.post(
         ApiConstants.authLogin,
         body: {
-          'employee_id':
-              username, // Backend accepts both 'username' and 'employee_id'; web uses 'employee_id'
+          'employee_id': username,
           'password': password,
+          'device_id': DeviceService().deviceId,
+          'device_type': DeviceService().deviceType,
         },
       );
 
@@ -107,7 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       final userEmail = (userDetails['email'] ?? '').toString();
-      final isFaceEnrolled = userDetails['is_face_enrolled'] == true;
+
 
       Navigator.pushReplacement(
         context,
@@ -383,7 +393,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFFFC69E).withOpacity(0.4),
+        color: const Color(0xFFFFC69E).withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(12),
       ),
       child: TextFormField(

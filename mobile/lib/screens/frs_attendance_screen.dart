@@ -118,8 +118,9 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
   Future<void> _markAttendance() async {
     if (_controller == null ||
         !_controller!.value.isInitialized ||
-        _isCapturing)
+        _isCapturing) {
       return;
+    }
 
     setState(() {
       _isCapturing = true;
@@ -287,7 +288,7 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFFA9052E).withOpacity(0.04),
+                    const Color(0xFFA9052E).withValues(alpha: 0.04),
                     Colors.transparent,
                   ],
                 ),
@@ -304,7 +305,7 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF3B82F6).withOpacity(0.03),
+                    const Color(0xFF3B82F6).withValues(alpha: 0.03),
                     Colors.transparent,
                   ],
                 ),
@@ -329,7 +330,7 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                           border: Border.all(color: const Color(0xFFF1F5F9)),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF0F172A).withOpacity(0.03),
+                              color: const Color(0xFF0F172A).withValues(alpha: 0.03),
                               blurRadius: 20,
                               offset: const Offset(0, 8),
                             ),
@@ -373,7 +374,7 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFBB0633).withOpacity(0.2),
+                                color: const Color(0xFFBB0633).withValues(alpha: 0.2),
                                 blurRadius: 25,
                                 spreadRadius: -5,
                               ),
@@ -404,7 +405,7 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                             elevation: 8,
                             shadowColor: const Color(
                               0xFF0F1E2A,
-                            ).withOpacity(0.4),
+                            ).withValues(alpha: 0.4),
                           ),
                           child: _isCapturing
                               ? const SizedBox(
@@ -466,7 +467,7 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
               width: 130,
               height: 130,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
             ),
@@ -488,7 +489,7 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(
@@ -507,7 +508,7 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -548,7 +549,7 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                 decoration: BoxDecoration(
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFBB0633).withOpacity(0.5),
+                      color: const Color(0xFFBB0633).withValues(alpha: 0.5),
                       blurRadius: 10,
                       spreadRadius: 2,
                     ),
@@ -556,7 +557,7 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                   gradient: LinearGradient(
                     colors: [
                       Colors.transparent,
-                      const Color(0xFFBB0633).withOpacity(0.8),
+                      const Color(0xFFBB0633).withValues(alpha: 0.8),
                       Colors.transparent,
                     ],
                   ),

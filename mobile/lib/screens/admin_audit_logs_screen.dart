@@ -166,7 +166,7 @@ class _AdminAuditLogsScreenState extends State<AdminAuditLogsScreen> {
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: _getActionColor(action).withOpacity(0.1),
+            color: _getActionColor(action).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(_getActionIcon(action), color: _getActionColor(action), size: 20),
@@ -185,7 +185,7 @@ class _AdminAuditLogsScreenState extends State<AdminAuditLogsScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(color: _getActionColor(action).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                  decoration: BoxDecoration(color: _getActionColor(action).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
                   child: Text(action, style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: _getActionColor(action))),
                 ),
                 const SizedBox(width: 8),

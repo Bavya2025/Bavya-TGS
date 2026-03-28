@@ -7,7 +7,7 @@ from .models import (
     TravelModeMaster, BookingTypeMaster, AirlineMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
     LocalTravelModeMaster, LocalProviderMaster,
     StayTypeMaster, RoomTypeMaster, MealCategoryMaster, MealTypeMaster, IncidentalTypeMaster,
-    CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking,
+    CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking, UserDailyTracking, FieldTracking,
     TravelOperatorMaster, TravelClassMaster, TravelVehicleMaster, LocalSubTypeMaster
 )
 from .serializers import (
@@ -18,7 +18,7 @@ from .serializers import (
     LocalTravelModeMasterSerializer, LocalProviderMasterSerializer, StayTypeMasterSerializer, RoomTypeMasterSerializer,
     MealCategoryMasterSerializer, MealTypeMasterSerializer, IncidentalTypeMasterSerializer,
     CustomMasterDefinitionSerializer, CustomMasterValueSerializer, MasterModuleSerializer,
-    TripTrackingSerializer,
+    TripTrackingSerializer, UserDailyTrackingSerializer, FieldTrackingSerializer,
     LocalSubTypeMasterSerializer, TravelOperatorMasterSerializer, TravelClassMasterSerializer, TravelVehicleMasterSerializer
 )
 import io
@@ -446,20 +446,17 @@ class TripTrackingView(APIView):
     permission_classes = [IsCustomAuthenticated]
 
     def get(self, request, trip_id):
-        print(f"DEBUG: TripTrackingView.get called for trip_id: {trip_id}")
         real_trip_id = decode_id(trip_id)
         # Verify trip exists and user has access
         try:
             trip = Trip.objects.get(trip_id=real_trip_id)
         except Trip.DoesNotExist:
-            print(f"DEBUG: Trip {real_trip_id} not found")
             return Response({"error": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
 
         # Basic access check: requester or manager or finance or admin
         user = getattr(request, 'custom_user', None)
-        print(f"DEBUG: Requester: {user.employee_id if user else 'Anonymous'}")
         
-        # ... existing logic ...
+        # Authorization check: Owner, Managers in the hierarchy, Current Approver, Finance, Guest House Manager, or Admin
         is_owner = (trip.user == user)
         is_manager = False
         if user:
@@ -469,29 +466,23 @@ class TripTrackingView(APIView):
         is_privileged = user_role in ['admin', 'finance', 'cfo', 'guesthousemanager']
 
         if not (is_owner or is_manager or is_privileged):
-            print(f"DEBUG: Unauthorized access attempt to trip {real_trip_id}")
             return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
 
         tracking_data = TripTracking.objects.filter(trip=trip).order_by('timestamp')
-        print(f"DEBUG: Returning {tracking_data.count()} points")
         serializer = TripTrackingSerializer(tracking_data, many=True)
         return Response(serializer.data)
 
     def post(self, request, trip_id):
-        print(f"DEBUG: TripTrackingView.post called for trip_id: {trip_id}")
         real_trip_id = decode_id(trip_id)
         try:
             trip = Trip.objects.get(trip_id=real_trip_id)
         except Trip.DoesNotExist:
-            print(f"DEBUG: Trip {real_trip_id} not found for POST")
             return Response({"error": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
 
         # Only trip owner can post tracking points
         user = getattr(request, 'custom_user', None)
-        print(f"DEBUG: POST Requester: {user.employee_id if user else 'Anonymous'}")
         
         if not user or trip.user != user:
-            print(f"DEBUG: POST Unauthorized for user {user.employee_id if user else 'None'}")
             return Response({"error": "Only trip owner can submit tracking data"}, status=status.HTTP_403_FORBIDDEN)
 
         data = request.data.copy()
@@ -500,10 +491,8 @@ class TripTrackingView(APIView):
         serializer = TripTrackingSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
-            print("DEBUG: Tracking point saved successfully")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
-        print(f"DEBUG: Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ApprovalCountView(APIView):
@@ -2819,10 +2808,14 @@ class LocalSubTypeMasterViewSet(viewsets.ModelViewSet):
         is_car = self.request.query_params.get('is_car')
         is_bike = self.request.query_params.get('is_bike')
         is_auto = self.request.query_params.get('is_auto')
+        is_bus = self.request.query_params.get('is_bus')
+        is_metro = self.request.query_params.get('is_metro')
         
         if is_car is not None: queryset = queryset.filter(is_car=is_car.lower() == 'true')
         if is_bike is not None: queryset = queryset.filter(is_bike=is_bike.lower() == 'true')
         if is_auto is not None: queryset = queryset.filter(is_auto=is_auto.lower() == 'true')
+        if is_bus is not None: queryset = queryset.filter(is_bus=is_bus.lower() == 'true')
+        if is_metro is not None: queryset = queryset.filter(is_metro=is_metro.lower() == 'true')
         return queryset
 
 class LocalProviderMasterViewSet(viewsets.ModelViewSet):
@@ -2888,3 +2881,84 @@ class CustomMasterValueViewSet(viewsets.ModelViewSet):
     filterset_fields = ['definition']
 
 
+class UserDailyTrackingViewSet(viewsets.ModelViewSet):
+    queryset = UserDailyTracking.objects.all()
+    serializer_class = UserDailyTrackingSerializer
+    permission_classes = [IsCustomAuthenticated]
+
+    def perform_create(self, serializer):
+        device_id = self.request.data.get('device_id')
+        serializer.save(user=self.request.user, device_id=device_id)
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = UserDailyTracking.objects.filter(user=user)
+        date_str = self.request.query_params.get('date')
+        if date_str:
+            queryset = queryset.filter(timestamp__date=date_str)
+        return queryset
+
+class FieldTrackingViewSet(viewsets.ModelViewSet):
+    queryset = FieldTracking.objects.all()
+    serializer_class = FieldTrackingSerializer
+    permission_classes = [IsCustomAuthenticated]
+
+    def perform_create(self, serializer):
+        device_id = self.request.data.get('device_id')
+        serializer.save(user=self.request.user, device_id=device_id)
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = FieldTracking.objects.filter(user=user)
+        date_str = self.request.query_params.get('date')
+        if date_str:
+            queryset = queryset.filter(timestamp__date=date_str)
+        return queryset
+
+
+class TeamLiveTrackingView(APIView):
+    permission_classes = [IsCustomAuthenticated]
+
+    def get(self, request):
+        user = getattr(request, 'custom_user', None)
+        if not user:
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        user_role = user.role.name.lower() if user and user.role else ''
+        is_admin = user_role in ['admin', 'it-admin', 'superuser']
+        
+        # Get active trips for today
+        today = timezone.now().date()
+        trips = Trip.objects.filter(
+            start_date__lte=today,
+            end_date__gte=today,
+            status__in=['Approved', 'Journey Started', 'On Route']
+        ).select_related('user')
+        
+        if not is_admin:
+            # Filter by reporting manager hierarchy if not admin
+            trips = trips.filter(
+                Q(user__reporting_manager=user) | 
+                Q(user__senior_manager=user) | 
+                Q(user__hod_director=user) |
+                Q(current_approver=user)
+            ).distinct()
+
+        results = []
+        for trip in trips:
+            latest = TripTracking.objects.filter(trip=trip).order_by('-timestamp').first()
+            if latest:
+                results.append({
+                    'trip_id': trip.trip_id,
+                    'employee_name': trip.user.name or trip.user.username or f"User {trip.user.employee_id or trip.user.id}",
+                    'employee_id': trip.user.employee_id,
+                    'destination': trip.destination,
+                    'purpose': trip.purpose,
+                    'latitude': latest.latitude,
+                    'longitude': latest.longitude,
+                    'last_updated': latest.timestamp.isoformat(),
+                    'consider_as_local': trip.consider_as_local,
+                    'is_logged_out': not trip.user.is_active
+                })
+        
+        return Response(results)

@@ -10,11 +10,11 @@ import '../services/location_tracking_service.dart';
 import '../services/trip_service.dart';
 import '../services/expense_reminder_service.dart';
 import 'notifications_screen.dart';
-import 'frs_attendance_screen.dart';
 import 'frs_enrollment_screen.dart';
 import 'profile_page.dart';
-import 'my_trips_screen.dart';
 import 'help_support_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
 
 /// Comprehensive role-based dashboard that displays modules as cards
 class RoleBasedDashboard extends StatefulWidget {
@@ -39,10 +39,8 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   late List<NavigationModule> _mainModules;
   late List<NavigationModule> _managementModules;
   List<NotificationItem> _notifications = [];
-  bool _isLoadingNotifs = true;
   int _currentIndex = 1; // Default to Dashboard (index 1)
 
-  bool _frsVerifiedThisSession = false;
   bool _isFaceEnrolled = false;
   Map<String, dynamic>? _dashboardStats;
   bool _isLoadingStats = true;
@@ -106,12 +104,95 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
     } catch (e) {
       debugPrint('INIT_SAFE_DATA: $e');
     }
+
+    try {
+       _verifyAlwaysTrackingPermission();
+    } catch (e) {
+       debugPrint('INIT_SAFE_PERM_VERIFY: $e');
+    }
+  }
+
+  /// Verification for background location permissions to comply with Android 10+ strict monitoring
+  Future<void> _verifyAlwaysTrackingPermission() async {
+    const String lastRemindKey = 'last_location_remind_v2';
+    final prefs = await SharedPreferences.getInstance();
+    final lastRemindedStr = prefs.getString(lastRemindKey);
+    final now = DateTime.now();
+    
+    // Only remind once every 24 hours to avoid annoyance
+    if (lastRemindedStr != null) {
+      final lastReminded = DateTime.parse(lastRemindedStr);
+      if (now.difference(lastReminded).inHours < 24) return;
+    }
+
+    // Check if Always permission is granted
+    bool hasAlways = await LocationTrackingService.checkAlwaysPermission();
+    if (!hasAlways && mounted) {
+      _showTrackingRationaleDialog();
+      await prefs.setString(lastRemindKey, now.toIso8601String());
+    }
+  }
+
+  void _showTrackingRationaleDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.location_on, color: Color(0xFFBB0633)),
+            SizedBox(width: 10),
+            Text('Background Tracking', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'For the "Smart Hub Sync" system to record your activity accurately even when the app is closed, please enable:',
+              style: TextStyle(fontSize: 14),
+            ),
+            SizedBox(height: 15),
+            Row(
+              children: [
+                Icon(Icons.check_circle, size: 16, color: Colors.green),
+                SizedBox(width: 8),
+                Expanded(child: Text('Location: "Allow all the time"', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+              ],
+            ),
+            SizedBox(height: 10),
+            Text(
+              'This is required by Android 10+ for company tracking protocols.',
+              style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Later', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFBB0633),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+              await Geolocator.openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _fetchDashboardData() async {
-    if (mounted) {
-      setState(() => _isLoadingStats = true);
-    }
+    setState(() => _isLoadingStats = true);
     try {
       final stats = await _tripService.fetchDashboardStats();
       if (mounted) {
@@ -129,13 +210,11 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   void _checkFrsStatus() {
     final user = _apiService.getUser();
     if (user != null) {
-      if (mounted) {
-        setState(() {
-          _isFaceEnrolled = user['is_face_enrolled'] == true;
-          _empId = (user['employee_id'] ?? user['emp_id'] ?? user['id'] ?? '')
-              .toString();
-        });
-      }
+      setState(() {
+        _isFaceEnrolled = user['is_face_enrolled'] == true;
+        _empId = (user['employee_id'] ?? user['emp_id'] ?? user['id'] ?? '')
+            .toString();
+      });
     }
   }
 
@@ -144,36 +223,17 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
       context,
       MaterialPageRoute(builder: (context) => const FrsEnrollmentScreen()),
     );
-    if (!mounted) {
-      return;
-    }
     if (result == true) {
       // Refresh status after enrollment
       await _apiService.fetchFreshUser();
-      if (!mounted) {
-        return;
-      }
       _checkFrsStatus();
     }
   }
 
-  Future<void> _performFRS() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const FrsAttendanceScreen()),
-    );
-
-    if (result == true && mounted) {
-      setState(() => _frsVerifiedThisSession = true);
-    }
-  }
 
   Future<void> _syncExpenseReminders() async {
     try {
       final trips = await _tripService.fetchTrips();
-      if (!mounted) {
-        return;
-      }
       await ExpenseReminderService.syncTripExpenseReminders(trips);
     } catch (e) {
       debugPrint('Failed to sync expense reminders: $e');
@@ -181,9 +241,6 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   }
 
   Future<void> _fetchNotifications() async {
-    if (mounted) {
-      setState(() => _isLoadingNotifs = true);
-    }
     try {
       final response = await _apiService.get(ApiConstants.notifications);
       if (mounted) {
@@ -196,12 +253,10 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                     )
                     .toList()
               : [];
-          _isLoadingNotifs = false;
         });
       }
     } catch (e) {
       debugPrint("Failed to fetch notifications: $e");
-      if (mounted) setState(() => _isLoadingNotifs = false);
     }
   }
 
@@ -279,7 +334,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: _currentIndex == 1, // Only allow pop if on Dashboard tab
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_currentIndex != 1) {
           setState(() => _currentIndex = 1);
@@ -302,119 +357,6 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
     );
   }
 
-  Widget _buildFRSVerificationCard() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              Container(
-                width: 6,
-                color: _frsVerifiedThisSession
-                    ? const Color(0xFF10B981)
-                    : const Color(0xFF7C1D1D),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color:
-                              (_frsVerifiedThisSession
-                                      ? const Color(0xFF10B981)
-                                      : const Color(0xFFBB0633))
-                                  .withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _frsVerifiedThisSession
-                              ? Icons.verified_user
-                              : Icons.face_unlock_rounded,
-                          color: _frsVerifiedThisSession
-                              ? const Color(0xFF10B981)
-                              : const Color(0xFFBB0633),
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _frsVerifiedThisSession
-                                  ? 'Identity Verified'
-                                  : 'Action Required',
-                              style: GoogleFonts.outfit(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFF0F172A),
-                              ),
-                            ),
-                            Text(
-                              _frsVerifiedThisSession
-                                  ? 'Authenticated for this session'
-                                  : 'Face Verification (FRS) required',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: const Color(0xFF64748B),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (!_frsVerifiedThisSession)
-                        ElevatedButton(
-                          onPressed: _performFRS,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFBB0633),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: Text(
-                            'VERIFY',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildDashboardHome() {
     return RefreshIndicator(
@@ -668,9 +610,12 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                     end: Alignment.bottomRight,
                     colors: [
                       color,
-                      color
-                          .withBlue(color.blue + 20)
-                          .withRed(color.red - 20), // Subtle gradient shift
+                      Color.from(
+                        alpha: color.a,
+                        red: (color.r * 255 - 20).clamp(0, 255) / 255,
+                        green: color.g,
+                        blue: (color.b * 255 + 20).clamp(0, 255) / 255,
+                      ), // Subtle gradient shift
                     ],
                   ),
                   borderRadius: BorderRadius.circular(24),
@@ -771,158 +716,7 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
     );
   }
 
-  Widget _buildRecentActivity() {
-    final activity = _dashboardStats?['recent_activity'] as List? ?? [];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 32, 20, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'RECENT TRIPS',
-                style: GoogleFonts.outfit(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF94A3B8),
-                  letterSpacing: 1.2,
-                ),
-              ),
-              TextButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MyTripsScreen()),
-                ),
-                child: Text(
-                  'View All',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFFBB0633),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (activity.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            child: Text('No recent activity found.'),
-          )
-        else
-          ...activity.map(
-            (item) => Container(
-              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFF1F5F9)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.business_center,
-                      color: Color(0xFF64748B),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          (item['title'] ?? '').toString(),
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF0F172A),
-                            fontSize: 13,
-                          ),
-                        ),
-                        Text(
-                          (item['subtitle'] ?? '').toString(),
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF64748B),
-                            fontSize: 11,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        (item['amount'] ?? '').toString(),
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF0F172A),
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                            color: _getStatusColor(
-                              (item['status'] ?? '').toString(),
-                            ).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          (item['status'] ?? '').toString().toUpperCase(),
-                          style: GoogleFonts.inter(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w900,
-                            color: _getStatusColor(
-                              (item['status'] ?? '').toString(),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Color _getStatusColor(String? status) {
-    if (status == null) {
-      return const Color(0xFF64748B);
-    }
-    switch (status.toLowerCase()) {
-      case 'approved':
-      case 'paid':
-      case 'completed':
-        return const Color(0xFF10B981);
-      case 'pending':
-        return Colors.orange;
-      case 'rejected':
-        return Colors.red;
-      default:
-        return const Color(0xFF64748B);
-    }
-  }
 
   Widget _buildWalletDisplay() {
     // show only the advance balance (wallet removed per request)
@@ -1300,12 +1094,12 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
         ),
       ],
     ).then((value) {
-      if (!mounted) return;
       if (value == 'profile') {
         setState(() {
           _currentIndex = 2;
         });
       } else if (value == 'help') {
+        if (!context.mounted) return;
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const HelpSupportScreen()),
@@ -1390,8 +1184,8 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
                 decoration: BoxDecoration(
                   gradient: RadialGradient(
                     colors: [
-                       module.iconColor.withValues(alpha: 0.06),
-                       module.iconColor.withValues(alpha: 0),
+                      module.iconColor.withValues(alpha: 0.06),
+                      module.iconColor.withValues(alpha: 0),
                     ],
                   ),
                   shape: BoxShape.circle,
@@ -1465,25 +1259,4 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 60),
-      child: Center(
-        child: Column(
-          children: [
-            Icon(Icons.lock_outline, size: 48, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'No modules available',
-              style: GoogleFonts.interTight(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

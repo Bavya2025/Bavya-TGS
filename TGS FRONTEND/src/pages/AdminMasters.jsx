@@ -10,7 +10,8 @@ import {
     Search,
     RefreshCw,
     X,
-    Save
+    Save,
+    Smartphone
 } from 'lucide-react';
 import api from '../api/api';
 import { useToast } from '../context/ToastContext';
@@ -53,6 +54,13 @@ const AdminMasters = () => {
         districts: [] // Array of location IDs
     });
 
+    const [mobilityConfig, setMobilityConfig] = useState({
+        interval_minutes: 15,
+        distance_filter: 100,
+        is_active: true,
+        daily_tracking_active: true
+    });
+
     const { showToast } = useToast();
 
     // Constant options across categories
@@ -66,7 +74,8 @@ const AdminMasters = () => {
 
     const tabs = [
         { name: 'Eligibility', icon: <Shield size={18} /> },
-        { name: 'Jurisdiction', icon: <Globe size={18} /> }
+        { name: 'Jurisdiction', icon: <Globe size={18} /> },
+        { name: 'Mobility', icon: <Smartphone size={18} /> }
     ];
 
     const categories = [
@@ -86,8 +95,34 @@ const AdminMasters = () => {
             fetchJurisdictions();
             fetchProjects();
             fetchStates();
+        } else if (activeTab === 'Mobility') {
+            fetchMobilityConfig();
         }
     }, [activeTab]);
+
+    const fetchMobilityConfig = async () => {
+        setLoading(true);
+        try {
+            const response = await api.get('/api/tracking-config/');
+            setMobilityConfig(response.data);
+        } catch (error) {
+            showToast("Failed to load mobility config", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSaveMobilityConfig = async () => {
+        setLoading(true);
+        try {
+            await api.post('/api/tracking-config/', mobilityConfig);
+            showToast("Mobility configuration updated successfully!", "success");
+        } catch (error) {
+            showToast("Failed to update mobility config", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const fetchJurisdictions = async () => {
         setLoading(true);
@@ -507,10 +542,12 @@ const AdminMasters = () => {
                             <span>{syncing ? 'Syncing...' : 'Sync Cadres'}</span>
                         </button>
                     )}
-                    <button className="btn-primary" onClick={() => openModal()}>
-                        <Plus size={18} />
-                        <span>Add New Entry</span>
-                    </button>
+                    {activeTab !== 'Mobility' && (
+                        <button className="btn-primary" onClick={() => openModal()}>
+                            <Plus size={18} />
+                            <span>Add New Entry</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -643,6 +680,76 @@ const AdminMasters = () => {
                                 </table>
                             )}
                         </>
+                    ) : activeTab === 'Mobility' ? (
+                        <div className="mobility-config-section" style={{ padding: '2rem', maxWidth: '800px' }}>
+                            <div style={{ marginBottom: '2rem' }}>
+                                <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--text-main)' }}>GPS Tracking Parameters</h3>
+                                <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>Configure how the mobile application tracks employee location in background.</p>
+                            </div>
+
+                            <div className="settings-grid" style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: '1fr 1fr' }}>
+                                <div className="setting-item premium-card" style={{ padding: '1.5rem' }}>
+                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Update Interval (Minutes)</label>
+                                    <input 
+                                        type="number" 
+                                        className="form-input" 
+                                        value={mobilityConfig.interval_minutes}
+                                        onChange={(e) => setMobilityConfig({...mobilityConfig, interval_minutes: parseInt(e.target.value)})}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1.5px solid var(--border)' }}
+                                    />
+                                    <small style={{ color: 'var(--text-dim)', fontSize: '0.75rem', marginTop: '0.5rem', display: 'block' }}>Recommendation: 15-30 minutes to save battery.</small>
+                                </div>
+
+                                <div className="setting-item premium-card" style={{ padding: '1.5rem' }}>
+                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Distance Filter (Meters)</label>
+                                    <input 
+                                        type="number" 
+                                        className="form-input" 
+                                        value={mobilityConfig.distance_filter}
+                                        onChange={(e) => setMobilityConfig({...mobilityConfig, distance_filter: parseInt(e.target.value)})}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1.5px solid var(--border)' }}
+                                    />
+                                    <small style={{ color: 'var(--text-dim)', fontSize: '0.75rem', marginTop: '0.5rem', display: 'block' }}>Minimum movement before triggering an update.</small>
+                                </div>
+
+                                <div className="setting-item premium-card" style={{ padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <label style={{ fontWeight: '700', display: 'block' }}>Global Tracking Active</label>
+                                        <small style={{ color: 'var(--text-dim)' }}>Enable/Disable tracking system-wide.</small>
+                                    </div>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={mobilityConfig.is_active}
+                                        onChange={(e) => setMobilityConfig({...mobilityConfig, is_active: e.target.checked})}
+                                        style={{ width: '24px', height: '24px', accentColor: 'var(--primary)' }}
+                                    />
+                                </div>
+
+                                <div className="setting-item premium-card" style={{ padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <label style={{ fontWeight: '700', display: 'block' }}>Non-Trip Daily Tracking</label>
+                                        <small style={{ color: 'var(--text-dim)' }}>Enable tracking even when no trip is active.</small>
+                                    </div>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={mobilityConfig.daily_tracking_active}
+                                        onChange={(e) => setMobilityConfig({...mobilityConfig, daily_tracking_active: e.target.checked})}
+                                        style={{ width: '24px', height: '24px', accentColor: 'var(--primary)' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+                                <button 
+                                    className="btn-primary" 
+                                    onClick={handleSaveMobilityConfig}
+                                    style={{ padding: '12px 32px' }}
+                                >
+                                    <Save size={18} />
+                                    <span>Save Global Configuration</span>
+                                </button>
+                            </div>
+                        </div>
                     ) : (
 
                         <>

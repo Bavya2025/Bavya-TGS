@@ -21,12 +21,12 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
   List<Map<String, dynamic>> _hubs = [];
   List<Map<String, dynamic>> _filteredHubs = [];
   Map<String, dynamic>? _selectedHub;
-  String _searchQuery = "";
+
 
   bool _isAdmin = false;
   bool _showRequests = false;
   List<Map<String, dynamic>> _fleetRequests = [];
-  bool _isReqLoading = false;
+
 
   late TabController _tabController;
 
@@ -136,54 +136,48 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
     setState(() => _isLoading = true);
     try {
       final list = await _tripService.fetchFleetHubs();
-      setState(() {
-        _hubs = list.map((h) => _normalizeHub(h)).toList();
-        _filteredHubs = _hubs;
-        _isLoading = false;
-      });
-    } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _hubs = list.map((h) => _normalizeHub(h)).toList();
+          _filteredHubs = _hubs;
+          _isLoading = false;
+        });
       }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _fetchFleetRequests() async {
-    setState(() => _isReqLoading = true);
     try {
       final trips = await _tripService.fetchTrips(all: true);
-      setState(() {
-        _fleetRequests = trips.where((t) => 
-          (t.accommodationRequests?.contains('Request for Company Vehicle') ?? false) && 
-          !t.hasVehicleBooking
-        ).map((t) => {
-          'trip_id': t.tripId,
-          'trip_leader': t.employee,
-          'destination': t.destination,
-          'purpose': t.title,
-          'start_date': t.startDate,
-          'end_date': t.endDate,
-          'original_trip': t,
-        }).toList();
-        _isReqLoading = false;
-      });
-    } catch (e) {
       if (mounted) {
-        setState(() => _isReqLoading = false);
+        setState(() {
+          _fleetRequests = trips.where((t) => 
+            (t.accommodationRequests?.contains('Request for Company Vehicle') ?? false) && 
+            !t.hasVehicleBooking
+          ).map((t) => {
+            'trip_id': t.tripId,
+            'trip_leader': t.employee,
+            'destination': t.destination,
+            'purpose': t.title,
+            'start_date': t.startDate,
+            'end_date': t.endDate,
+            'original_trip': t,
+          }).toList();
+        });
       }
+    } catch (e) {
+      debugPrint('Error fetching fleet requests: $e');
     }
   }
 
   void _applySearch(String query) {
     setState(() {
-      _searchQuery = query;
       _filteredHubs = _hubs.where((h) {
         final name = h['name']?.toString().toLowerCase() ?? "";
         final loc = h['location']?.toString().toLowerCase() ?? "";
-        if (name.contains(query.toLowerCase())) {
-          return true;
-        }
-        return loc.contains(query.toLowerCase());
+        return name.contains(query.toLowerCase()) || loc.contains(query.toLowerCase());
       }).toList();
     });
   }
@@ -283,19 +277,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: active ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: active
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  )
-                ]
-              : null,
-        ),
+        decoration: BoxDecoration(color: active ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(12), boxShadow: active ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 2))] : null),
         child: Center(child: Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w900, color: active ? const Color(0xFF7C1D1D) : Colors.black26))),
       ),
     );
@@ -327,18 +309,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
       }),
       child: Container(
         margin: const EdgeInsets.only(bottom: 20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFF1F5F9)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            )
-          ],
-        ),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFFF1F5F9)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(0, 8))]),
         child: Column(
           children: [
             Stack(
@@ -352,26 +323,11 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
                     : const Center(child: Icon(Icons.location_city_rounded, size: 50, color: Colors.black12)),
                 ),
                 Positioned(top: 15, right: 15, child: _hubStatusBadge(hub['isActive'])),
-                if (_isAdmin)
-                  Positioned(
-                    top: 15,
-                    left: 15,
-                    child: Row(
-                      children: [
-                        _circleAction(
-                          Icons.edit_rounded,
-                          Colors.blue,
-                          () => _openAddEditHubModal(hub: hub),
-                        ),
-                        const SizedBox(width: 8),
-                        _circleAction(
-                          Icons.delete_outline_rounded,
-                          Colors.red,
-                          () => _confirmDeleteHub(hub),
-                        ),
-                      ],
-                    ),
-                  ),
+                if (_isAdmin) Positioned(top: 15, left: 15, child: Row(children: [
+                  _circleAction(Icons.edit_rounded, Colors.blue, () => _openAddEditHubModal(hub: hub)),
+                  const SizedBox(width: 8),
+                  _circleAction(Icons.delete_outline_rounded, Colors.red, () => _confirmDeleteHub(hub)),
+                ])),
               ],
             ),
             Padding(
@@ -453,20 +409,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
   }
 
   Widget _buildRequestCard(Map<String, dynamic> req) {
-    final Map<String, dynamic>? matchingHub =
-        _hubs.cast<Map<String, dynamic>?>().firstWhere(
-      (h) {
-        if (h == null) {
-          return false;
-        }
-        return h['location']
-                .toLowerCase()
-                .contains(req['destination'].toLowerCase()) ||
-            req['destination']
-                .toLowerCase()
-                .contains(h['name'].toLowerCase());
-      },
-      orElse: () => null,
+    final Map<String, dynamic>? matchingHub = _hubs.cast<Map<String, dynamic>?>().firstWhere((h) => 
+      h!['location'].toLowerCase().contains(req['destination'].toLowerCase()) ||
+      req['destination'].toLowerCase().contains(h['name'].toLowerCase()),
+      orElse: () => null
     );
 
     final hasAvailable = matchingHub != null && (matchingHub['vehicles'] as List).any((v) => v['status'] == 'Available');
@@ -483,10 +429,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF7C1D1D).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                decoration: BoxDecoration(color: const Color(0xFF7C1D1D).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
                 child: Text('VEHICLE REQUEST', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF7C1D1D))),
               ),
               Text(req['trip_id'], style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black45)),
@@ -500,12 +443,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: hasAvailable
-                    ? const Color(0xFF22C55E).withValues(alpha: 0.1)
-                    : const Color(0xFFEF4444).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
+              decoration: BoxDecoration(color: hasAvailable ? const Color(0xFF22C55E).withValues(alpha: 0.1) : const Color(0xFFEF4444).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
               child: Row(
                 children: [
                   Icon(hasAvailable ? Icons.check_circle_rounded : Icons.info_rounded, size: 16, color: hasAvailable ? const Color(0xFF22C55E) : const Color(0xFFEF4444)),
@@ -641,14 +579,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFF1F5F9))),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(Icons.directions_car_rounded, color: statusColor),
-          ),
+          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)), child: Icon(Icons.directions_car_rounded, color: statusColor)),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(v['plate_number'], style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
@@ -660,21 +591,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
             ],
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                v['status'].toUpperCase(),
-                style: GoogleFonts.inter(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w900,
-                  color: statusColor,
-                ),
-              ),
-            ),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text(v['status'].toUpperCase(), style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: statusColor))),
             if (_isAdmin) Row(children: [
               IconButton(icon: const Icon(Icons.edit_rounded, size: 18, color: Colors.black26), onPressed: () => _openAddItemModal('vehicles', item: v)),
               IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent), onPressed: () => _confirmDeleteItem('vehicles', v)),
@@ -692,14 +609,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFF1F5F9))),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF7C1D1D).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.person_pin_rounded, color: Color(0xFF7C1D1D)),
-          ),
+          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF7C1D1D).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.person_pin_rounded, color: Color(0xFF7C1D1D))),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(d['name'], style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: const Color(0xFF0F172A))),
@@ -762,17 +672,16 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
           SizedBox(width: double.infinity, child: ElevatedButton(
             onPressed: () async {
               if (nameCtrl.text.isEmpty || addrCtrl.text.isEmpty || pinCtrl.text.isEmpty) return;
-                await _tripService.saveFleetHub({
-                  'name': nameCtrl.text,
-                  'address': addrCtrl.text,
-                  'location': addrCtrl.text,
-                  'pincode': pinCtrl.text,
-                  'is_active': active,
-                }, id: hub?['id']);
-                if (mounted) {
-                  Navigator.pop(context);
-                  _fetchHubs();
-                }
+              await _tripService.saveFleetHub({
+                'name': nameCtrl.text,
+                'address': addrCtrl.text,
+                'location': addrCtrl.text,
+                'pincode': pinCtrl.text,
+                'is_active': active,
+              }, id: hub?['id']);
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              _fetchHubs();
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C1D1D), padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
             child: Text('SAVE HUB', style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: Colors.white)),
@@ -834,17 +743,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
                   targetHubId = _selectedHub!['id'];
                   return;
                 }
-                final match = _hubs.cast<Map<String, dynamic>?>().firstWhere(
-                  (h) {
-                    if (h == null) {
-                      return false;
-                    }
-                    return h['name']
-                        .toString()
-                        .toLowerCase()
-                        .contains(query.toLowerCase());
-                  },
-                  orElse: () => null,
+                final match = _hubs.cast<Map<String, dynamic>? >().firstWhere(
+                  (h) => h!['name'].toString().toLowerCase().contains(query.toLowerCase()),
+                  orElse: () => null
                 );
                 if (match != null) {
                   suggestedHub = match;
@@ -860,11 +761,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
-                ),
+                decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withValues(alpha: 0.2))),
                 child: Row(
                   children: [
                     const Icon(Icons.location_on_rounded, size: 16, color: Colors.blue),
@@ -881,10 +778,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: const Color(0xFF7C1D1D).withValues(alpha: 0.2),
-                    style: BorderStyle.solid,
-                  ),
+                  border: Border.all(color: const Color(0xFF7C1D1D).withValues(alpha: 0.2), style: BorderStyle.solid),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -916,18 +810,16 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
                             // Re-fetch to get the new hub
                             await _fetchHubs();
                             final newHub = _hubs.firstWhere((h) => h['name'] == newHubNameCtrl.text);
-                            if (mounted) {
-                              sb(() {
-                                targetHubId = newHub['id'];
-                                suggestedHub = newHub;
-                                showCreateHubPrompt = false;
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Hub "${newHub['name']}" created and vehicle scheduled for transfer!')));
-                            }
+                            sb(() {
+                              targetHubId = newHub['id'];
+                              suggestedHub = newHub;
+                              showCreateHubPrompt = false;
+                            });
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Hub "${newHub['name']}" created and vehicle scheduled for transfer!')));
                           } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                            }
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
                           }
                         },
                         child: Text('CREATE HUB & TRANSFER', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
@@ -958,10 +850,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
                 'hub': _selectedHub!['id'],
               };
               await _tripService.saveFleetItem(type, data, id: item?['id']);
-              if (mounted) {
-                Navigator.pop(context);
-                _refreshSelectedHub();
-              }
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              _refreshSelectedHub();
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C1D1D), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
             child: const Text('SAVE', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
@@ -990,7 +881,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
           _modalHeader('ASSIGN VEHICLE'),
           _inputLabel('SELECT VEHICLE*'),
           DropdownButtonFormField<Map<String, dynamic>>(
-            value: selectedV,
+            initialValue: selectedV,
             items: availableVehicles.map<DropdownMenuItem<Map<String, dynamic>>>((v) => DropdownMenuItem(value: v, child: Text('${v['plate_number']} - ${v['model_name']}'))).toList(),
             onChanged: (v) => sb(() => selectedV = v),
             decoration: _inputDecor('Choose available vehicle'),
@@ -998,7 +889,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
           const SizedBox(height: 16),
           _inputLabel('ASSIGN DRIVER (OPTIONAL)'),
           DropdownButtonFormField<Map<String, dynamic>>(
-            value: selectedD,
+            initialValue: selectedD,
             items: availableDrivers.map<DropdownMenuItem<Map<String, dynamic>>>((d) => DropdownMenuItem(value: d, child: Text('${d['name']} (${d['phone']})'))).toList(),
            onChanged: (d) => sb(() => selectedD = d),
             decoration: _inputDecor('Choose available driver'),
@@ -1019,12 +910,11 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
                 'requester_name': req['trip_leader'],
                 'remarks': remarksCtrl.text,
               });
-              if (mounted) {
-                Navigator.pop(context);
-                _fetchFleetRequests();
-                _fetchHubs();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vehicle assigned and employee notified!')));
-              }
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              _fetchFleetRequests();
+              _fetchHubs();
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vehicle assigned and employee notified!')));
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C1D1D), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
             child: const Text('CONFIRM ASSIGNMENT', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
@@ -1053,14 +943,12 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
         'accommodation_requests': updatedRequests,
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Employee notified and request cleared.')));
-        _fetchFleetRequests();
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Employee notified and request cleared.')));
+      _fetchFleetRequests();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -1080,10 +968,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
         TextButton(onPressed: () async {
           await _tripService.deleteFleetHub(hub['id']);
-          if (mounted) {
-            Navigator.pop(ctx);
-            _fetchHubs();
-          }
+          if (!context.mounted) return;
+          Navigator.pop(ctx);
+          _fetchHubs();
         }, child: const Text('DELETE', style: TextStyle(color: Colors.red))),
       ],
     ));
@@ -1097,10 +984,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
         TextButton(onPressed: () async {
           await _tripService.deleteFleetItem(type, item['id']);
-          if (mounted) {
-            Navigator.pop(ctx);
-            _refreshSelectedHub();
-          }
+          if (!context.mounted) return;
+          Navigator.pop(ctx);
+          _refreshSelectedHub();
         }, child: const Text('DELETE', style: TextStyle(color: Colors.red))),
       ],
     ));
@@ -1125,7 +1011,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
     return Column(children: [
       _inputLabel(label),
       DropdownButtonFormField<String>(
-        value: valueExists ? value : items.first,
+        initialValue: valueExists ? value : items.first,
         items: items.map((i) => DropdownMenuItem(value: i, child: Text(i.toUpperCase()))).toList(),
         onChanged: onChanged,
         decoration: _inputDecor(''),

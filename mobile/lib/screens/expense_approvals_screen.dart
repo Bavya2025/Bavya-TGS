@@ -30,6 +30,7 @@ class _ExpenseApprovalsScreenState extends State<ExpenseApprovalsScreen> {
       });
     } catch (e) {
       setState(() => _isLoading = false);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
@@ -48,6 +49,7 @@ class _ExpenseApprovalsScreenState extends State<ExpenseApprovalsScreen> {
         default:
           verb = '${action.toLowerCase()}ed';
       }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Request $verb successfully'), backgroundColor: Colors.green),
       );
@@ -55,6 +57,7 @@ class _ExpenseApprovalsScreenState extends State<ExpenseApprovalsScreen> {
     } catch (e) {
       String message = e.toString();
       if (e is Map && e.containsKey('error')) message = e['error'].toString();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Action failed: $message'), backgroundColor: Colors.red),
       );
@@ -75,7 +78,7 @@ class _ExpenseApprovalsScreenState extends State<ExpenseApprovalsScreen> {
               width: 350,
               height: 350,
               decoration: BoxDecoration(
-                gradient: RadialGradient(colors: [const Color(0xFFA9052E).withOpacity(0.02), Colors.transparent]),
+                gradient: RadialGradient(colors: [const Color(0xFFA9052E).withValues(alpha: 0.02), Colors.transparent]),
                 shape: BoxShape.circle,
               ),
             ),
@@ -115,7 +118,7 @@ class _ExpenseApprovalsScreenState extends State<ExpenseApprovalsScreen> {
         children: [
           Positioned(
             right: -20, top: -20,
-            child: Container(width: 130, height: 130, decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), shape: BoxShape.circle)),
+            child: Container(width: 130, height: 130, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), shape: BoxShape.circle)),
           ),
           SafeArea(
             child: Padding(
@@ -130,7 +133,7 @@ class _ExpenseApprovalsScreenState extends State<ExpenseApprovalsScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(Icons.receipt_long_rounded, color: Colors.white, size: 24),
@@ -145,7 +148,7 @@ class _ExpenseApprovalsScreenState extends State<ExpenseApprovalsScreen> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -202,7 +205,7 @@ class _ExpenseApprovalsScreenState extends State<ExpenseApprovalsScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 15, offset: const Offset(0, 4))],
       ),
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -215,7 +218,7 @@ class _ExpenseApprovalsScreenState extends State<ExpenseApprovalsScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFBB0633).withOpacity(0.08),
+                    color: const Color(0xFFBB0633).withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -298,7 +301,7 @@ class _ExpenseApprovalsScreenState extends State<ExpenseApprovalsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 8,
-                      shadowColor: const Color(0xFF0F1E2A).withOpacity(0.4),
+                      shadowColor: const Color(0xFF0F1E2A).withValues(alpha: 0.4),
                     ),
                     child: Text('VERIFY CLAIM', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
                   ),

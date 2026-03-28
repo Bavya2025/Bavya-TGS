@@ -6,7 +6,7 @@ class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
 
   @override
-  _SignUpScreenState createState() => _SignUpScreenState();
+  State<SignUpScreen> createState() => _SignUpScreenState();
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
@@ -16,18 +16,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _videoController = VideoPlayerController.asset('assets/background.mp4')
       ..initialize().then((_) {
-        if (mounted) {
-          _videoController.play();
-          _videoController.setLooping(true);
-          setState(() {});
-        }
+        _videoController.play();
+        _videoController.setLooping(true);
+        setState(() {});
       });
   }
 

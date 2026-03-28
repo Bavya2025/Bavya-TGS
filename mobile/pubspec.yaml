@@ -1,6 +1,6 @@
 name: mobile
 description: "A new Flutter project."
-publish_to: 'none'
+publish_to: "none"
 
 version: 1.0.0+1
 
@@ -11,6 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  device_info_plus: ^10.1.0
   http: ^1.1.0
   google_fonts: ^6.1.0
   video_player: ^2.7.0
@@ -30,11 +31,24 @@ dependencies:
   url_launcher: ^6.2.1
   open_filex: ^4.3.4
   flutter_background_service: ^5.0.0
+  flutter_background_service_android: ^6.1.1
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  permission_handler: ^11.3.1
+  package_info_plus: ^8.1.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logo.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/logo.png"
 
 flutter:
   uses-material-design: true

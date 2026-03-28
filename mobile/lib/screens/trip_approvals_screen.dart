@@ -30,6 +30,7 @@ class _TripApprovalsScreenState extends State<TripApprovalsScreen> {
       });
     } catch (e) {
       setState(() => _isLoading = false);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
@@ -48,6 +49,7 @@ class _TripApprovalsScreenState extends State<TripApprovalsScreen> {
         default:
           verb = '${action.toLowerCase()}ed';
       }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Trip $verb successfully'), backgroundColor: Colors.green),
       );
@@ -75,7 +77,7 @@ class _TripApprovalsScreenState extends State<TripApprovalsScreen> {
               width: 350,
               height: 350,
               decoration: BoxDecoration(
-                gradient: RadialGradient(colors: [const Color(0xFFA9052E).withOpacity(0.02), Colors.transparent]),
+                gradient: RadialGradient(colors: [const Color(0xFFA9052E).withValues(alpha: 0.02), Colors.transparent]),
                 shape: BoxShape.circle,
               ),
             ),
@@ -115,7 +117,7 @@ class _TripApprovalsScreenState extends State<TripApprovalsScreen> {
         children: [
           Positioned(
             right: -20, top: -20,
-            child: Container(width: 130, height: 130, decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), shape: BoxShape.circle)),
+            child: Container(width: 130, height: 130, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), shape: BoxShape.circle)),
           ),
           SafeArea(
             child: Padding(
@@ -130,7 +132,7 @@ class _TripApprovalsScreenState extends State<TripApprovalsScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(Icons.flight_takeoff_rounded, color: Colors.white, size: 24),
@@ -145,7 +147,7 @@ class _TripApprovalsScreenState extends State<TripApprovalsScreen> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -202,7 +204,7 @@ class _TripApprovalsScreenState extends State<TripApprovalsScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 15, offset: const Offset(0, 4))],
       ),
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -215,7 +217,7 @@ class _TripApprovalsScreenState extends State<TripApprovalsScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFBB0633).withOpacity(0.08),
+                    color: const Color(0xFFBB0633).withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -298,7 +300,7 @@ class _TripApprovalsScreenState extends State<TripApprovalsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 8,
-                      shadowColor: const Color(0xFF0F1E2A).withOpacity(0.4),
+                      shadowColor: const Color(0xFF0F1E2A).withValues(alpha: 0.4),
                     ),
                     child: Text('APPROVE TRIP', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
                   ),

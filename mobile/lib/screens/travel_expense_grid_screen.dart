@@ -13,7 +13,7 @@ class TravelExpenseGridScreen extends StatefulWidget {
   const TravelExpenseGridScreen({super.key, required this.travelId});
 
   @override
-  _TravelExpenseGridScreenState createState() => _TravelExpenseGridScreenState();
+  State<TravelExpenseGridScreen> createState() => _TravelExpenseGridScreenState();
 }
 
 class _TravelExpenseGridScreenState extends State<TravelExpenseGridScreen> {
@@ -209,7 +209,7 @@ class _TravelExpenseGridScreenState extends State<TravelExpenseGridScreen> {
                           style: GoogleFonts.plusJakartaSans(
                               fontSize: 11,
                               fontWeight: FontWeight.w900,
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withValues(alpha: 0.9),
                               letterSpacing: 1.2)),
                     ),
                     const SizedBox(height: 12),
@@ -251,7 +251,7 @@ class _TravelExpenseGridScreenState extends State<TravelExpenseGridScreen> {
               ),
               if (_isActionLoading)
                 Container(
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withValues(alpha: 0.3),
                   child: const Center(
                       child: CircularProgressIndicator(color: Colors.white)),
                 ),
@@ -264,12 +264,12 @@ class _TravelExpenseGridScreenState extends State<TravelExpenseGridScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 40,
               offset: const Offset(0, 20))
         ],
@@ -279,7 +279,7 @@ class _TravelExpenseGridScreenState extends State<TravelExpenseGridScreen> {
             style: GoogleFonts.plusJakartaSans(
                 fontSize: 10,
                 fontWeight: FontWeight.w800,
-                color: Colors.white.withOpacity(0.8),
+                color: Colors.white.withValues(alpha: 0.8),
                 letterSpacing: 1)),
         const SizedBox(height: 8),
         Text('₹${total.toStringAsFixed(2)}',
@@ -292,7 +292,7 @@ class _TravelExpenseGridScreenState extends State<TravelExpenseGridScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(20)),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.confirmation_num_outlined, color: Colors.white, size: 14),
@@ -311,8 +311,9 @@ class _TravelExpenseGridScreenState extends State<TravelExpenseGridScreen> {
     final categoryExpenses = _expenses.where((e) {
       final cat = e['category']?.toString().toLowerCase();
       if (category == 'Local Travel') return cat == 'fuel' || cat == 'local travel';
-      if (category == 'Incidental')
+      if (category == 'Incidental') {
         return cat == 'others' || cat == 'incidental' || cat == 'miscellaneous';
+      }
       return cat == category.toLowerCase();
     }).toList();
 
@@ -323,7 +324,7 @@ class _TravelExpenseGridScreenState extends State<TravelExpenseGridScreen> {
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-              color: const Color(0xFF4F46E5).withOpacity(0.06),
+              color: const Color(0xFF4F46E5).withValues(alpha: 0.06),
               blurRadius: 30,
               offset: const Offset(0, 10))
         ],
@@ -338,7 +339,7 @@ class _TravelExpenseGridScreenState extends State<TravelExpenseGridScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
+                      color: color.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(14)),
                   child: Icon(icon, color: color, size: 20),
                 ),

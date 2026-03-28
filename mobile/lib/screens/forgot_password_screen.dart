@@ -50,7 +50,7 @@ class ForgotPasswordScreen extends StatelessWidget {
             const SizedBox(height: 8),
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFFFC69E).withOpacity(0.2),
+                color: const Color(0xFFFFC69E).withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: TextField(

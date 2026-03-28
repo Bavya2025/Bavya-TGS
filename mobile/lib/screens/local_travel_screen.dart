@@ -3,9 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/trip_service.dart';
 import '../services/api_service.dart';
-import '../constants/api_constants.dart';
 import 'travel_story_screen.dart';
 
 class LocalTravelScreen extends StatefulWidget {
@@ -20,14 +20,13 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
   final TripService _tripService = TripService();
   final ApiService _apiService = ApiService();
 
-  final TextEditingController _purposeController =
-      TextEditingController(text: 'MMU INSPECTION TRAVEL SCHEDULE');
+  final TextEditingController _purposeController = TextEditingController();
   final TextEditingController _projectController = TextEditingController(text: 'General');
   String _baseLocation = 'Vijayawada';
+  String _baseLocationCode = 'VIJ';
   
   String _selectedMonth = DateFormat('yyyy-MM').format(DateTime.now());
   bool _isLoading = false;
-  bool _isDetectingManager = true;
   String _reportingManagerName = 'Loading...';
   String? _reportingManagerId;
   File? _selectedFile;
@@ -36,7 +35,22 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
   @override
   void initState() {
     super.initState();
+    _updatePurposeFromMonth(_selectedMonth);
     _detectManager();
+  }
+
+  void _updatePurposeFromMonth(String yearMonth) {
+    try {
+      final parts = yearMonth.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final date = DateTime(year, month, 1);
+      final monthAbbr = DateFormat('MMM').format(date).toUpperCase();
+      final yearShort = year.toString().substring(2);
+      _purposeController.text = 'MMU ITS $monthAbbr$yearShort';
+    } catch (e) {
+      _purposeController.text = 'MMU INSPECTION TRAVEL SCHEDULE';
+    }
   }
 
   String _normalizeId(dynamic id) {
@@ -48,9 +62,7 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
 
   Future<void> _detectManager() async {
     final user = _apiService.getUser();
-    if (user == null) {
-      return;
-    }
+    if (user == null) return;
     final myId = _normalizeId(user['employee_id'] ?? user['username']);
 
     try {
@@ -66,8 +78,10 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
       );
 
       if (me.isNotEmpty) {
+        final locName = me['office']?['name'] ?? 'Vijayawada';
         setState(() {
-          _baseLocation = me['office']?['name'] ?? 'Vijayawada';
+          _baseLocation = locName;
+          _baseLocationCode = locName.length >= 3 ? locName.substring(0, 3).toUpperCase() : 'VIJ';
         });
         // Auto-fill project from employee profile
         final projectName = me['project']?['name'] ?? '';
@@ -93,30 +107,25 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
             setState(() {
               _reportingManagerId = systemMgr['id'].toString();
               _reportingManagerName = systemMgr['name'] ?? 'Assigned Manager';
-              _isDetectingManager = false;
             });
           } else {
             setState(() {
               _reportingManagerName = 'Routing Automatically';
-              _isDetectingManager = false;
             });
           }
         } else {
           setState(() {
             _reportingManagerName = 'Routing Automatically';
-            _isDetectingManager = false;
           });
         }
       } else {
         setState(() {
           _reportingManagerName = 'Profile Missing';
-          _isDetectingManager = false;
         });
       }
     } catch (e) {
       setState(() {
         _reportingManagerName = 'Error detecting manager';
-        _isDetectingManager = false;
       });
     }
   }
@@ -132,14 +141,54 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
     }
   }
 
+  String _buildTemplateFilename() {
+    try {
+      final parts = _selectedMonth.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final date = DateTime(year, month, 1);
+      final monthAbbr = DateFormat('MMM').format(date).toUpperCase();
+      final yearShort = year.toString().substring(2);
+      final project = _projectController.text.isNotEmpty ? _projectController.text : 'GENERAL';
+      return 'ITS-$project-$_baseLocationCode-$monthAbbr$yearShort.xlsx';
+    } catch (_) {
+      return 'ITS-template.xlsx';
+    }
+  }
+
+  Future<void> _downloadTemplate() async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Downloading template...'), duration: Duration(seconds: 2)),
+      );
+      final bytes = await _tripService.downloadBulkTemplate();
+      final directory = await getTemporaryDirectory();
+      final filename = _buildTemplateFilename();
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(bytes);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Template saved: $filename'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
     
     if (_selectedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please upload the activities file'),
-            backgroundColor: Colors.red),
+        const SnackBar(content: Text('Please upload the activities file'), backgroundColor: Colors.red),
       );
       return;
     }
@@ -170,6 +219,7 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
       'travel_mode': 'Car / Jeep / Van',
       'project_code': _projectController.text,
       'consider_as_local': true,
+      if (_reportingManagerId != null) 'reporting_manager': int.tryParse(_reportingManagerId!),
     };
 
     try {
@@ -181,9 +231,7 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
       } catch (uploadError) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('Trip created, but file upload failed: $uploadError'),
-                backgroundColor: Colors.orange),
+            SnackBar(content: Text('Trip created, but file upload failed: $uploadError'), backgroundColor: Colors.orange),
           );
         }
       }
@@ -214,9 +262,7 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                  shape: BoxShape.circle),
+              decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.1), shape: BoxShape.circle),
               child: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 64),
             ),
             const SizedBox(height: 24),
@@ -328,8 +374,7 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color:
-            enabled ? Colors.white : const Color(0xFFF1F5F9).withValues(alpha: 0.5),
+        color: enabled ? Colors.white : const Color(0xFFF1F5F9).withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -369,12 +414,7 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4))
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -391,7 +431,12 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
                     style: GoogleFonts.plusJakartaSans(
                         fontWeight: FontWeight.w700)));
           }),
-          onChanged: (v) => setState(() => _selectedMonth = v!),
+          onChanged: (v) {
+            if (v != null) {
+              setState(() => _selectedMonth = v);
+              _updatePurposeFromMonth(v);
+            }
+          },
         ),
       ),
     );
@@ -439,7 +484,7 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -451,10 +496,7 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.blue.withValues(alpha: 0.1))),
+            decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withValues(alpha: 0.1))),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -465,8 +507,32 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Monthly tour plans require a validated bulk upload of daily activities.', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.blue.shade900, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
-                      Text('Need the Activity Log Template? You can download it from the Help & Support page.', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: Colors.blue.shade700)),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: _downloadTemplate,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.download_rounded, color: Color(0xFF059669), size: 16),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Download ${_buildTemplateFilename()}',
+                                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF059669), fontWeight: FontWeight.w700),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -490,15 +556,9 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _selectedFile != null
-                            ? const Color(0xFF10B981).withValues(alpha: 0.1)
-                            : Colors.white,
+                        color: _selectedFile != null ? const Color(0xFF10B981).withValues(alpha: 0.1) : Colors.white,
                         shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.05),
-                              blurRadius: 10)
-                        ],
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
                       ),
                       child: Icon(
                         _selectedFile != null ? Icons.check_circle_rounded : Icons.upload_file_rounded,

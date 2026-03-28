@@ -5,13 +5,14 @@ from .views import (
     TravelAdvanceViewSet, TripOdometerViewSet, DashboardStatsView,
     ApprovalsView, ApprovalCountView, TripBookingSearchView, DisputeViewSet,
     PolicyDocumentViewSet, TripSettlementView, CFOWarRoomView, BulkActivityBatchViewSet, JobReportViewSet,
-    TripTrackingView,
+    TripTrackingView, TeamLiveTrackingView,
     TravelModeMasterViewSet, BookingTypeMasterViewSet, AirlineMasterViewSet, BusTypeMasterViewSet,
     IntercityCabVehicleMasterViewSet, TravelProviderMasterViewSet,
     LocalTravelModeMasterViewSet, LocalProviderMasterViewSet, StayTypeMasterViewSet, RoomTypeMasterViewSet,
     MealCategoryMasterViewSet, MealTypeMasterViewSet, IncidentalTypeMasterViewSet,
     CustomMasterDefinitionViewSet, CustomMasterValueViewSet, MasterModuleViewSet,
-    TravelOperatorMasterViewSet, TravelClassMasterViewSet, TravelVehicleMasterViewSet, LocalSubTypeMasterViewSet
+    TravelOperatorMasterViewSet, TravelClassMasterViewSet, TravelVehicleMasterViewSet, LocalSubTypeMasterViewSet,
+    UserDailyTrackingViewSet, FieldTrackingViewSet
 )
 from .views_export import ExpenseStatementPDFView, ExpenseStatementExcelView
 
@@ -24,6 +25,8 @@ router.register(r'disputes', DisputeViewSet)
 router.register(r'policies', PolicyDocumentViewSet)
 router.register(r'bulk-activities', BulkActivityBatchViewSet)
 router.register(r'job-reports', JobReportViewSet)
+router.register(r'daily-tracking', UserDailyTrackingViewSet)
+router.register(r'field-tracking', FieldTrackingViewSet)
 
 # Master route registers (Travel)
 router.register(r'travel-mode-masters', TravelModeMasterViewSet)
@@ -73,5 +76,6 @@ urlpatterns = [
     path('approvals/count/', ApprovalCountView.as_view(), name='approvals-count'),
     path('settlement/', TripSettlementView.as_view(), name='trip-settlement'),
     path('war-room/', CFOWarRoomView.as_view(), name='war-room'),
+    path('team/live-tracking/', TeamLiveTrackingView.as_view(), name='team-live-tracking'),
     path('', include(router.urls)),
 ]

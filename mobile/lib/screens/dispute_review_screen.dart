@@ -18,7 +18,7 @@ class DisputeReviewScreen extends StatelessWidget {
               width: 350,
               height: 350,
               decoration: BoxDecoration(
-                gradient: RadialGradient(colors: [const Color(0xFFA9052E).withOpacity(0.02), Colors.transparent]),
+                gradient: RadialGradient(colors: [const Color(0xFFA9052E).withValues(alpha: 0.02), Colors.transparent]),
                 shape: BoxShape.circle,
               ),
             ),
@@ -73,7 +73,7 @@ class DisputeReviewScreen extends StatelessWidget {
         children: [
           Positioned(
             right: -20, top: -20,
-            child: Container(width: 130, height: 130, decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), shape: BoxShape.circle)),
+            child: Container(width: 130, height: 130, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), shape: BoxShape.circle)),
           ),
           SafeArea(
             child: Padding(
@@ -88,7 +88,7 @@ class DisputeReviewScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(Icons.gavel_rounded, color: Colors.white, size: 24),
@@ -103,7 +103,7 @@ class DisputeReviewScreen extends StatelessWidget {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -135,7 +135,7 @@ class DisputeReviewScreen extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 15, offset: const Offset(0, 4))],
       ),
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -148,8 +148,8 @@ class DisputeReviewScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F56B).withOpacity(0.1),
-                    border: Border.all(color: const Color(0xFFF1F56B).withOpacity(0.2)),
+                    color: const Color(0xFFF1F56B).withValues(alpha: 0.1),
+                    border: Border.all(color: const Color(0xFFF1F56B).withValues(alpha: 0.2)),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(id, style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: 0.5)),
@@ -167,7 +167,7 @@ class DisputeReviewScreen extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 20,
-                  backgroundColor: const Color(0xFFBB0633).withOpacity(0.1),
+                  backgroundColor: const Color(0xFFBB0633).withValues(alpha: 0.1),
                   child: Text(employee[0].toUpperCase(), style: const TextStyle(color: Color(0xFFBB0633), fontWeight: FontWeight.w900, fontSize: 14)),
                 ),
                 const SizedBox(width: 14),
@@ -208,7 +208,7 @@ class DisputeReviewScreen extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 8,
-                      shadowColor: const Color(0xFF0F1E2A).withOpacity(0.4),
+                      shadowColor: const Color(0xFF0F1E2A).withValues(alpha: 0.4),
                     ),
                     child: Text('RESOLVE', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
                   ),

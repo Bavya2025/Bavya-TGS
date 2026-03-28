@@ -243,16 +243,10 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
     setState(() => _isLoading = true);
     try {
       final bytes = await _tripService.downloadBulkTemplate();
-      if (!mounted) {
-        return;
-      }
       final dir = await getApplicationDocumentsDirectory();
-      if (!mounted) {
-        return;
-      }
       final file = File('${dir.path}/bulk_local_travel_template.xlsx');
       await file.writeAsBytes(bytes);
-
+      
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -277,10 +271,6 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls'],
       );
-
-      if (!mounted) {
-        return;
-      }
 
       if (result != null && result.files.single.path != null) {
         setState(() => _isBulkUploading = true);
@@ -320,16 +310,12 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
     setState(() => _isLoading = true);
     try {
       final updatedTrip = await _tripService.fetchTripDetails(widget.trip.id);
-      if (mounted) {
-        setState(() {
-          _tripData = updatedTrip;
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _tripData = updatedTrip;
+        _isLoading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      setState(() => _isLoading = false);
     }
   }
 
@@ -339,21 +325,16 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       MaterialPageRoute(builder: (context) => const ForensicCamera()),
     );
 
-    if (!mounted) {
-      return;
-    }
-
     if (result != null && result is Map<String, dynamic>) {
       setState(() {
         _receiptImagePaths.add(result['path']);
         _latitude ??= result['latitude'];
         _longitude ??= result['longitude'];
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Forensic Receipt Captured!')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Forensic Receipt Captured!')),
+      );
     }
   }
 
@@ -361,16 +342,9 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
     final ImagePicker picker = ImagePicker();
     final List<XFile> images = await picker.pickMultiImage();
 
-    if (!mounted) {
-      return;
-    }
-
     if (images.isNotEmpty) {
       if (_latitude == null) {
         final pos = await _determinePosition();
-        if (!mounted) {
-          return;
-        }
         if (pos != null) {
           setState(() {
             _latitude = pos.latitude;
@@ -384,11 +358,10 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
           _receiptImagePaths.add(img.path);
         }
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${images.length} images added from gallery!')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${images.length} images added from gallery!')),
+      );
     }
   }
 
@@ -482,10 +455,6 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       MaterialPageRoute(builder: (context) => const ForensicCamera()),
     );
 
-    if (!mounted) {
-      return;
-    }
-
     if (result != null && result is Map<String, dynamic>) {
       setState(() {
         if (isStart) {
@@ -498,13 +467,12 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
           _odoEndLong = result['longitude'];
         }
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Forensic ${isStart ? 'Start' : 'End'} Odo Captured!'),
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Forensic ${isStart ? 'Start' : 'End'} Odo Captured!'),
+        ),
+      );
     }
   }
 
@@ -513,9 +481,6 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
     LocationPermission permission;
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!mounted) {
-      return null;
-    }
     if (!serviceEnabled) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -526,28 +491,16 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
     }
 
     permission = await Geolocator.checkPermission();
-    if (!mounted) {
-      return null;
-    }
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (!mounted) {
-        return null;
-      }
       if (permission == LocationPermission.denied) return null;
     }
 
-    if (permission == LocationPermission.deniedForever) {
-      return null;
-    }
+    if (permission == LocationPermission.deniedForever) return null;
 
-    final pos = await Geolocator.getCurrentPosition(
+    return await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.medium,
     );
-    if (!mounted) {
-      return null;
-    }
-    return pos;
   }
 
   Future<void> _handleRequestAdvance() async {
@@ -828,7 +781,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
           'isFinalized': isNowFinalized,
           'isCompleted': isNowCompleted,
           'endOdoSubmittedAt':
-              endOdoTimestamp ?? detailMap['endOdoSubmittedAt'],
+              endOdoTimestamp ?? (detailMap['endOdoSubmittedAt']),
         }),
         'receipt_image': receiptImagesJson,
         'latitude': _latitude ?? 0.0,
@@ -846,7 +799,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
           'isFinalized': isNowFinalized,
           'isCompleted': isNowCompleted,
           'endOdoSubmittedAt':
-              endOdoTimestamp ?? detailMap['endOdoSubmittedAt'],
+              endOdoTimestamp ?? (detailMap['endOdoSubmittedAt']),
         });
       }
 
@@ -955,13 +908,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       ),
     );
 
-    if (!mounted) {
-      return;
-    }
-
-    if (confirm != true) {
-      return;
-    }
+    if (confirm != true) return;
 
     setState(() => _isSubmitting = true);
     try {
@@ -1235,11 +1182,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                 Icons.currency_rupee_rounded,
                 'Top Up',
                 const Color(0xFF0B2844),
-                () {
-                  setState(() {
-                    _view = 'request_advance';
-                  });
-                },
+                () => setState(() => _view = 'request_advance'),
               ),
             ),
             const SizedBox(width: 16),
@@ -1250,9 +1193,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
             //     const Color(0xFF7C1D1D),
             //     () {
             //       _clearForm();
-            //       setState(() {
-            //         _view = 'add_expense';
-            //       });
+            //       setState(() => _view = 'add_expense');
             //     },
             //   ),
             // ),
@@ -1369,9 +1310,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       for (var e in _tripData.expenses!) {
         Map<String, dynamic> detail = {};
         try {
-          if (e['description'] != null) {
-            detail = jsonDecode(e['description']);
-          }
+          if (e['description'] != null) detail = jsonDecode(e['description']);
         } catch (_) {}
 
         final displayCategory = e['category'] ?? 'Expense';
@@ -1476,7 +1415,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: activities.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final act = activities[index];
         final isAdvance = act['type'] == 'advance';
@@ -1570,9 +1509,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                             if (act['is_odo_form'] == true &&
                                 act['is_completed'] != true)
                               IconButton(
-                                onPressed: () {
-                                  _editExpense(act['raw_data']);
-                                },
+                                onPressed: () => _editExpense(act['raw_data']),
                                 icon: const Icon(
                                   Icons.edit_note_rounded,
                                   size: 18,
@@ -1585,9 +1522,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                                 act['is_completed'] != true)
                               const SizedBox(width: 8),
                             IconButton(
-                              onPressed: () {
-                                _deleteExpense(act['id']);
-                              },
+                              onPressed: () => _deleteExpense(act['id']),
                               icon: const Icon(
                                 Icons.delete_outline_rounded,
                                 size: 18,
@@ -1770,9 +1705,6 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
     if (confirmed == true) {
       try {
         await _tripService.deleteExpense(id.toString());
-        if (!mounted) {
-          return;
-        }
         _refreshTripData();
         widget.onUpdate();
       } catch (e) {
@@ -1792,11 +1724,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
         Row(
           children: [
             IconButton(
-              onPressed: () {
-                setState(() {
-                  _view = 'overview';
-                });
-              },
+              onPressed: () => setState(() => _view = 'overview'),
               icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
             ),
             const SizedBox(width: 8),
@@ -1932,11 +1860,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                       scale: 0.7,
                       child: Switch(
                         value: _carryingLuggage,
-                        onChanged: (v) {
-                          setState(() {
-                            _carryingLuggage = v;
-                          });
-                        },
+                        onChanged: (v) => setState(() => _carryingLuggage = v),
                         activeThumbColor: const Color(0xFF3B82F6),
                       ),
                     ),
@@ -1983,14 +1907,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                                 const Duration(days: 365),
                               ),
                             );
-                            if (!mounted) {
-                              return;
-                            }
-                            if (d != null) {
-                              setState(() {
-                                _bookingDate = d;
-                              });
-                            }
+                            if (d != null) setState(() => _bookingDate = d);
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -2038,9 +1955,6 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               context: context,
                               initialTime: TimeOfDay.now(),
                             );
-                            if (!mounted) {
-                              return;
-                            }
                             if (t != null) {
                               _bookingTimeController.text =
                                   "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
@@ -2062,7 +1976,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
               children: [
                 DropdownButtonFormField<String>(
                   isExpanded: true,
-                  value: _selectedMode,
+                  initialValue: _selectedMode,
                   hint: Text(
                     'Select Mode',
                     style: GoogleFonts.inter(
@@ -2085,20 +1999,20 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                         ),
                       )
                       .toList(),
-                    onChanged: (v) => setState(() {
-                      _selectedMode = v!;
-                      if (_selectedMode == 'Flight') {
-                        _selectedClass = 'Economy';
-                      } else if (_selectedMode == 'Train') {
-                        _selectedClass = 'Sleeper';
-                      } else if (_selectedMode == 'Intercity Bus') {
-                        _selectedClass = 'Volvo';
-                      } else if (_selectedMode == 'Intercity Cab') {
-                        _selectedClass = 'Sedan';
-                      } else if (_selectedMode == 'Intercity Car') {
-                        _selectedClass = 'Own Car';
-                      }
-                    }),
+                  onChanged: (v) => setState(() {
+                    _selectedMode = v!;
+                    if (_selectedMode == 'Flight') {
+                      _selectedClass = 'Economy';
+                    } else if (_selectedMode == 'Train') {
+                      _selectedClass = 'Sleeper';
+                    } else if (_selectedMode == 'Intercity Bus') {
+                      _selectedClass = 'Volvo';
+                    } else if (_selectedMode == 'Intercity Cab') {
+                      _selectedClass = 'Sedan';
+                    } else if (_selectedMode == 'Intercity Car') {
+                      _selectedClass = 'Own Car';
+                    }
+                  }),
                   icon: const Icon(
                     Icons.keyboard_arrow_down_rounded,
                     color: Colors.black26,
@@ -2108,7 +2022,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   isExpanded: true,
-                  value: _bookingType,
+                  initialValue: _bookingType,
                   items: _bookedByOptions
                       .map(
                         (m) => DropdownMenuItem(
@@ -2294,7 +2208,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         isExpanded: true,
-                        value: (() {
+                        initialValue: (() {
                           final items = _selectedMode == 'Flight'
                               ? [
                                   'Economy',
@@ -2392,11 +2306,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                                   ),
                                 )
                                 .toList(),
-                        onChanged: (v) {
-                          setState(() {
-                            _selectedClass = v!;
-                          });
-                        },
+                        onChanged: (v) => setState(() => _selectedClass = v!),
                         decoration: _inputDecorationSuffix(
                           null,
                           _selectedMode == 'Intercity Bus'
@@ -2499,12 +2409,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                                 const Duration(days: 365),
                               ),
                             );
-                            if (!mounted) {
-                              return;
-                            }
-                            if (d != null) {
-                              setState(() => _selectedDate = d);
-                            }
+                            if (d != null) setState(() => _selectedDate = d);
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -2555,12 +2460,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                                 const Duration(days: 365),
                               ),
                             );
-                            if (!mounted) {
-                              return;
-                            }
-                            if (d != null) {
-                              setState(() => _endDate = d);
-                            }
+                            if (d != null) setState(() => _endDate = d);
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -2615,9 +2515,6 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               context: context,
                               initialTime: TimeOfDay.now(),
                             );
-                            if (!mounted) {
-                              return;
-                            }
                             if (t != null) {
                               _boardingTimeController.text =
                                   "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
@@ -2642,9 +2539,6 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               context: context,
                               initialTime: TimeOfDay.now(),
                             );
-                            if (!mounted) {
-                              return;
-                            }
                             if (t != null) {
                               _scheduledTimeController.text =
                                   "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
@@ -2673,9 +2567,6 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               context: context,
                               initialTime: TimeOfDay.now(),
                             );
-                            if (!mounted) {
-                              return;
-                            }
                             if (t != null) {
                               _actualTimeController.text =
                                   "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
@@ -2750,12 +2641,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               const Duration(days: 365),
                             ),
                           );
-                          if (!mounted) {
-                            return;
-                          }
-                          if (d != null) {
-                            setState(() => _selectedDate = d);
-                          }
+                          if (d != null) setState(() => _selectedDate = d);
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -2799,12 +2685,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               const Duration(days: 365),
                             ),
                           );
-                          if (!mounted) {
-                            return;
-                          }
-                          if (d != null) {
-                            setState(() => _endDate = d);
-                          }
+                          if (d != null) setState(() => _endDate = d);
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -2848,7 +2729,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
               children: [
                 DropdownButtonFormField<String>(
                   isExpanded: true,
-                  value: _selectedLocalMode,
+                  initialValue: _selectedLocalMode,
                   hint: Text(
                     'Select Mode',
                     style: GoogleFonts.inter(
@@ -2890,7 +2771,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     isExpanded: true,
-                    value: _selectedLocalSubType,
+                    initialValue: _selectedLocalSubType,
                     hint: Text(
                       'Select Sub-Type',
                       style: GoogleFonts.inter(
@@ -2930,7 +2811,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   isExpanded: true,
-                  value: _bookingType,
+                  initialValue: _bookingType,
                   hint: Text(
                     'Select Booked By',
                     style: GoogleFonts.inter(
@@ -3011,9 +2892,6 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                             context: context,
                             initialTime: TimeOfDay.now(),
                           );
-                          if (!mounted) {
-                            return;
-                          }
                           if (t != null) {
                             _startTimeController.text =
                                 "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
@@ -3035,9 +2913,6 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                             context: context,
                             initialTime: TimeOfDay.now(),
                           );
-                          if (!mounted) {
-                            return;
-                          }
                           if (t != null) {
                             _endTimeController.text =
                                 "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
@@ -3139,12 +3014,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               const Duration(days: 365),
                             ),
                           );
-                          if (!mounted) {
-                            return;
-                          }
-                          if (d != null) {
-                            setState(() => _selectedDate = d);
-                          }
+                          if (d != null) setState(() => _selectedDate = d);
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -3190,9 +3060,6 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                             context: context,
                             initialTime: TimeOfDay.now(),
                           );
-                          if (!mounted) {
-                            return;
-                          }
                           if (t != null) {
                             _mealTimeController.text =
                                 "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
@@ -3212,7 +3079,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
               children: [
                 DropdownButtonFormField<String>(
                   isExpanded: true,
-                  value: _mealCategories.contains(_mealCategory)
+                  initialValue: _mealCategories.contains(_mealCategory)
                       ? _mealCategory
                       : 'Self Meal',
                   items: _mealCategories
@@ -3229,19 +3096,17 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                         ),
                       )
                       .toList(),
-                  onChanged: (v) {
-                    setState(() {
-                      _mealCategory = v!;
-                      _mealType = _mealSubTypes[_mealCategory]![0];
-                      if (_mealCategory != 'Self Meal') {
-                        _expenseAmountController.text = '0';
-                        _restaurantController.clear();
-                        _addressController.clear();
-                        _invoiceNoController.clear();
-                        _receiptImagePaths.clear();
-                      }
-                    });
-                  },
+                  onChanged: (v) => setState(() {
+                    _mealCategory = v!;
+                    _mealType = _mealSubTypes[_mealCategory]![0];
+                    if (_mealCategory != 'Self Meal') {
+                      _expenseAmountController.text = '0';
+                      _restaurantController.clear();
+                      _addressController.clear();
+                      _invoiceNoController.clear();
+                      _receiptImagePaths.clear();
+                    }
+                  }),
                   icon: const Icon(
                     Icons.keyboard_arrow_down_rounded,
                     color: Colors.black26,
@@ -3257,7 +3122,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                         opacity: _mealCategory == 'Self Meal' ? 1.0 : 0.5,
                         child: DropdownButtonFormField<String>(
                           isExpanded: true,
-                          value:
+                          initialValue:
                               _mealSubTypes[_mealCategory]!.contains(_mealType)
                               ? _mealType
                               : _mealSubTypes[_mealCategory]![0],
@@ -3276,11 +3141,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               )
                               .toList(),
                           onChanged: _mealCategory == 'Self Meal'
-                              ? (v) {
-                                  setState(() {
-                                    _mealType = v!;
-                                  });
-                                }
+                              ? (v) => setState(() => _mealType = v!)
                               : null,
                           icon: const Icon(
                             Icons.keyboard_arrow_down_rounded,
@@ -3352,12 +3213,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               const Duration(days: 365),
                             ),
                           );
-                          if (!mounted) {
-                            return;
-                          }
-                          if (d != null) {
-                            setState(() => _selectedDate = d);
-                          }
+                          if (d != null) setState(() => _selectedDate = d);
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -3401,12 +3257,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               const Duration(days: 365),
                             ),
                           );
-                          if (!mounted) {
-                            return;
-                          }
-                          if (d != null) {
-                            setState(() => _endDate = d);
-                          }
+                          if (d != null) setState(() => _endDate = d);
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -3450,7 +3301,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
               children: [
                 DropdownButtonFormField<String>(
                   isExpanded: true,
-                  value:
+                  initialValue:
                       [
                         'Hotel Stay',
                         'Bavya Guest House',
@@ -3481,11 +3332,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                             ),
                           )
                           .toList(),
-                  onChanged: (v) {
-                    setState(() {
-                      _selectedMode = v!;
-                    });
-                  },
+                  onChanged: (v) => setState(() => _selectedMode = v!),
                   icon: const Icon(
                     Icons.keyboard_arrow_down_rounded,
                     color: Colors.black26,
@@ -3505,7 +3352,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     isExpanded: true,
-                    value:
+                    initialValue:
                         [
                           'Standard',
                           'Deluxe',
@@ -3536,11 +3383,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                               ),
                             )
                             .toList(),
-                    onChanged: (v) {
-                      setState(() {
-                        _roomType = v!;
-                      });
-                    },
+                    onChanged: (v) => setState(() => _roomType = v!),
                     icon: const Icon(
                       Icons.keyboard_arrow_down_rounded,
                       color: Colors.black26,
@@ -3616,14 +3459,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                   firstDate: DateTime(2020),
                   lastDate: DateTime.now().add(const Duration(days: 365)),
                 );
-
-                if (!mounted) {
-                  return;
-                }
-
-                if (d != null) {
-                  setState(() => _selectedDate = d);
-                }
+                if (d != null) setState(() => _selectedDate = d);
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -3666,7 +3502,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                       flex: 3,
                       child: DropdownButtonFormField<String>(
                         isExpanded: true,
-                        value:
+                        initialValue:
                             [
                               'Parking Charges',
                               'Toll Charges',
@@ -4003,9 +3839,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
               child: ElevatedButton(
                 onPressed: _isSubmitting
                     ? null
-                    : () {
-                        _handleAddExpense(finalizeSubmit: true);
-                      },
+                    : () => _handleAddExpense(finalizeSubmit: true),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   shape: RoundedRectangleBorder(
@@ -4046,9 +3880,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
             child: ElevatedButton(
               onPressed: _isSubmitting
                   ? null
-                  : () {
-                      _handleAddExpense(finalizeSubmit: false);
-                    },
+                  : () => _handleAddExpense(finalizeSubmit: false),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF7C1D1D),
                 shape: RoundedRectangleBorder(
@@ -4073,11 +3905,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
             width: double.infinity,
             height: 60,
             child: ElevatedButton(
-              onPressed: _isSubmitting
-                  ? null
-                  : () {
-                      _handleAddExpense();
-                    },
+              onPressed: _isSubmitting ? null : () => _handleAddExpense(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF7C1D1D),
                 shape: RoundedRectangleBorder(
@@ -4179,9 +4007,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                       IconButton(
                         onPressed: isStartLocked
                             ? null
-                            : () {
-                                _captureOdoPhoto(true);
-                              },
+                            : () => _captureOdoPhoto(true),
                         icon: Icon(
                           Icons.camera_alt_outlined,
                           size: 16,
@@ -4237,9 +4063,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                       IconButton(
                         onPressed: (isEndDisabled || isEndPreviouslyCaptured)
                             ? null
-                            : () {
-                                _captureOdoPhoto(false);
-                              },
+                            : () => _captureOdoPhoto(false),
                         icon: Icon(
                           Icons.camera_alt_outlined,
                           size: 16,
@@ -4264,7 +4088,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
                 style: GoogleFonts.inter(
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A).withValues(alpha: 0.6),
+                  color: const Color(0xFF7C1D1D).withValues(alpha: 0.6),
                 ),
               ),
             )
@@ -4380,7 +4204,7 @@ class _TripWalletSheetState extends State<TripWalletSheet> {
           'EXPENSE TYPE',
           DropdownButtonFormField<String>(
             isExpanded: true,
-            value: _selectedCategory,
+            initialValue: _selectedCategory,
             items: _filteredCategories
                 .map(
                   (c) => DropdownMenuItem(

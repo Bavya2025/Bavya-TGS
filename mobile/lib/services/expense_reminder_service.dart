@@ -17,8 +17,6 @@ class ExpenseReminderService {
       'Reminds users to fill daily trip expenses at 3 PM.';
   static const String _storedIdsKey = 'trip_expense_reminder_ids';
   static const String _sentCatchupKey = 'trip_expense_catchup_sent_keys';
-  static const String _submissionReminderIdsKey =
-      'trip_submission_reminder_ids';
 
   static bool _initialized = false;
 

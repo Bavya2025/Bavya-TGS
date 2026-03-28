@@ -15,13 +15,14 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
   final TripService _tripService = TripService();
   bool _isLoading = true;
   List<Map<String, dynamic>> _records = [];
-  String _searchQuery = '';
+  String _selectedTab = 'action_required'; // action_required, under_process, completed, rejected
+  final TextEditingController _searchController = TextEditingController();
 
   // Stats mirroring web
-  int _pendingAuditCount = 0;
-  double _settledTodayValue = 0.0;
-  int _flaggedDisputedCount = 0;
-  String _avgAuditTime = '2.4h';
+  final int _pendingAuditCount = 0;
+  final double _settledTodayValue = 0.0;
+  final int _flaggedDisputedCount = 0;
+  final String _avgAuditTime = '2.4h';
 
   @override
   void initState() {
@@ -30,16 +31,16 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
   }
 
   Future<void> _fetchFinanceData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final data = await _tripService.fetchApprovals(tab: 'pending');
+      final data = await _tripService.fetchApprovals(
+        tab: _selectedTab,
+        search: _searchController.text,
+      );
       if (mounted) {
         setState(() {
           _records = data;
-          _pendingAuditCount = data.length;
-          _settledTodayValue = 0.0;
-          _flaggedDisputedCount = 0;
-          _avgAuditTime = '0h';
           _isLoading = false;
         });
       }
@@ -51,19 +52,6 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
         ).showSnackBar(SnackBar(content: Text('Failed to load records: $e')));
       }
     }
-  }
-
-  List<Map<String, dynamic>> get _filteredRecords {
-    if (_searchQuery.isEmpty) return _records;
-    final q = _searchQuery.toLowerCase();
-    return _records
-        .where(
-          (r) =>
-              r['id'].toString().toLowerCase().contains(q) ||
-              (r['requester'] ?? '').toString().toLowerCase().contains(q) ||
-              (r['type'] ?? '').toString().toLowerCase().contains(q),
-        )
-        .toList();
   }
 
   Future<void> _handleUnderProcess(dynamic id) async {
@@ -79,13 +67,14 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
         _fetchFinanceData();
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Action failed: $e'),
             backgroundColor: Colors.red,
           ),
         );
+      }
     }
   }
 
@@ -125,7 +114,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Recording payment for ${rec['requester']}',
+                'Recording payment for ${rec['creator_name'] ?? rec['requester']}',
                 style: GoogleFonts.inter(color: Colors.grey, fontSize: 13),
               ),
               const Divider(height: 32),
@@ -135,7 +124,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
                   Expanded(
                     child: _buildModalField(
                       'Amount',
-                      rec['cost'] ?? '0',
+                      '₹${rec['cost'] ?? rec['cost_estimate'] ?? '0'}',
                       isHighlight: true,
                     ),
                   ),
@@ -219,23 +208,22 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
                           'remarks': remarks,
                         },
                       );
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Funds transferred successfully'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                        _fetchFinanceData();
-                      }
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Funds transferred successfully'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      _fetchFinanceData();
                     } catch (e) {
-                      if (mounted)
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Transfer failed: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Transfer failed: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -338,23 +326,22 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
                           'RejectByFinance',
                           extraData: {'remarks': reason},
                         );
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Request rejected'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                          _fetchFinanceData();
-                        }
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Request rejected'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        _fetchFinanceData();
                       } catch (e) {
-                        if (mounted)
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Rejection failed: $e'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Rejection failed: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -450,7 +437,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFFA9052E).withOpacity(0.04),
+                    const Color(0xFFA9052E).withValues(alpha: 0.04),
                     Colors.transparent,
                   ],
                 ),
@@ -467,7 +454,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF3B82F6).withOpacity(0.03),
+                    const Color(0xFF3B82F6).withValues(alpha: 0.03),
                     Colors.transparent,
                   ],
                 ),
@@ -489,6 +476,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildKpiGid(),
+                        _buildFilterTabs(),
                         _buildSearchBox(),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
@@ -506,7 +494,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
                               ),
                               if (!_isLoading)
                                 Text(
-                                  '${_filteredRecords.length} ITEMS',
+                                  '${_records.length} ITEMS',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
@@ -525,7 +513,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
                               ),
                             ),
                           )
-                        else if (_filteredRecords.isEmpty)
+                        else if (_records.isEmpty)
                           _buildEmptyState()
                         else
                           ListView.builder(
@@ -535,9 +523,9 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
                               horizontal: 20,
                               vertical: 0,
                             ),
-                            itemCount: _filteredRecords.length,
+                            itemCount: _records.length,
                             itemBuilder: (context, index) =>
-                                _buildTransactionCard(_filteredRecords[index]),
+                                _buildTransactionCard(_records[index]),
                           ),
                         const SizedBox(height: 100),
                       ],
@@ -578,7 +566,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
         color: const Color(0xFFA9052E),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -597,7 +585,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
               width: 140,
               height: 140,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
             ),
@@ -638,7 +626,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.2,
                           ),
                         ),
@@ -658,7 +646,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
                     onPressed: _fetchFinanceData,
                     icon: Icon(
                       Icons.refresh_rounded,
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                       size: 24,
                     ),
                   ),
@@ -717,12 +705,12 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [color, color.withOpacity(0.8)],
+          colors: [color, color.withValues(alpha: 0.8)],
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.3),
+            color: color.withValues(alpha: 0.3),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -738,7 +726,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
               height: 70,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withValues(alpha: 0.1),
               ),
             ),
           ),
@@ -764,7 +752,7 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 8,
                     fontWeight: FontWeight.w800,
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withValues(alpha: 0.8),
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -772,6 +760,66 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFilterTabs() {
+    final tabs = [
+      {'id': 'action_required', 'label': 'Action Required'},
+      {'id': 'under_process', 'label': 'Under Process'},
+      {'id': 'completed', 'label': 'Transfer Completed'},
+      {'id': 'rejected', 'label': 'Flagged/Rejected'},
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Row(
+        children: tabs.map((t) {
+          bool isSelected = _selectedTab == t['id'];
+          return Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: InkWell(
+              onTap: () {
+                setState(() => _selectedTab = t['id']!);
+                _fetchFinanceData();
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected ? const Color(0xFF0F1E2A) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? const Color(0xFF0F1E2A)
+                        : const Color(0xFFE2E8F0),
+                  ),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFF0F1E2A).withValues(alpha: 0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Text(
+                  t['label']!,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isSelected ? Colors.white : Colors.black54,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -786,218 +834,148 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: TextField(
-        onChanged: (v) => setState(() => _searchQuery = v),
+        controller: _searchController,
+        onSubmitted: (v) => _fetchFinanceData(),
+        decoration: InputDecoration(
+          hintText: 'Search by Trip ID or Requester...',
+          hintStyle: GoogleFonts.inter(color: Colors.grey[400], fontSize: 13),
+          border: InputBorder.none,
+          icon: const Icon(Icons.search, color: Color(0xFFBB0633), size: 18),
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.clear, size: 16),
+            onPressed: () {
+              _searchController.clear();
+              _fetchFinanceData();
+            },
+          ),
+        ),
         style: GoogleFonts.plusJakartaSans(
           fontSize: 14,
           fontWeight: FontWeight.w600,
-        ),
-        decoration: InputDecoration(
-          hintText: 'Search audit ledger...',
-          hintStyle: GoogleFonts.plusJakartaSans(
-            fontSize: 13,
-            color: const Color(0xFF94A3B8),
-            fontWeight: FontWeight.w600,
-          ),
-          prefixIcon: const Icon(
-            Icons.search_rounded,
-            size: 20,
-            color: Color(0xFFBB0633),
-          ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 16),
         ),
       ),
     );
   }
 
   Widget _buildTransactionCard(Map<String, dynamic> rec) {
-    final status = (rec['status'] ?? 'unknown').toString().toLowerCase();
-    Color statusColor = const Color(0xFF64748B);
-    Color statusBg = const Color(0xFFF1F5F9);
-
-    if (status.contains('pending')) {
-      statusColor = const Color(0xFFF59E0B);
-      statusBg = const Color(0xFFFFFBEB);
-    } else if (status.contains('success') ||
-        status == 'settled' ||
-        status == 'transfered') {
-      statusColor = const Color(0xFF10B981);
-      statusBg = const Color(0xFFF0FDF4);
-    } else if (status.contains('process')) {
-      statusColor = const Color(0xFF3B82F6);
-      statusBg = const Color(0xFFEFF6FF);
-    }
-
+    bool canProcess = _selectedTab == 'action_required';
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFBB0633).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.receipt_long_rounded,
+                  color: Color(0xFFBB0633),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFF1F5F9)),
-                      ),
-                      child: Text(
-                        rec['id'].toString(),
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF0F1E2A),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          rec['id']?.toString() ?? 'TRP-N/A',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                          ),
                         ),
-                      ),
+                        Text(
+                          '₹${rec['cost'] ?? rec['cost_estimate'] ?? '0'}',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFFBB0633),
+                          ),
+                        ),
+                      ],
                     ),
                     Text(
-                      rec['cost']?.toString() ?? '₹0',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: const Color(0xFF0F1E2A),
+                      rec['creator_name'] ?? rec['requester'] ?? 'Unknown Requester',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFBB0633).withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          (rec['requester']?.toString() ?? 'U')[0]
-                              .toUpperCase(),
-                          style: GoogleFonts.plusJakartaSans(
-                            color: const Color(0xFFBB0633),
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            rec['requester']?.toString() ?? 'Unknown Requester',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF0F1E2A),
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              Text(
-                                rec['type']?.toString() ?? 'General Expense',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 10,
-                                  color: const Color(0xFF64748B),
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              if (rec['date'] != null)
-                                Text(
-                                  '• ${rec['date']}',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 9,
-                                    color: const Color(0xFF94A3B8),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: statusBg,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        status.toUpperCase(),
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                          color: statusColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _fAction(
-                  Icons.pending_actions_rounded,
-                  'AUDIT',
-                  const Color(0xFF0F1E2A),
-                  () => _handleUnderProcess(rec['id']),
-                ),
-                _fAction(
-                  Icons.currency_exchange_rounded,
-                  'TRANSFER',
-                  const Color(0xFF10B981),
-                  () => _openTransferModal(rec),
-                ),
-                _fAction(
-                  Icons.block_flipped,
-                  'REJECT',
-                  const Color(0xFFBB0633),
-                  () => _openRejectModal(rec),
-                ),
-              ],
+          const Divider(height: 32),
+          Row(
+            children: [
+              _infoChip(Icons.category_rounded, rec['type'] ?? 'Trip Expense'),
+              const Spacer(),
+              if (canProcess) ...[
+                 _actionIconBtn(Icons.pending_actions_rounded, Colors.orange, () => _handleUnderProcess(rec['id'])),
+                 const SizedBox(width: 12),
+                 _actionIconBtn(Icons.send_rounded, Colors.green, () => _openTransferModal(rec)),
+                 const SizedBox(width: 12),
+                 _actionIconBtn(Icons.close_rounded, Colors.red, () => _openRejectModal(rec)),
+              ] else ...[
+                 _statusBadge(rec['status'] ?? 'Processed'),
+              ]
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: const Color(0xFF64748B)),
+          const SizedBox(width: 6),
+          Text(
+            label.toUpperCase(),
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF64748B),
             ),
           ),
         ],
@@ -1005,62 +983,53 @@ class _FinanceHubScreenState extends State<FinanceHubScreen> {
     );
   }
 
-  Widget _fAction(
-    IconData icon,
-    String label,
-    Color color,
-    VoidCallback onTap,
-  ) {
+  Widget _actionIconBtn(IconData icon, Color color, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                color: color,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Icon(icon, color: color, size: 18),
+      ),
+    );
+  }
+
+  Widget _statusBadge(String status) {
+     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F1E2A).withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
+          color: const Color(0xFF0F1E2A),
         ),
       ),
     );
   }
 
   Widget _buildEmptyState() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 80),
-      child: Center(
+     return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 100),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.assignment_turned_in_rounded,
-              size: 64,
-              color: Color(0xFFE2E8F0),
-            ),
+            Icon(Icons.inbox_outlined, size: 48, color: Colors.grey[300]),
             const SizedBox(height: 16),
             Text(
-              'All caught up!',
+              'No records found',
               style: GoogleFonts.plusJakartaSans(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                color: const Color(0xFF94A3B8),
-              ),
-            ),
-            Text(
-              'No pending financial audits found.',
-              style: GoogleFonts.plusJakartaSans(
-                color: const Color(0xFFCBD5E1),
                 fontWeight: FontWeight.w700,
-                fontSize: 13,
+                color: Colors.grey,
               ),
             ),
           ],

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
-import 'path_management_screen.dart';
 
 class RouteMasterScreen extends StatefulWidget {
   const RouteMasterScreen({super.key});
@@ -15,8 +14,6 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
   final ApiService _apiService = ApiService();
   
   bool _isLoading = true;
-  List<dynamic> _routes = [];
-  List<dynamic> _tollGates = [];
   List<dynamic> _hierarchy = [];
   List<dynamic> _discoveryNodes = [];
   
@@ -42,8 +39,6 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
   Future<void> _loadAll() async {
     setState(() => _isLoading = true);
     await Future.wait([
-      _fetchRoutes(),
-      _fetchTolls(),
       _fetchHierarchy(),
     ]);
     
@@ -58,24 +53,9 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
     }
 
     _processDiscovery();
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
+    setState(() => _isLoading = false);
   }
 
-  Future<void> _fetchRoutes() async {
-    try {
-      final res = await _apiService.get('/api/masters/routes/');
-      _routes = res is List ? res : (res['results'] ?? []);
-    } catch (e) { debugPrint("Route fetch error: $e"); }
-  }
-
-  Future<void> _fetchTolls() async {
-    try {
-      final res = await _apiService.get('/api/masters/toll-gates/');
-      _tollGates = res is List ? res : (res['results'] ?? []);
-    } catch (e) { debugPrint("Toll fetch error: $e"); }
-  }
 
   Future<void> _fetchHierarchy() async {
     try {
@@ -88,7 +68,6 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
     List<dynamic> nodes = [];
     
     void traverseDeep(List<dynamic> items, String level) {
-      if (items == null) return;
       for (var item in items) {
         nodes.add({
           'id': item['id'],
@@ -98,12 +77,17 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
           'item': item,
         });
 
-        if (level == 'Continent') traverseDeep(item['countries'] ?? [], 'Country');
-        else if (level == 'Country') traverseDeep(item['states'] ?? [], 'State');
-        else if (level == 'State') traverseDeep(item['districts'] ?? [], 'District');
-        else if (level == 'District') traverseDeep(item['mandals'] ?? [], 'Mandal');
-        else if (level == 'Mandal') traverseDeep(item['clusters'] ?? [], 'Cluster');
-        else if (level == 'Cluster') {
+        if (level == 'Continent') {
+          traverseDeep(item['countries'] ?? [], 'Country');
+        } else if (level == 'Country') {
+          traverseDeep(item['states'] ?? [], 'State');
+        } else if (level == 'State') {
+          traverseDeep(item['districts'] ?? [], 'District');
+        } else if (level == 'District') {
+          traverseDeep(item['mandals'] ?? [], 'Mandal');
+        } else if (level == 'Mandal') {
+          traverseDeep(item['clusters'] ?? [], 'Cluster');
+        } else if (level == 'Cluster') {
           traverseDeep(item['visiting_locations'] ?? item['locations'] ?? [], 'Visiting Location');
           traverseDeep(item['landmarks'] ?? [], 'Landmark');
         }
@@ -121,30 +105,46 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
         final cluster = _findNode(_hierarchy, _selectedCluster!, 'Cluster');
         final vl = cluster != null ? (cluster['visiting_locations'] ?? cluster['locations'] ?? []) : [];
         final lm = cluster != null ? (cluster['landmarks'] ?? []) : [];
-        for (var p in vl) nodes.add({'id': p['id'], 'name': p['name'], 'code': p['code'] ?? 'ID-${p['id']}', 'type': 'Visiting Location'});
-        for (var p in lm) nodes.add({'id': p['id'], 'name': p['name'], 'code': p['code'] ?? 'ID-${p['id']}', 'type': 'Landmark'});
+        for (var p in vl) {
+          nodes.add({'id': p['id'], 'name': p['name'], 'code': p['code'] ?? 'ID-${p['id']}', 'type': 'Visiting Location'});
+        }
+        for (var p in lm) {
+          nodes.add({'id': p['id'], 'name': p['name'], 'code': p['code'] ?? 'ID-${p['id']}', 'type': 'Landmark'});
+        }
       } else if (_selectedMandal != null) {
         final mandal = _findNode(_hierarchy, _selectedMandal!, 'Mandal');
         final clusters = mandal != null ? (mandal['clusters'] ?? []) : [];
-        for (var c in clusters) nodes.add({'id': c['id'], 'name': c['name'], 'code': c['code'] ?? 'ID-${c['id']}', 'type': 'Cluster'});
+        for (var c in clusters) {
+          nodes.add({'id': c['id'], 'name': c['name'], 'code': c['code'] ?? 'ID-${c['id']}', 'type': 'Cluster'});
+        }
       } else if (_selectedDistrict != null) {
         final district = _findNode(_hierarchy, _selectedDistrict!, 'District');
         final mandals = district != null ? (district['mandals'] ?? []) : [];
-        for (var m in mandals) nodes.add({'id': m['id'], 'name': m['name'], 'code': m['code'] ?? 'ID-${m['id']}', 'type': 'Mandal'});
+        for (var m in mandals) {
+          nodes.add({'id': m['id'], 'name': m['name'], 'code': m['code'] ?? 'ID-${m['id']}', 'type': 'Mandal'});
+        }
       } else if (_selectedState != null) {
         final state = _findNode(_hierarchy, _selectedState!, 'State');
         final districts = state != null ? (state['districts'] ?? []) : [];
-        for (var d in districts) nodes.add({'id': d['id'], 'name': d['name'], 'code': d['code'] ?? 'ID-${d['id']}', 'type': 'District'});
+        for (var d in districts) {
+          nodes.add({'id': d['id'], 'name': d['name'], 'code': d['code'] ?? 'ID-${d['id']}', 'type': 'District'});
+        }
       } else if (_selectedCountry != null) {
         final country = _findNode(_hierarchy, _selectedCountry!, 'Country');
         final states = country != null ? (country['states'] ?? []) : [];
-        for (var s in states) nodes.add({'id': s['id'], 'name': s['name'], 'code': s['code'] ?? 'ID-${s['id']}', 'type': 'State'});
+        for (var s in states) {
+          nodes.add({'id': s['id'], 'name': s['name'], 'code': s['code'] ?? 'ID-${s['id']}', 'type': 'State'});
+        }
       } else if (_selectedContinent != null) {
         final continent = _findNode(_hierarchy, _selectedContinent!, 'Continent');
         final countries = continent != null ? (continent['countries'] ?? []) : [];
-        for (var c in countries) nodes.add({'id': c['id'], 'name': c['name'], 'code': c['code'] ?? 'ID-${c['id']}', 'type': 'Country'});
+        for (var c in countries) {
+          nodes.add({'id': c['id'], 'name': c['name'], 'code': c['code'] ?? 'ID-${c['id']}', 'type': 'Country'});
+        }
       } else {
-        for (var c in _hierarchy) nodes.add({'id': c['id'], 'name': c['name'], 'code': c['code'] ?? 'ID-${c['id']}', 'type': 'Continent'});
+        for (var c in _hierarchy) {
+          nodes.add({'id': c['id'], 'name': c['name'], 'code': c['code'] ?? 'ID-${c['id']}', 'type': 'Continent'});
+        }
       }
     }
 
@@ -154,18 +154,23 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
   }
 
   dynamic _findNode(List<dynamic> items, String name, String targetLevel) {
-    if (items == null) return null;
     for (var item in items) {
-      if (item['name'] == name) return item;
+      if (item['name'] == name) {
+        return item;
+      }
       final kids = item['countries'] ?? item['states'] ?? item['districts'] ?? item['mandals'] ?? item['clusters'] ?? [];
       final found = _findNode(kids, name, targetLevel);
-      if (found != null) return found;
+      if (found != null) {
+        return found;
+      }
     }
     return null;
   }
 
   List<dynamic> _getAvailableOptions(String level) {
-    if (level == 'Continent') return _hierarchy;
+    if (level == 'Continent') {
+      return _hierarchy;
+    }
 
     // Smart Drilldown: If parent is selected, show children. If NOT, show ALL to prevent "No information"
     if (level == 'Country') {
@@ -202,8 +207,9 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
   }
 
   List<dynamic> _collectAllFromDepth(List<dynamic> items, String target, String current) {
-    if (items == null) return [];
-    if (current == target) return items;
+    if (current == target) {
+      return items;
+    }
     List<dynamic> found = [];
     for (var item in items) {
       final kids = item['countries'] ?? item['states'] ?? item['districts'] ?? item['mandals'] ?? item['clusters'] ?? [];
@@ -213,11 +219,21 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
   }
 
   String _nextLevel(String lv) {
-    if (lv == 'Continent') return 'Country';
-    if (lv == 'Country') return 'State';
-    if (lv == 'State') return 'District';
-    if (lv == 'District') return 'Mandal';
-    if (lv == 'Mandal') return 'Cluster';
+    if (lv == 'Continent') {
+      return 'Country';
+    }
+    if (lv == 'Country') {
+      return 'State';
+    }
+    if (lv == 'State') {
+      return 'District';
+    }
+    if (lv == 'District') {
+      return 'Mandal';
+    }
+    if (lv == 'Mandal') {
+      return 'Cluster';
+    }
     return '';
   }
 
@@ -260,7 +276,9 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
   }
 
   Widget _buildGeoTab() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator(color: Color(0xFFBB0633)));
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFFBB0633)));
+    }
     return Column(
       children: [
         _buildGeoFilters(),
@@ -413,12 +431,8 @@ class _RouteMasterScreenState extends State<RouteMasterScreen> with SingleTicker
     try {
       await _apiService.post('/api/masters/locations/sync/', body: {}, includeAuth: true);
       await _loadAll();
-    } catch (e) {
-      debugPrint("Sync error: $e");
-    }
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
+    } catch (e) { debugPrint("Sync error: $e"); }
+    setState(() => _isLoading = false);
   }
 
   // Placeholder for Routes/Tolls to keep the file clean for this fix

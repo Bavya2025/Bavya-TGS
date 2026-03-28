@@ -33,10 +33,12 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
     setState(() => _isLoading = true);
     try {
       final trip = await _tripService.fetchTripDetails(widget.tripId);
-      setState(() {
-        _trip = trip;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _trip = trip;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -69,6 +71,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
       if (action == 'Submit' && _trip!.claim == null) {
         // Create new claim initially
         await _tripService.createClaim({'trip': _trip!.id});
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Claim submitted successfully'),
@@ -81,6 +84,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
             ? "CLAIM-${_trip!.claim!['id']}"
             : "TRIP-${_trip!.tripId}";
         await _tripService.performApproval(taskId, action);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$action successful'),
@@ -90,6 +94,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
       }
       _fetchDetails();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to $action: $e'),
@@ -97,7 +102,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
         ),
       );
     } finally {
-      setState(() => _isActionLoading = false);
+      if (mounted) setState(() => _isActionLoading = false);
     }
   }
 
@@ -114,6 +119,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
           'remarks': remarks,
         },
       );
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Item updated'),
@@ -270,7 +276,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: paymentMode,
+                initialValue: paymentMode,
                 decoration: InputDecoration(
                   labelText: 'Payment Mode',
                   prefixIcon: const Icon(Icons.payment_rounded),
@@ -310,14 +316,12 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
                         double.parse(amountController.text),
                         purposeController.text,
                         paymentMode: paymentMode,
-                      );
-                      if (mounted) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Top-up request submitted'), backgroundColor: Colors.green));
-                        _fetchDetails();
-                      }
+                      );                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Top-up request submitted'), backgroundColor: Colors.green));
+                      _fetchDetails();
                     } catch (e) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
                     } finally {
                       setModalState(() => isSubmitting = false);
                     }
@@ -396,7 +400,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
       style: ElevatedButton.styleFrom(
         backgroundColor: outline ? Colors.white : color,
         foregroundColor: outline ? color : Colors.white,
-        side: outline ? BorderSide(color: color.withOpacity(0.3)) : null,
+        side: outline ? BorderSide(color: color.withValues(alpha: 0.3)) : null,
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: outline ? 0 : 2,
@@ -430,7 +434,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -509,7 +513,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                       elevation: 4,
-                      shadowColor: const Color(0xFF0F172A).withOpacity(0.3),
+                      shadowColor: const Color(0xFF0F172A).withValues(alpha: 0.3),
                     ),
                   ),
                 ),
@@ -530,7 +534,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
           style: GoogleFonts.plusJakartaSans(
             fontSize: 8,
             fontWeight: FontWeight.w800,
-            color: color.withOpacity(0.7),
+            color: color.withValues(alpha: 0.7),
             letterSpacing: 1,
           ),
         ),
@@ -580,7 +584,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -723,7 +727,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.2),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.2),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -740,7 +744,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 9,
                     fontWeight: FontWeight.w800,
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -756,7 +760,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
               ],
             ),
           ),
-          Container(width: 1, height: 32, color: Colors.white.withOpacity(0.1)),
+          Container(width: 1, height: 32, color: Colors.white.withValues(alpha: 0.1)),
           const SizedBox(width: 20),
           Expanded(
             child: Column(
@@ -767,7 +771,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 9,
                     fontWeight: FontWeight.w800,
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -891,8 +895,9 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
   }
 
   Widget _buildAdvanceRequestsList() {
-    if (_trip!.advances == null || _trip!.advances!.isEmpty)
+    if (_trip!.advances == null || _trip!.advances!.isEmpty) {
       return const SizedBox.shrink();
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -924,12 +929,15 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
           final mode = adv['payment_mode'] ?? 'N/A';
 
           Color statusColor = const Color(0xFF64748B);
-          if (status.toLowerCase().contains('approved'))
+          if (status.toLowerCase().contains('approved')) {
             statusColor = const Color(0xFF10B981);
-          if (status.toLowerCase().contains('rejected'))
+          }
+          if (status.toLowerCase().contains('rejected')) {
             statusColor = const Color(0xFFEF4444);
-          if (status.toLowerCase().contains('submitted'))
+          }
+          if (status.toLowerCase().contains('submitted')) {
             statusColor = const Color(0xFF3B82F6);
+          }
 
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
@@ -944,7 +952,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -983,7 +991,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -998,7 +1006,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
               ],
             ),
           );
-        }).toList(),
+        }),
       ],
     );
   }
@@ -1017,7 +1025,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: primary.withOpacity(0.1)),
+        border: Border.all(color: primary.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
@@ -1027,7 +1035,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
-                BoxShadow(color: primary.withOpacity(0.1), blurRadius: 10),
+                BoxShadow(color: primary.withValues(alpha: 0.1), blurRadius: 10),
               ],
             ),
             child: Icon(icon, color: primary, size: 20),
@@ -1042,7 +1050,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
-                    color: primary.withOpacity(0.7),
+                    color: primary.withValues(alpha: 0.7),
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -1168,7 +1176,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 16, color: color),
@@ -1220,7 +1228,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.3),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.3),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -1234,7 +1242,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
               Container(
                 width: 1,
                 height: 40,
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withValues(alpha: 0.1),
               ),
               Expanded(
                 child: _odoItem(
@@ -1255,7 +1263,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
         Text(
           label,
           style: GoogleFonts.plusJakartaSans(
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withValues(alpha: 0.5),
             fontSize: 9,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.5,
@@ -1367,7 +1375,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
           Padding(
             padding: const EdgeInsets.all(32.0),
             child: Text(
-              'No ${_selectedCategory} expenses found',
+              'No $_selectedCategory expenses found',
               style: GoogleFonts.plusJakartaSans(color: Colors.grey),
             ),
           )
@@ -1405,7 +1413,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 elevation: 4,
-                shadowColor: const Color(0xFF10B981).withOpacity(0.3),
+                shadowColor: const Color(0xFF10B981).withValues(alpha: 0.3),
               ),
             ),
           ),
@@ -1428,7 +1436,9 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
         exp['description'].toString().startsWith('{')) {
       try {
         details = jsonDecode(exp['description']);
-      } catch (e) {}
+      } catch (e) {
+        // Fallback for non-JSON or other parsing errors
+      }
     }
 
     // Normalize nature for mobile labeling
@@ -1436,8 +1446,9 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
     if (nature.toLowerCase() == 'fuel') displayNature = 'Local Travel';
     if (nature.toLowerCase() == 'others' ||
         nature.toLowerCase() == 'other' ||
-        nature.toLowerCase() == 'miscellaneous')
+        nature.toLowerCase() == 'miscellaneous') {
       displayNature = 'Others';
+    }
     if (nature.toLowerCase() == 'incidental') displayNature = 'Incidental';
 
     // Smart override: if details contain any local conveyance/travel data,
@@ -1494,11 +1505,11 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: isRejected
-            ? Border.all(color: Colors.red.withOpacity(0.3))
+            ? Border.all(color: Colors.red.withValues(alpha: 0.3))
             : Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1739,7 +1750,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.15),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.15),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -1789,7 +1800,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
           style: GoogleFonts.plusJakartaSans(
             fontSize: 8,
             fontWeight: FontWeight.w800,
-            color: Colors.white.withOpacity(0.4),
+            color: Colors.white.withValues(alpha: 0.4),
             letterSpacing: 0.5,
           ),
         ),
@@ -1798,7 +1809,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
@@ -1825,8 +1836,9 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
   }
 
   Widget _buildDetailRow(String label, dynamic value) {
-    if (value == null || value.toString().isEmpty || value.toString() == 'N/A')
+    if (value == null || value.toString().isEmpty || value.toString() == 'N/A') {
       return const SizedBox.shrink();
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -2018,7 +2030,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
             border: Border.all(color: const Color(0xFFF1F5F9)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
+                color: Colors.black.withValues(alpha: 0.02),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -2201,8 +2213,9 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
   }
 
   Widget _buildAuditRemarkRow(String role, dynamic remark) {
-    if (remark == null || remark.toString().isEmpty)
+    if (remark == null || remark.toString().isEmpty) {
       return const SizedBox.shrink();
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -2373,7 +2386,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
       height: 65,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
@@ -2385,7 +2398,7 @@ class _TripStoryScreenState extends State<TripStoryScreen> {
               left: 0,
               right: 0,
               child: Container(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withValues(alpha: 0.5),
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Text(
                   label,

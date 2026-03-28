@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
@@ -10,7 +11,7 @@ class LoggerService {
     final prefix = isError ? '[ERROR]' : '[INFO]';
     final logLine = '$timestamp $prefix $message';
 
-    print(logLine);
+    debugPrint(logLine);
     _logs.add(logLine);
 
     // Keep only last 100 logs
@@ -20,7 +21,7 @@ class LoggerService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_logKey, _logs);
     } catch (e) {
-      print('Failed to persist log: $e');
+      debugPrint('Failed to persist log: $e');
     }
   }
 

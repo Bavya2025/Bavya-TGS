@@ -35,19 +35,17 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   String _composition = 'Alone';
   String _travelMode = 'Airways';
   String _vehicleType = 'Own';
-  String _reportingManagerName = 'Loading...';
   String? _reportingManagerId;
-  List<Map<String, dynamic>> _members = [];
-  List<String> _accommodationRequests = [];
+  final List<Map<String, dynamic>> _members = [];
+  final List<String> _accommodationRequests = [];
 
   String _logisticsType = 'long';
-  bool _considerLocal = true;
+  bool _considerLocal = false;
   String _distance = '';
   String? _routePathId;
   List<dynamic> _availablePaths = [];
 
   bool _isLoading = false;
-  bool _isDetectingManager = true;
   List<Map<String, dynamic>> _employeeList = [];
   List<Map<String, dynamic>> _filteredEmployees = [];
   bool _showMemberDropdown = false;
@@ -69,9 +67,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     'mandal': '',
     'cluster': '',
   };
-  List<dynamic> _sourcePool = [];
-  List<dynamic> _destPool = [];
-  bool _loadingLocations = false;
 
   @override
   void initState() {
@@ -84,13 +79,13 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   Future<void> _fetchHierarchy() async {
     try {
       final res = await _apiService.get(ApiConstants.geoHierarchy);
-      if (mounted) {
-        setState(() {
-          _fullHierarchy = (res is List) ? res : (res['results'] ?? res['data'] ?? []);
-        });
-        // Re-fetch pool after hierarchy is ready (essential for long distance city extraction)
-        _fetchLocationsPool();
-      }
+      setState(() {
+        _fullHierarchy = (res is List)
+            ? res
+            : (res['results'] ?? res['data'] ?? []);
+      });
+      // Re-fetch pool after hierarchy is ready (essential for long distance city extraction)
+      _fetchLocationsPool();
     } catch (e) {
       debugPrint("Failed to fetch hierarchy: $e");
     }
@@ -107,7 +102,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           if (node == null || node is! Map) return;
 
           // Check direct child lists for cities/metro cities
-          ['cities', 'metro_polyten_cities'].forEach((key) {
+          for (var key in ['cities', 'metro_polyten_cities']) {
             final arr = node[key];
             if (arr is List) {
               for (var c in arr) {
@@ -121,10 +116,10 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 }
               }
             }
-          });
+          }
 
           // Walk standard hierarchy levels
-          ['continents', 'countries', 'states', 'districts', 'mandals', 'clusters', 'children'].forEach((key) {
+          for (var key in ['continents', 'countries', 'states', 'districts', 'mandals', 'clusters', 'children']) {
             final arr = node[key];
             if (arr is List) {
               for (var child in arr) {
@@ -142,7 +137,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 }
               }
             }
-          });
+          }
         }
 
         for (var root in _fullHierarchy) {
@@ -165,15 +160,10 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       } else {
         // Local: Fetch Site-level locations from backend
         final res = await _apiService.get("${ApiConstants.locations}?type=Site");
-        if (mounted) {
-          setState(() {
-            _locationsPool =
-                (res is List) ? res : (res['results'] ?? res['data'] ?? []);
-          });
-        }
-        debugPrint(
-          "DEBUG LOC: Local Pool set with ${_locationsPool.length} sites.",
-        );
+        setState(() {
+          _locationsPool = (res is List) ? res : (res['results'] ?? res['data'] ?? []);
+        });
+        debugPrint("DEBUG LOC: Local Pool set with ${_locationsPool.length} sites.");
       }
     } catch (e) {
       debugPrint("Failed to fetch locations pool: $e");
@@ -184,7 +174,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     List<dynamic> states = [];
     void search(dynamic nodes, [int depth = 0]) {
       if (depth > 15 || nodes == null || nodes is! List) {
-        return;
+        return; // Type & Recursion protection
       }
       for (var node in nodes) {
         if (node['level'] == 3 ||
@@ -204,12 +194,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   }
 
   List<dynamic> _getChildren(String type, Map<String, String> filters) {
-    if (_fullHierarchy.isEmpty) {
-      return [];
-    }
-    if (type == 'state') {
-      return _allStates;
-    }
+    if (_fullHierarchy.isEmpty) return [];
+    if (type == 'state') return _allStates;
 
     bool safeMatch(dynamic name, String target) =>
         name?.toString().trim().toLowerCase() == target.trim().toLowerCase();
@@ -324,25 +310,23 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         final res = await _apiService.get(
           "${ApiConstants.findPaths}?source=$src&destination=$dest",
         );
-        if (mounted) {
-          setState(() {
-            _availablePaths = res is List ? res : [];
-            if (_availablePaths.isNotEmpty) {
-              final path = _availablePaths.firstWhere(
-                (p) => p['is_default'] == true,
-                orElse: () => _availablePaths[0],
-              );
-              _routePathId = path['id'].toString();
-              _enRouteController.text =
-                  (path['via_location_names'] as List? ?? []).join(', ');
-              _distance = path['distance_km']?.toString() ?? '';
-            } else {
-              _routePathId = null;
-              _enRouteController.text = '';
-              _distance = '';
-            }
-          });
-        }
+        setState(() {
+          _availablePaths = res is List ? res : [];
+          if (_availablePaths.isNotEmpty) {
+            final path = _availablePaths.firstWhere(
+              (p) => p['is_default'] == true,
+              orElse: () => _availablePaths[0],
+            );
+            _routePathId = path['id'].toString();
+            _enRouteController.text =
+                (path['via_location_names'] as List? ?? []).join(', ');
+            _distance = path['distance_km']?.toString() ?? '';
+          } else {
+            _routePathId = null;
+            _enRouteController.text = '';
+            _distance = '';
+          }
+        });
       } catch (e) {
         debugPrint("Failed to fetch paths: $e");
       }
@@ -385,20 +369,16 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   // --- LOGIC ---
   Future<void> _setupAuthData() async {
     final user = _apiService.getUser();
-    if (user == null) {
-      return;
-    }
+    if (user == null) return;
 
     final userName = (user['name'] ?? user['username'] ?? 'Self');
     _travelerInfo = "$userName (${user['employee_id'] ?? 'ID-N/A'})";
 
     final myId = _normalizeId(user['employee_id'] ?? user['username']);
 
-    if (mounted) {
-      setState(() {
-        _tripLeaderController.text = _travelerInfo;
-      });
-    }
+    setState(() {
+      _tripLeaderController.text = _travelerInfo;
+    });
 
     try {
       // 1. Fetch Employees & Users parallel
@@ -428,10 +408,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               managerInfo['employee_code'] ??
               managerInfo['employee_id'] ??
               managerInfo['id'];
-          final managerName =
-              managerInfo['name'] ??
-              managerInfo['employee_name'] ??
-              'Assigned Manager';
+
 
           final systemMgr = systemUsers.firstWhere(
             (u) =>
@@ -441,13 +418,9 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           );
 
           if (systemMgr.isNotEmpty) {
-            if (!mounted) {
-              return;
-            }
+            if (!mounted) return;
             setState(() {
               _reportingManagerId = systemMgr['id'].toString();
-              _reportingManagerName = systemMgr['name'] ?? managerName;
-              _isDetectingManager = false;
             });
           } else {
             // Fallback to Admin
@@ -459,17 +432,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               ].contains(u['role']?.toString() ?? ''),
               orElse: () => {},
             );
-            if (!mounted) {
-              return;
-            }
+            if (!mounted) return;
             setState(() {
               _reportingManagerId = admin.isNotEmpty
                   ? admin['id'].toString()
                   : null;
-              _reportingManagerName = admin.isNotEmpty
-                  ? "System Admin fallback (for $managerName)"
-                  : managerName;
-              _isDetectingManager = false;
             });
           }
         } else {
@@ -486,19 +453,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             _reportingManagerId = admin.isNotEmpty
                 ? admin['id'].toString()
                 : null;
-            _reportingManagerName = admin.isNotEmpty
-                ? "${admin['name']} (Default)"
-                : 'System Administrator (Default)';
-            _isDetectingManager = false;
           });
         }
       } else {
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
         setState(() {
-          _reportingManagerName = 'Employee Profile Missing';
-          _isDetectingManager = false;
         });
       }
 
@@ -519,29 +478,19 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             };
           })
           .where((emp) {
-            if (_normalizeId(emp['id']) == myId) {
-              return false;
-            }
-            if (_myLevel == 99) {
-              return true;
-            }
+            if (_normalizeId(emp['id']) == myId) return false;
+            if (_myLevel == 99) return true;
             return (emp['numericLevel'] as int) >= _myLevel;
           })
           .toList();
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _employeeList = mapped;
       });
     } catch (e) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
-        _reportingManagerName = 'Error detecting manager';
-        _isDetectingManager = false;
       });
     }
   }
@@ -588,25 +537,21 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       },
     );
     if (picked != null) {
-      if (mounted) {
-        setState(() {
-          if (isStart) {
-            _startDate = picked;
-            if (_endDate != null && _endDate!.isBefore(_startDate!)) {
-              _endDate = null;
-            }
-          } else {
-            _endDate = picked;
+      setState(() {
+        if (isStart) {
+          _startDate = picked;
+          if (_endDate != null && _endDate!.isBefore(_startDate!)) {
+            _endDate = null;
           }
-        });
-      }
+        } else {
+          _endDate = picked;
+        }
+      });
     }
   }
 
   Future<void> _handleSubmit() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     if (_fromController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -671,19 +616,13 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
     try {
       final trip = await _tripService.createTrip(payload);
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       _showSuccessDialog(trip.tripId);
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
@@ -1578,7 +1517,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           Switch(
             value: _considerLocal,
             onChanged: (v) => setState(() => _considerLocal = v),
-            activeColor: Colors.orange,
+            activeThumbColor: Colors.orange,
           ),
         ],
       ),
@@ -1727,7 +1666,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               border: Border.all(color: const Color(0xFFF1F5F9)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -2090,76 +2029,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     );
   }
 
-  Widget _buildReadOnlyField(
-    String label,
-    String value, {
-    bool isWarning = false,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFF64748B),
-            letterSpacing: 0.2,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isWarning
-                    ? const Color(0xFFBB0633).withValues(alpha: 0.1)
-                    : const Color(0xFFF1F5F9).withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isWarning
-                  ? const Color(0xFFFECACA)
-                  : const Color(0xFFF1F5F9),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                isWarning
-                    ? Icons.warning_amber_rounded
-                    : Icons.verified_user_rounded,
-                size: 20,
-                color: isWarning ? Colors.red : const Color(0xFF64748B),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  value,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: isWarning ? Colors.red : const Color(0xFF0F172A),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (isWarning)
-          Padding(
-            padding: const EdgeInsets.only(top: 6, left: 4),
-            child: Text(
-              'Manual review required at HQ Level.',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 10,
-                color: Colors.red,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
+
 
   Widget _buildChecklistItem(
     String title,
@@ -2277,7 +2147,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFF1F5F9).withValues(alpha: 0.03),
+                      color: const Color(0xFF0F1E2A).withValues(alpha: 0.3),
                       blurRadius: 15,
                       offset: const Offset(0, 8),
                     ),

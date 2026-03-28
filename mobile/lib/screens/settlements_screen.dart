@@ -69,6 +69,7 @@ class _SettlementsScreenState extends State<SettlementsScreen> {
     setState(() => _isSettling = true);
     try {
       await _tripService.performSettlement(_selectedTripId!);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Trip accounts finalized and settled successfully'),
@@ -233,7 +234,7 @@ class _SettlementsScreenState extends State<SettlementsScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -273,7 +274,7 @@ class _SettlementsScreenState extends State<SettlementsScreen> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(trip['status']).withOpacity(0.1),
+                    color: _getStatusColor(trip['status']).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(30),
                   ),
                   child: Text(
@@ -292,7 +293,7 @@ class _SettlementsScreenState extends State<SettlementsScreen> {
               children: [
                 CircleAvatar(
                   radius: 16,
-                  backgroundColor: const Color(0xFF0F172A).withOpacity(0.05),
+                  backgroundColor: const Color(0xFF0F172A).withValues(alpha: 0.05),
                   child: Text(
                     (trip['employee'] ?? 'U')[0].toUpperCase(),
                     style: const TextStyle(
@@ -454,7 +455,7 @@ class _SettlementsScreenState extends State<SettlementsScreen> {
               border: Border.all(color: const Color(0xFFF1F5F9)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext.jsx';
 import Layout from './components/Layout';
+import 'leaflet/dist/leaflet.css';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ContactHR from './pages/ContactHR';
@@ -48,6 +49,7 @@ import FuelMaster from './pages/FuelMaster';
 import JobReport from './pages/JobReport';
 import TravelCreation from './pages/TravelCreation';
 import AdminMasters from './pages/AdminMasters';
+import AdminTracking from './pages/AdminTracking';
 import NotificationsPage from './pages/NotificationsPage';
 import TravelTimeline from './pages/TravelTimeline';
 import Settings from './pages/Settings';
@@ -354,6 +356,7 @@ function App() {
                   <Route path="/fuel-master" element={<ProtectedRoute><FuelMaster /></ProtectedRoute>} />
                   <Route path="/travel-creation" element={<ProtectedRoute><TravelCreation /></ProtectedRoute>} />
                   <Route path="/AdminMasters" element={<ProtectedRoute><AdminMasters /></ProtectedRoute>} />
+                  <Route path="/tracking" element={<AdminRoute><AdminTracking /></AdminRoute>} />
                   <Route path="/travel-timeline/:id" element={<ProtectedRoute><TravelTimeline /></ProtectedRoute>} />
                   <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
                   <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

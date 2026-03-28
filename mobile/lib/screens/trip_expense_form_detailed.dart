@@ -20,7 +20,7 @@ class TripExpenseFormDetailedScreen extends StatefulWidget {
   });
 
   @override
-  _TripExpenseFormDetailedScreenState createState() =>
+  State<TripExpenseFormDetailedScreen> createState() =>
       _TripExpenseFormDetailedScreenState();
 }
 
@@ -30,11 +30,10 @@ class _TripExpenseFormDetailedScreenState
   bool _isProcessing = false;
   final picker = ImagePicker();
   final TripService _tripService = TripService();
-  bool get isStartFieldsComplete {
-    return _originController.text.isNotEmpty &&
-        _odoStartController.text.isNotEmpty &&
-        _odoStartImg != null;
-  }
+  bool get isStartFieldsComplete =>
+      _originController.text.isNotEmpty &&
+      _odoStartController.text.isNotEmpty &&
+      _odoStartImg != null;
 
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _amountController = TextEditingController();
@@ -126,11 +125,9 @@ class _TripExpenseFormDetailedScreenState
     final type = (_travelSubType == 'Own Car') ? '4 Wheeler' : '2 Wheeler';
     final rate = await _tripService.fetchFuelRate(type);
     if (rate != null) {
-      if (mounted) {
-        setState(() {
-          _odoRateController.text = rate.toStringAsFixed(2);
-        });
-      }
+      setState(() {
+        _odoRateController.text = rate.toStringAsFixed(2);
+      });
     }
   }
 
@@ -144,7 +141,9 @@ class _TripExpenseFormDetailedScreenState
         exp['description'].toString().startsWith('{')) {
       try {
         details = jsonDecode(exp['description']);
-      } catch (e) {}
+      } catch (e) {
+        debugPrint('Error decoding description: $e');
+      }
     }
 
     _jobReportController.text = exp['remarks'] ?? details['remarks'] ?? details['jobReport'] ?? (widget.category != 'Food' ? (details['purpose'] ?? '') : '');
@@ -237,12 +236,8 @@ class _TripExpenseFormDetailedScreenState
       _endDate = DateTime.tryParse(details['checkOut']) ?? _endDate;
     }
 
-    if (details['depTime'] != null) {
-      _startTime = _parseTime(details['depTime']);
-    }
-    if (details['arrTime'] != null) {
-      _endTime = _parseTime(details['arrTime']);
-    }
+    if (details['depTime'] != null) _startTime = _parseTime(details['depTime']);
+    if (details['arrTime'] != null) _endTime = _parseTime(details['arrTime']);
     if (details['mealTime'] != null) {
       _startTime = _parseTime(details['mealTime']);
     }
@@ -278,9 +273,7 @@ class _TripExpenseFormDetailedScreenState
       if (details['startTime'] != null) {
         _startTime = _parseTime(details['startTime']);
       }
-      if (details['endTime'] != null) {
-        _endTime = _parseTime(details['endTime']);
-      }
+      if (details['endTime'] != null) _endTime = _parseTime(details['endTime']);
     }
   }
 
@@ -294,7 +287,9 @@ class _TripExpenseFormDetailedScreenState
         if (timeStr.toLowerCase().contains('am') && hour == 12) hour = 0;
         return TimeOfDay(hour: hour, minute: minute);
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Error parsing time: $e');
+    }
     return TimeOfDay.now();
   }
 
@@ -304,9 +299,7 @@ class _TripExpenseFormDetailedScreenState
   }
 
   Future<void> _submitEntry() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isProcessing = true);
     try {
@@ -383,19 +376,14 @@ class _TripExpenseFormDetailedScreenState
         }
       }
 
-      if (mounted) {
-        Navigator.pop(context, true);
-      }
+      if (!mounted) return;
+      Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
     } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-      }
+      setState(() => _isProcessing = false);
     }
   }
 
@@ -799,7 +787,7 @@ class _TripExpenseFormDetailedScreenState
                         Switch.adaptive(
                           value: _isTatkal,
                           onChanged: (v) => setState(() => _isTatkal = v),
-                          activeColor: Colors.deepPurple,
+                          activeThumbColor: Colors.deepPurple,
                         ),
                       ],
                     ),
@@ -879,7 +867,7 @@ class _TripExpenseFormDetailedScreenState
                   dense: true,
                 ),
               ),
-              if (_travelMode == 'Flight') ...[
+              if (_travelMode == 'Flight')
                 Expanded(
                   child: CheckboxListTile(
                     title: Text(
@@ -897,7 +885,6 @@ class _TripExpenseFormDetailedScreenState
                     dense: true,
                   ),
                 ),
-              ],
             ],
           ),
         ],
@@ -927,9 +914,7 @@ class _TripExpenseFormDetailedScreenState
   }
 
   Widget _buildLocalTravelForm() {
-    if (_isTravelo) {
-      return _buildTraveloLocalForm();
-    }
+    if (_isTravelo) return _buildTraveloLocalForm();
     return _buildTripLocalTravelForm();
   }
 
@@ -1110,9 +1095,7 @@ class _TripExpenseFormDetailedScreenState
             const SizedBox(height: 32),
             Row(
               children: [
-                Expanded(
-                  child: Divider(color: Colors.grey.withValues(alpha: 0.1)),
-                ),
+                Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.1))),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Icon(
@@ -1121,9 +1104,7 @@ class _TripExpenseFormDetailedScreenState
                     color: Colors.grey.withValues(alpha: 0.3),
                   ),
                 ),
-                Expanded(
-                  child: Divider(color: Colors.grey.withValues(alpha: 0.1)),
-                ),
+                Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.1))),
               ],
             ),
             const SizedBox(height: 32),
@@ -1289,12 +1270,9 @@ class _TripExpenseFormDetailedScreenState
                         result is Map &&
                         result['path'] != null) {
                       final bytes = await File(result['path']).readAsBytes();
-                      if (mounted) {
-                        setState(() {
-                          _selfieImages.add(
-                              'data:image/jpeg;base64,${base64Encode(bytes)}');
-                        });
-                      }
+                      setState(() {
+                        _selfieImages.add('data:image/jpeg;base64,${base64Encode(bytes)}');
+                      });
                     }
                   },
                   icon: const Icon(Icons.add_a_photo_rounded, size: 16),
@@ -1530,9 +1508,7 @@ class _TripExpenseFormDetailedScreenState
             // Functional Divider
             Row(
               children: [
-                Expanded(
-                  child: Divider(color: Colors.grey.withValues(alpha: 0.1)),
-                ),
+                Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.1))),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Icon(
@@ -1541,9 +1517,7 @@ class _TripExpenseFormDetailedScreenState
                     color: Colors.grey.withValues(alpha: 0.3),
                   ),
                 ),
-                Expanded(
-                  child: Divider(color: Colors.grey.withValues(alpha: 0.1)),
-                ),
+                Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.1))),
               ],
             ),
             const SizedBox(height: 32),
@@ -1682,12 +1656,10 @@ class _TripExpenseFormDetailedScreenState
                                 initialReport: _jobReportController.text,
                                 initialAttachments: _jobReportAttachments,
                                 onSave: (text, attachments) async {
-                                  if (mounted) {
-                                    setState(() {
-                                      _jobReportController.text = text;
-                                      _jobReportAttachments = attachments;
-                                    });
-                                  }
+                                  setState(() {
+                                    _jobReportController.text = text;
+                                    _jobReportAttachments = attachments;
+                                  });
                                 },
                               ),
                             ),
@@ -1936,10 +1908,7 @@ class _TripExpenseFormDetailedScreenState
             );
             if (result != null && result is Map) {
               final bytes = await File(result['path']).readAsBytes();
-              if (mounted) {
-                setState(
-                    () => _incidentals[index]['bill'] = base64Encode(bytes));
-              }
+              setState(() => _incidentals[index]['bill'] = base64Encode(bytes));
             }
           },
           child: Container(
@@ -2058,18 +2027,16 @@ class _TripExpenseFormDetailedScreenState
                     );
                     if (result != null && result is Map) {
                       final bytes = await File(result['path']).readAsBytes();
-                      if (mounted) {
-                        onImg('data:image/jpeg;base64,${base64Encode(bytes)}');
-                        setState(() {
-                          if (isStart) {
-                            _odoStartLat = result['latitude'];
-                            _odoStartLong = result['longitude'];
-                          } else {
-                            _odoEndLat = result['latitude'];
-                            _odoEndLong = result['longitude'];
-                          }
-                        });
-                      }
+                      onImg('data:image/jpeg;base64,${base64Encode(bytes)}');
+                      setState(() {
+                        if (isStart) {
+                          _odoStartLat = result['latitude'];
+                          _odoStartLong = result['longitude'];
+                        } else {
+                          _odoEndLat = result['latitude'];
+                          _odoEndLong = result['longitude'];
+                        }
+                      });
                     }
                   },
                   child: Container(
@@ -2424,9 +2391,7 @@ class _TripExpenseFormDetailedScreenState
             color: const Color(0xFF1E293B),
           ),
           onChanged: (v) {
-            if (onChanged != null) {
-              onChanged(v);
-            }
+            if (onChanged != null) onChanged(v);
             setState(() {}); // Trigger calc update
           },
           decoration: InputDecoration(
@@ -2533,9 +2498,7 @@ class _TripExpenseFormDetailedScreenState
               firstDate: DateTime(2023),
               lastDate: DateTime(2030),
             );
-            if (d != null) {
-              onType(d);
-            }
+            if (d != null) onType(d);
           },
           child: Container(
             padding: const EdgeInsets.all(12),
@@ -2589,9 +2552,7 @@ class _TripExpenseFormDetailedScreenState
               context: context,
               initialTime: value,
             );
-            if (t != null) {
-              onType(t);
-            }
+            if (t != null) onType(t);
           },
           child: Container(
             padding: const EdgeInsets.all(12),
@@ -2672,12 +2633,9 @@ class _TripExpenseFormDetailedScreenState
                           result is Map &&
                           result['path'] != null) {
                         final bytes = await File(result['path']).readAsBytes();
-                        if (mounted) {
-                          setState(() {
-                            _jobReportAttachments.add(
-                                'data:image/jpeg;base64,${base64Encode(bytes)}');
-                          });
-                        }
+                        setState(() {
+                          _jobReportAttachments.add('data:image/jpeg;base64,${base64Encode(bytes)}');
+                        });
                       }
                     },
                   ),
@@ -2696,12 +2654,9 @@ class _TripExpenseFormDetailedScreenState
                       );
                       if (image != null) {
                         final bytes = await image.readAsBytes();
-                        if (mounted) {
-                          setState(() {
-                            _jobReportAttachments.add(
-                                'data:image/jpeg;base64,${base64Encode(bytes)}');
-                          });
-                        }
+                        setState(() {
+                          _jobReportAttachments.add('data:image/jpeg;base64,${base64Encode(bytes)}');
+                        });
                       }
                     },
                   ),

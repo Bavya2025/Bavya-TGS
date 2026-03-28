@@ -17,7 +17,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   final ApiService _apiService = ApiService();
   bool _isSaving = false;
 
-  Map<String, dynamic> _docs = {
+  final Map<String, dynamic> _docs = {
     'aadharId': {'val': '', 'file': null, 'fileName': ''},
     'companyId': {'val': '', 'file': null, 'fileName': ''},
     'drivingLicense': {'val': '', 'file': null, 'fileName': ''},
@@ -201,7 +201,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFFA9052E).withOpacity(0.04),
+                    const Color(0xFFA9052E).withValues(alpha: 0.04),
                     Colors.transparent,
                   ],
                 ),
@@ -218,7 +218,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF3B82F6).withOpacity(0.03),
+                    const Color(0xFF3B82F6).withValues(alpha: 0.03),
                     Colors.transparent,
                   ],
                 ),
@@ -318,7 +318,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
           if (_isSaving)
             Container(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               child: const Center(
                 child: CircularProgressIndicator(color: Color(0xFFBB0633)),
               ),
@@ -336,7 +336,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         color: const Color(0xFFA9052E),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -355,7 +355,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               width: 140,
               height: 140,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
             ),
@@ -396,7 +396,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.2,
                           ),
                         ),
@@ -416,7 +416,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     onPressed: _isSaving ? null : _saveDocuments,
                     icon: Icon(
                       Icons.sync_rounded,
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                       size: 24,
                     ),
                   ),
@@ -543,7 +543,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.04),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -554,7 +554,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         child: IntrinsicHeight(
           child: Row(
             children: [
-              Container(width: 6, color: activeColor.withOpacity(0.4)),
+              Container(width: 6, color: activeColor.withValues(alpha: 0.4)),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(20),
@@ -566,7 +566,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: activeColor.withOpacity(0.1),
+                              color: activeColor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Icon(icon, color: activeColor, size: 22),
@@ -664,7 +664,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                             ),
                             enabledBorder: UnderlineInputBorder(
                               borderSide: BorderSide(
-                                color: Colors.grey.withOpacity(0.1),
+                                color: Colors.grey.withValues(alpha: 0.1),
                               ),
                             ),
                             focusedBorder: const UnderlineInputBorder(
@@ -704,7 +704,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                         _actionBtn(
                           'UPLOAD DOCUMENT SCAN',
                           Icons.cloud_upload_outlined,
-                          const Color(0xFF0F172A).withOpacity(0.04),
+                          const Color(0xFF0F172A).withValues(alpha: 0.04),
                           const Color(0xFF475569),
                           onUpload,
                         ),
@@ -724,7 +724,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFF10B981).withOpacity(0.1),
+          color: const Color(0xFF10B981).withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
@@ -740,7 +740,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
@@ -848,7 +848,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, -5),
           ),
@@ -864,7 +864,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0F1E2A).withOpacity(0.2),
+                color: const Color(0xFF0F1E2A).withValues(alpha: 0.2),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -946,7 +946,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF64748B).withOpacity(0.05),
+        color: const Color(0xFF64748B).withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(

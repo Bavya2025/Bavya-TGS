@@ -126,6 +126,7 @@ class _LocationCodesScreenState extends State<LocationCodesScreen> {
     setState(() => _isSyncing = true);
     try {
       await _apiService.post('/api/masters/locations/sync/', body: {}, includeAuth: true);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Database synchronized successfully!")));
       _fetchDeepLocations();
     } catch (e) {
@@ -343,7 +344,7 @@ class _LocationCodesScreenState extends State<LocationCodesScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: const Color(0xFFF1F5F9)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.01), blurRadius: 10, offset: const Offset(0, 4))],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.01), blurRadius: 10, offset: const Offset(0, 4))],
           ),
           child: Column(
             children: [
@@ -351,7 +352,7 @@ class _LocationCodesScreenState extends State<LocationCodesScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: const Color(0xFF700B34).withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+                    decoration: BoxDecoration(color: const Color(0xFF700B34).withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
                     child: const Icon(Icons.location_on_rounded, color: Color(0xFF700B34), size: 24),
                   ),
                   const SizedBox(width: 16),
@@ -414,7 +415,7 @@ class _LocationCodesScreenState extends State<LocationCodesScreen> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
       child: Text(type.toUpperCase(), style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: color)),
     );
   }

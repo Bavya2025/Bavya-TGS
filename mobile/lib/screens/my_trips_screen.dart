@@ -1,25 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'trip_details_screen.dart';
+import 'trip_timeline_screen.dart';
+import 'local_travel_timeline_screen.dart';
 import 'travel_story_screen.dart';
 import 'trip_story_screen.dart';
 import 'trip_summary_screen.dart';
 
-import 'trip_planner_screen.dart';
 import '../models/trip_model.dart';
 import '../services/trip_service.dart';
-import '../components/trip_wallet_sheet.dart';
 import 'create_trip_screen.dart';
 import 'local_travel_screen.dart';
-import '../components/claim_sheet.dart';
 import '../services/expense_reminder_service.dart';
-import '../components/forensic_camera.dart';
-import 'dart:io';
-import 'package:intl/intl.dart';
-import 'package:geolocator/geolocator.dart';
-import 'dart:ui' as ui;
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
 
 class MyTripsScreen extends StatefulWidget {
   const MyTripsScreen({super.key});
@@ -54,13 +45,11 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
           debugPrint('Notification sync failed (non-critical): $notifErr');
         }
       }
-      if (mounted) {
-        setState(() {
-          _allTrips = trips;
-          _applyFilters();
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _allTrips = trips;
+        _applyFilters();
+        _isLoading = false;
+      });
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -71,28 +60,6 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     }
   }
 
-  String _formatCurrency(dynamic amount) {
-    if (amount == null) {
-      return '₹0';
-    }
-    double? numAmount;
-    if (amount is num) {
-      numAmount = amount.toDouble();
-    } else if (amount is String) {
-      // Remove any existing currency symbols or commas before parsing
-      final cleanString = amount.replaceAll(RegExp(r'[^\d.]'), '');
-      numAmount = double.tryParse(cleanString);
-    }
-
-    if (numAmount == null) return '₹$amount';
-
-    final formatter = NumberFormat.currency(
-      locale: 'en_IN',
-      symbol: '₹',
-      decimalDigits: 0,
-    );
-    return formatter.format(numAmount);
-  }
 
   void _applyFilters() {
     final term = _searchTerm.toLowerCase().trim();
@@ -115,9 +82,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
         bool isHidden =
             hideStates.contains(status) || status.contains('pending');
 
-        if (isHidden) {
-          return false;
-        }
+        if (isHidden) return false;
 
         final filterLabel = _filter.trim().toLowerCase();
         final filterClean = filterLabel.replaceAll(' ', '').replaceAll('-', '');
@@ -132,12 +97,8 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
         bool matchesType = _typeFilter == 'All Types' || _typeFilter == 'All';
         if (!matchesType) {
-          if (_typeFilter == 'Trip' && !t.considerAsLocal) {
-            matchesType = true;
-          }
-          if (_typeFilter == 'Travel' && t.considerAsLocal) {
-            matchesType = true;
-          }
+          if (_typeFilter == 'Trip' && !t.considerAsLocal) matchesType = true;
+          if (_typeFilter == 'Travel' && t.considerAsLocal) matchesType = true;
         }
 
         final matchesSearch =
@@ -157,97 +118,14 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   }
 
   void _onFilterChanged(String? v) {
-    if (v == null) {
-      return;
-    }
+    if (v == null) return;
     setState(() {
       _filter = v;
       _applyFilters();
     });
   }
 
-  Future<File?> _processOdometerImage(File imageFile, Position position) async {
-    try {
-      final String currentTime = DateFormat(
-        'yyyy-MM-dd HH:mm',
-      ).format(DateTime.now());
-      final String gpsLocation =
-          "Lat: ${position.latitude.toStringAsFixed(4)}, Long: ${position.longitude.toStringAsFixed(4)}";
 
-      final bytes = await imageFile.readAsBytes();
-      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
-      final ui.FrameInfo frame = await codec.getNextFrame();
-      final ui.Image image = frame.image;
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      final paint = Paint();
-
-      canvas.drawImage(image, Offset.zero, paint);
-      final rectPaint = Paint()..color = Colors.black.withValues(alpha: 0.5);
-      canvas.drawRect(
-        Rect.fromLTWH(
-          0,
-          image.height.toDouble() - 180,
-          image.width.toDouble(),
-          180,
-        ),
-        rectPaint,
-      );
-
-      final textStyle = TextStyle(
-        color: Colors.white,
-        fontSize: (image.width / 30).clamp(24, 80),
-        fontWeight: FontWeight.bold,
-      );
-      final textPainterLoc = TextPainter(
-        text: TextSpan(text: 'Location: $gpsLocation', style: textStyle),
-        textDirection: ui.TextDirection.ltr,
-      );
-      textPainterLoc.layout();
-      textPainterLoc.paint(canvas, Offset(40, image.height.toDouble() - 140));
-
-      final textPainterTime = TextPainter(
-        text: TextSpan(text: 'Time: $currentTime', style: textStyle),
-        textDirection: ui.TextDirection.ltr,
-      );
-      textPainterTime.layout();
-      textPainterTime.paint(canvas, Offset(40, image.height.toDouble() - 70));
-
-      final picture = recorder.endRecording();
-      final img = await picture.toImage(image.width, image.height);
-      final data = await img.toByteData(format: ui.ImageByteFormat.png);
-
-      if (data != null) {
-        final directory = await getTemporaryDirectory();
-        final String filePath = p.join(
-          directory.path,
-          'watermarked_odo_${DateTime.now().millisecondsSinceEpoch}.png',
-        );
-        final File watermarkedFile = File(filePath)
-          ..writeAsBytesSync(data.buffer.asUint8List());
-        return watermarkedFile;
-      }
-    } catch (e) {
-      debugPrint('Error processing image: $e');
-    }
-    return null;
-  }
-
-  Future<Position?> _determinePosition() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return null;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return null;
-      }
-    }
-    return await Geolocator.getCurrentPosition();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -569,7 +447,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               const SizedBox(width: 12),
               Container(
                 height: 60,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -608,6 +486,71 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _filter,
+                isExpanded: true,
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFFBB0633),
+                  size: 20,
+                ),
+                style: GoogleFonts.plusJakartaSans(
+                  color: const Color(0xFF0F172A),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+                items: [
+                  'All Status',
+                  'Approved',
+                  'On-Going',
+                  'Completed',
+                  'Settled',
+                  'Cancelled',
+                  'Rejected',
+                ]
+                    .map(
+                      (v) => DropdownMenuItem(
+                        value: v,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(right: 10),
+                              decoration: BoxDecoration(
+                                color: v == 'All Status'
+                                    ? Colors.grey.shade300
+                                    : _getStatusColor(v),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            Text(v),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _onFilterChanged,
+              ),
+            ),
           ),
         ],
       ),
@@ -712,99 +655,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     );
   }
 
-  Widget _summaryTile(
-    String label,
-    String value, {
-    bool badge = false,
-    bool isBudget = false,
-    IconData? icon,
-  }) {
-    String displayValue = value.trim();
-    // Improved double symbol check: handle both literal and variant characters
-    bool hasCurrency =
-        displayValue.contains('₹') ||
-        displayValue.contains('Rs') ||
-        displayValue.contains('\u20B9');
-
-    if (isBudget && !hasCurrency) {
-      displayValue = '₹$displayValue';
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 12, color: Colors.black26),
-                const SizedBox(width: 4),
-              ],
-              Text(
-                label.toUpperCase(),
-                style: GoogleFonts.inter(
-                  fontSize: 8,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black26,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          if (badge)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: _getStatusColor(displayValue).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                displayValue,
-                style: GoogleFonts.inter(
-                  color: _getStatusColor(displayValue),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            )
-          else
-            Text(
-              displayValue,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-                color: isBudget
-                    ? const Color(0xFFBB0633)
-                    : const Color(0xFF0F172A),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildTripCard(Trip t) {
     final statusColor = _getStatusColor(t.status);
-    final bool canShowStory =
-        t.status.toLowerCase() != 'draft' &&
-        t.status.toLowerCase() != 'cancelled';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
@@ -826,14 +679,10 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
         child: InkWell(
           onTap: t.status.toLowerCase() == 'settled'
               ? null
-              : () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => TripSummaryScreen(trip: t),
-                    ),
-                  );
-                },
+              : () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => TripSummaryScreen(trip: t)),
+                ),
           borderRadius: BorderRadius.circular(28),
           child: Stack(
             children: [
@@ -922,6 +771,31 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                                 Row(
                                   children: [
                                     _cardDetailIcon(
+                                      Icons.person_outline_rounded,
+                                      const Color(0xFF8B5CF6),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        t.employee,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF475569),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 10),
+                                  child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+                                ),
+                                Row(
+                                  children: [
+                                    _cardDetailIcon(
                                       Icons.location_on_rounded,
                                       const Color(0xFFBB0633),
                                     ),
@@ -968,6 +842,32 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                             ),
                           ),
                           const SizedBox(height: 20),
+                        ] else ...[
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFF1F5F9)),
+                            ),
+                            child: Row(
+                              children: [
+                                _cardDetailIcon(Icons.calendar_month_rounded, const Color(0xFF3B82F6)),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    t.dates,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF475569),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
                         ],
                         Row(
                           children: [
@@ -997,8 +897,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                                   () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          TripDetailsScreen(tripId: t.id),
+                                      builder: (_) => t.considerAsLocal
+                                          ? LocalTravelTimelineScreen(tripId: t.id)
+                                          : TripTimelineScreen(tripId: t.id),
                                     ),
                                   ),
                                 ),
@@ -1032,7 +933,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.5),
+                      color: Colors.white.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(28),
                     ),
                     child: Center(
@@ -1139,92 +1040,6 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     );
   }
 
-  Widget _modalActionButton(String label, IconData icon, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: const Color(0xFFBB0633)),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF0F172A),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _cardActionButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback onPressed,
-    bool isSecondary = false,
-    Color? textColor,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      child: TextButton(
-        onPressed: onPressed,
-        style: TextButton.styleFrom(
-          backgroundColor: Colors.white,
-          side: const BorderSide(color: Color(0xFFF1F5F9)),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
-                color: textColor ?? const Color(0xFF0F172A),
-              ),
-            ),
-            Icon(icon, size: 18, color: textColor ?? const Color(0xFF0F172A)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  PopupMenuItem<String> _menuItem(String value, IconData icon) {
-    return PopupMenuItem(
-      value: value,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: const Color(0xFF64748B)),
-          const SizedBox(width: 12),
-          Text(
-            value,
-            style: GoogleFonts.plusJakartaSans(
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {

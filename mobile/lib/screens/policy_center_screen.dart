@@ -42,14 +42,9 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
   }
 
   Future<void> _fetchPolicies() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
     try {
       final response = await _apiService.get(ApiConstants.policies);
-      if (!mounted) {
-        return;
-      }
       
       List<dynamic> list = [];
       if (response is List) {
@@ -66,9 +61,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
     } catch (e) {
       debugPrint("Failed to fetch policies: $e");
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Failed to load policies")),
         );
@@ -102,9 +95,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
       floatingActionButton: isAdmin ? FloatingActionButton.extended(
-        onPressed: () {
-          _showUploadModal();
-        },
+        onPressed: () => _showUploadModal(),
         backgroundColor: const Color(0xFF0F1E2A),
         elevation: 10,
         icon: const Icon(Icons.upload_file_rounded, color: Colors.white),
@@ -424,7 +415,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
             ],
           ),
         ),
-        ...items.map((p) => _buildPolicyCard(p, isAdmin)).toList(),
+        ...items.map((p) => _buildPolicyCard(p, isAdmin)),
         const SizedBox(height: 12),
       ],
     );
@@ -544,23 +535,15 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
   Future<void> _handleView(dynamic p) async {
     final suffix = _getLanguageSuffix();
     if (p['file_name_$suffix'] == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("This policy is not available in $_selectedLanguage")),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("This policy is not available in $_selectedLanguage")),
+      );
+      return;
     }
     
-    if (mounted) {
-      setState(() {
-        _isProcessing = true;
-      });
-    }
+    setState(() => _isProcessing = true);
     try {
       final response = await _apiService.get('${ApiConstants.policies}${p['id']}/');
-      if (!mounted) {
-        return;
-      }
       final base64String = response['file_content_$suffix']?.toString();
       
       if (base64String == null || base64String.isEmpty) {
@@ -575,40 +558,22 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
       
       final bytes = base64Decode(cleanBase64);
       final tempDir = await getTemporaryDirectory();
-      if (!mounted) {
-        return;
-      }
       final fileName = p['file_name_$suffix'] ?? 'policy.pdf';
       final file = File('${tempDir.path}/$fileName');
       await file.writeAsBytes(bytes);
-      if (!mounted) {
-        return;
-      }
       
       final result = await OpenFilex.open(file.path);
       if (result.type != ResultType.done) {
         throw Exception(result.message);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to open document: $e")));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to open document: $e")));
     } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
-      }
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
-  Future<void> _handleDownload(dynamic p) async {
-    // Similar to view but save to permanent storage or show Toast
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Download logic same as view; opening PDF.")));
-    }
-    _handleView(p);
-  }
 
   Future<void> _handleDelete(dynamic id) async {
     final confirmed = await showDialog<bool>(
@@ -617,53 +582,29 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
         title: Text('Delete Policy', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900)),
         content: const Text('Are you sure you want to delete this policy? This action cannot be undone.'),
         actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey, fontWeight: FontWeight.w700))),
           TextButton(
-            onPressed: () {
-              Navigator.pop(ctx, false);
-            },
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.inter(color: Colors.grey, fontWeight: FontWeight.w700),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx, true);
-            },
-            child: Text(
-              'Delete',
-              style: GoogleFonts.inter(color: const Color(0xFFEF4444), fontWeight: FontWeight.w700),
-            ),
+            onPressed: () => Navigator.pop(ctx, true), 
+            child: Text('Delete', style: GoogleFonts.inter(color: const Color(0xFFEF4444), fontWeight: FontWeight.w700))
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      if (mounted) {
-        setState(() {
-          _isProcessing = true;
-        });
-      }
+      setState(() => _isProcessing = true);
       try {
         await _apiService.delete('${ApiConstants.policies}$id/');
-        if (!mounted) {
-          return;
-        }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Policy deleted successfully")));
+          _fetchPolicies();
         }
-        _fetchPolicies();
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to delete: $e")));
         }
       } finally {
-        if (mounted) {
-          setState(() {
-            _isProcessing = false;
-          });
-        }
+        if (mounted) setState(() => _isProcessing = false);
       }
     }
   }
@@ -675,9 +616,7 @@ class _PolicyCenterScreenState extends State<PolicyCenterScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return _PolicyUploadModal(onSuccess: () => _fetchPolicies());
-      },
+      builder: (ctx) => _PolicyUploadModal(onSuccess: () => _fetchPolicies()),
     );
   }
 }
@@ -696,7 +635,7 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
   String _category = 'General';
   bool _isUploading = false;
 
-  Map<String, dynamic> _files = {
+  final Map<String, dynamic> _files = {
     'en': {'name': null, 'content': null, 'size': null},
     'te': {'name': null, 'content': null, 'size': null},
     'hi': {'name': null, 'content': null, 'size': null},
@@ -707,18 +646,12 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
       type: FileType.custom,
       allowedExtensions: ['pdf'],
     );
-    if (!mounted) {
-      return;
-    }
 
     if (result != null) {
       final file = File(result.files.single.path!);
       final bytes = await file.readAsBytes();
-      if (!mounted) {
-        return;
-      }
       final base64Content = 'data:application/pdf;base64,${base64Encode(bytes)}';
-      final sizeMb = (bytes.length / (1024 * 1024)).toStringAsFixed(1) + ' MB';
+      final sizeMb = '${(bytes.length / (1024 * 1024)).toStringAsFixed(1)} MB';
 
       setState(() {
         _files[lang] = {
@@ -732,23 +665,15 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
 
   Future<void> _handleUpload() async {
     if (_titleController.text.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a title")));
-      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a title")));
       return;
     }
     if (_files.values.every((f) => f['content'] == null)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Select at least one language PDF")));
-      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Select at least one language PDF")));
       return;
     }
 
-    if (mounted) {
-      setState(() {
-        _isUploading = true;
-      });
-    }
+    setState(() => _isUploading = true);
     try {
       final data = {
         'title': _titleController.text,
@@ -775,11 +700,7 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Upload failed: $e")));
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isUploading = false;
-        });
-      }
+      if (mounted) setState(() => _isUploading = false);
     }
   }
 
@@ -807,9 +728,7 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
                   style: GoogleFonts.plusJakartaSans(fontSize: 24, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: -0.8)
                 ),
                 GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context);
-                  },
+                  onTap: () => Navigator.pop(context),
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(color: const Color(0xFFF1F5F9), shape: BoxShape.circle),
@@ -850,11 +769,7 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
                   value: _category,
                   isExpanded: true,
                   icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B)),
-                  onChanged: (val) {
-                    setState(() {
-                      _category = val!;
-                    });
-                  },
+                  onChanged: (val) => setState(() => _category = val!),
                   items: ['General', 'HR Policy', 'Travel Guide'].map((c) => DropdownMenuItem(
                     value: c, 
                     child: Text(c, style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)))
@@ -913,9 +828,7 @@ class _PolicyUploadModalState extends State<_PolicyUploadModal> {
   Widget _buildLangUpload(String code, String label) {
     bool hasFile = _files[code]!['name'] != null;
     return GestureDetector(
-      onTap: () {
-        _pickFile(code);
-      },
+      onTap: () => _pickFile(code),
       child: Container(
         height: 110,
         decoration: BoxDecoration(

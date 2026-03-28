@@ -378,23 +378,6 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
   }
 
   Widget _buildStatusPill(String status) {
-    Color color;
-    switch (status.toLowerCase()) {
-      case 'approved':
-        color = const Color(0xFF10B981);
-        break;
-      case 'completed':
-        color = const Color(0xFF3B82F6);
-        break;
-      case 'on-going':
-        color = const Color(0xFFF59E0B);
-        break;
-      case 'rejected':
-        color = const Color(0xFFEF4444);
-        break;
-      default:
-        color = Colors.white70;
-    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
@@ -476,12 +459,13 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
               ? Icons.access_time_filled_rounded
               : Icons.radio_button_unchecked_rounded);
 
-    if (status == 'completed')
+    if (status == 'completed') {
       nodeColor = const Color(0xFF10B981);
-    else if (status == 'current')
+    } else if (status == 'current') {
       nodeColor = const Color(0xFFBB0633);
-    else
+    } else {
       nodeColor = const Color(0xFFE2E8F0);
+    }
 
     return IntrinsicHeight(
       child: Row(
@@ -820,7 +804,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
         border: Border.all(color: borderColor ?? const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -911,19 +895,4 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
     );
   }
 
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'approved':
-        return const Color(0xFF10B981);
-      case 'completed':
-        return const Color(0xFF3B82F6);
-      case 'on-going':
-        return const Color(0xFFF59E0B);
-      case 'cancelled':
-      case 'rejected':
-        return const Color(0xFFEF4444);
-      default:
-        return const Color(0xFF64748B);
-    }
-  }
 }

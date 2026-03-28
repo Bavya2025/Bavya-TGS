@@ -11,12 +11,56 @@ import {
     Shield, 
     Check,
     ChevronRight,
-    Smartphone
+    Smartphone,
+    Navigation,
+    Loader2,
+    RefreshCw
 } from 'lucide-react';
+import api from '../api/api';
+import { useToast } from '../context/ToastContext.jsx';
 
 const Settings = () => {
     const { user } = useAuth();
     const { theme: activeTheme, changeTheme, themes } = useTheme();
+    const { showToast } = useToast();
+
+    const [trackingConfig, setTrackingConfig] = React.useState({
+        interval_minutes: 15,
+        distance_filter: 100,
+        is_active: true,
+        daily_tracking_active: true,
+        latest_version: '1.0.0',
+        update_url: ''
+    });
+    const [loadingConfig, setLoadingConfig] = React.useState(false);
+
+    React.useEffect(() => {
+        const isAdmin = ['admin', 'superuser'].includes((user?.role?.name || user?.role || '').toLowerCase());
+        if (isAdmin) {
+            fetchTrackingConfig();
+        }
+    }, [user]);
+
+    const fetchTrackingConfig = async () => {
+        setLoadingConfig(true);
+        try {
+            const res = await api.get('/api/tracking-config/');
+            if (res.data) setTrackingConfig(res.data);
+        } catch (error) {
+            console.error('Failed to fetch tracking config:', error);
+        } finally {
+            setLoadingConfig(false);
+        }
+    };
+
+    const handleUpdateTrackingConfig = async () => {
+        try {
+            await api.post('/api/tracking-config/', trackingConfig);
+            showToast('Tracking configuration updated successfully', 'success');
+        } catch (error) {
+            showToast('Failed to update tracking config', 'error');
+        }
+    };
 
     const sections = [
         {
@@ -171,6 +215,107 @@ const Settings = () => {
                             ))}
                         </div>
                     </div>
+
+                    {/* Admin Section: Mobile Tracking Config */}
+                    {['admin', 'superuser'].includes((user?.role?.name || user?.role || '').toLowerCase()) && (
+                        <div className="premium-card mt-8" style={{ padding: '2rem', marginTop: '2rem', border: '2px solid #3b82f620' }}>
+                            <div className="section-header-styled mb-6" style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderBottom: '1px solid #3b82f6', paddingBottom: '1rem', marginBottom: '2rem' }}>
+                                <div className="header-icon" style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', padding: '10px', borderRadius: '12px', color: 'white' }}>
+                                    <Navigation size={24} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e40af' }}>Global Mobility Configuration</h3>
+                                    <p className="text-muted" style={{ margin: 0 }}>Define behavior for stealth mobile GPS tracking and sync intervals.</p>
+                                </div>
+                                <button 
+                                    className="btn btn-primary btn-sm"
+                                    onClick={() => handleUpdateTrackingConfig()}
+                                >
+                                    Save Changes
+                                </button>
+                            </div>
+
+                            <div className="settings-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '2rem' }}>
+                                <div className="config-item">
+                                    <label style={{ display: 'block', fontWeight: '700', fontSize: '14px', marginBottom: '8px', color: '#334155' }}>Sync Interval (Minutes)</label>
+                                    <input 
+                                        type="number" 
+                                        className="form-control" 
+                                        value={trackingConfig.interval_minutes}
+                                        onChange={(e) => setTrackingConfig({...trackingConfig, interval_minutes: e.target.value})}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                                    />
+                                    <p style={{ fontSize: '11px', color: '#64748b', marginTop: '5px' }}>How often background GPS points are synced to the cloud.</p>
+                                </div>
+                                <div className="config-item">
+                                    <label style={{ display: 'block', fontWeight: '700', fontSize: '14px', marginBottom: '8px', color: '#334155' }}>Distance Filter (Meters)</label>
+                                    <input 
+                                        type="number" 
+                                        className="form-control" 
+                                        value={trackingConfig.distance_filter}
+                                        onChange={(e) => setTrackingConfig({...trackingConfig, distance_filter: e.target.value})}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                                    />
+                                    <p style={{ fontSize: '11px', color: '#64748b', marginTop: '5px' }}>Minimum movement required to trigger a new location capture.</p>
+                                </div>
+                                <div className="config-item">
+                                    <label style={{ display: 'block', fontWeight: '700', fontSize: '14px', marginBottom: '8px', color: '#334155' }}>Current App Version</label>
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <input 
+                                            type="text" 
+                                            className="form-control" 
+                                            value={trackingConfig.latest_version}
+                                            onChange={(e) => setTrackingConfig({...trackingConfig, latest_version: e.target.value})}
+                                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                                        />
+                                        <div style={{ display: 'flex', alignItems: 'center', background: '#f8fafc', padding: '0 10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: '#64748b' }}>
+                                            <RefreshCw size={14} />
+                                        </div>
+                                    </div>
+                                    <p style={{ fontSize: '11px', color: '#64748b', marginTop: '5px' }}>The version currently available for download.</p>
+                                </div>
+                                <div className="config-item">
+                                    <label style={{ display: 'block', fontWeight: '700', fontSize: '14px', marginBottom: '8px', color: '#334155' }}>Update URL (APK/Bundle)</label>
+                                    <input 
+                                        type="url" 
+                                        className="form-control" 
+                                        value={trackingConfig.update_url}
+                                        onChange={(e) => setTrackingConfig({...trackingConfig, update_url: e.target.value})}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                                        placeholder="https://your-server.com/app.apk"
+                                    />
+                                    <p style={{ fontSize: '11px', color: '#64748b', marginTop: '5px' }}>Direct link to the new version file.</p>
+                                </div>
+                            </div>
+
+                            <div className="toggle-group mt-6" style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 700, color: '#1e293b' }}>Global Tracking Active</div>
+                                        <div style={{ fontSize: '12px', color: '#64748b' }}>Master switch to enable/disable background tracking system-wide.</div>
+                                    </div>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={trackingConfig.is_active}
+                                        onChange={(e) => setTrackingConfig({...trackingConfig, is_active: e.target.checked})}
+                                        style={{ width: '20px', height: '20px' }} 
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 700, color: '#1e293b' }}>Daily Stealth Monitoring</div>
+                                        <div style={{ fontSize: '12px', color: '#64748b' }}>Keeps tracking alive on non-trip days (Generic "Smart Hub Sync" mode).</div>
+                                    </div>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={trackingConfig.daily_tracking_active}
+                                        onChange={(e) => setTrackingConfig({...trackingConfig, daily_tracking_active: e.target.checked})}
+                                        style={{ width: '20px', height: '20px' }} 
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

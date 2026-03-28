@@ -50,27 +50,74 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
   Future<void> _fetchData() async {
     setState(() => _isLoading = true);
     try {
-      final tasks = await _tripService.fetchApprovals(
-        tab: _activeTab,
-        type: _filterType,
-        viewType: _viewType,
-        search: _searchController.text,
-      );
+      await _tripService.fetchApprovalCounts();
+      List<Map<String, dynamic>> finalTasks = [];
+
+      if (_viewType == 'monthly') {
+        final batchesData = await _tripService.fetchBulkActivities();
+        // Filter those pending for me
+        // However, on mobile we don't have user info in this screen to filter 'current_approver',
+        // so we'll just show what the backend returns. The backend should ideally filter by approver.
+        finalTasks = batchesData
+            .where((b) {
+              final s = b['status']?.toString() ?? '';
+              if (_activeTab == 'pending') {
+                return s == 'Submitted' || s == 'Manager Approved';
+              } else {
+                return s == 'Approved' ||
+                    s == 'Rejected' ||
+                    s == 'Finance Review' ||
+                    s == 'Settled';
+              }
+            })
+            .map((b) {
+              final rows = (b['data_json'] as List?) ?? [];
+              final entryCount = rows.where((r) {
+                final dateStr = r['date']?.toString() ?? '';
+                return !dateStr.toLowerCase().contains('instruc');
+              }).length;
+
+              return {
+                'id': b['id']?.toString() ?? '',
+                'type': 'Monthly Tour Plan',
+                'requester':
+                    b['employee_name']?.toString() ?? 'Unknown Employee',
+                'purpose': 'Monthly Tour Plan',
+                'status': b['status'],
+                'date': b['created_at']?.toString().split('T').first ?? '',
+                'cost': '$entryCount Entries',
+                'risk': 'Low',
+                'data_json': rows,
+                'file_name': b['file_name']?.toString() ?? 'Daily Activities',
+                'remarks': b['remarks'],
+              };
+            })
+            .toList();
+      } else {
+        finalTasks = await _tripService.fetchApprovals(
+          tab: _activeTab,
+          type: _filterType,
+          viewType: _viewType,
+          search: _searchController.text,
+        );
+      }
       if (mounted) {
         setState(() {
-          _tasks = tasks;
+          _tasks = finalTasks;
           _isLoading = false;
         });
       }
     } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
       if (mounted) {
-        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to load tasks: $e'),
             backgroundColor: const Color(0xFFEF4444),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -105,18 +152,18 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
         default:
           verb = '${action}ed';
       }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Request $verb successfully'),
-            backgroundColor: const Color(0xFF10B981),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Request $verb successfully'),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
-        );
-        setState(() => _selectedIds.clear());
-      }
+        ),
+      );
+      setState(() => _selectedIds.clear());
       _fetchData();
     } catch (e) {
       String message = e.toString();
@@ -126,17 +173,17 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
         message = 'You are not authorized to perform this action.';
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: const Color(0xFFEF4444),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
-        );
-      }
+        ),
+      );
     }
   }
 
@@ -316,12 +363,8 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
             ),
             child: Row(
               children: [
-                Expanded(
-                  child: _categoryBtn('special', 'Special Requests'),
-                ),
-                Expanded(
-                  child: _categoryBtn('monthly', 'Monthly Tour Plan'),
-                ),
+                Expanded(child: _categoryBtn('special', 'Special Requests')),
+                Expanded(child: _categoryBtn('monthly', 'Monthly Tour Plan')),
               ],
             ),
           ),
@@ -440,7 +483,11 @@ class _ApprovalsInboxScreenState extends State<ApprovalsInboxScreen>
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: _filterType,
-                icon: const Icon(Icons.filter_list_rounded, color: Color(0xFFBB0633), size: 18),
+                icon: const Icon(
+                  Icons.filter_list_rounded,
+                  color: Color(0xFFBB0633),
+                  size: 18,
+                ),
                 style: GoogleFonts.plusJakartaSans(
                   color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w800,
@@ -837,19 +884,18 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
 
     if (status == 'Rejected') {
       final remark = await _showRemarksDialog();
+      if (!mounted) return;
       if (remark == null || remark.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Rejection reason is mandatory'),
-              backgroundColor: const Color(0xFFEF4444),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Rejection reason is mandatory'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
             ),
-          );
-        }
+          ),
+        );
         return;
       }
       finalRemark = remark;
@@ -867,32 +913,31 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
           'remarks': finalRemark,
         },
       );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Item ${status.toLowerCase()}ed with feedback'),
-            backgroundColor: const Color(0xFF10B981),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Item ${status.toLowerCase()}ed with feedback'),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
-        );
-        widget.onRefresh(); // Trigger main screen refresh
-      }
+        ),
+      );
+      widget.onRefresh(); // Trigger main screen refresh
+      if (!mounted) return;
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update item: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update item: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
-        );
-      }
-    } finally {
-    }
+        ),
+      );
+    } finally {}
   }
 
   @override
@@ -1075,6 +1120,13 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+
+                // ── Monthly Tour Plan (Bulk Batch) ───────────────────────────
+                if (type == 'Monthly Tour Plan' ||
+                    task['data_json'] != null) ...[
+                  const SizedBox(height: 32),
+                  _buildBulkBatchSection(task),
+                ],
 
                 if (type == 'Trip' && details.isNotEmpty) ...[
                   const SizedBox(height: 32),
@@ -1454,6 +1506,485 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
     );
   }
 
+  // ─── Monthly Tour Plan / Bulk Activity Batch ─────────────────────────────
+
+  final Map<int, Map<String, String>> _batchRowEdits = {};
+
+  Widget _buildBulkBatchSection(Map<String, dynamic> task) {
+    final List<dynamic> rows = task['data_json'] ?? [];
+    final String fileName =
+        task['file_name']?.toString() ??
+        task['purpose']?.toString() ??
+        'Monthly Tour Plan';
+    final filteredRows = rows.where((r) {
+      final dateStr = r['date']?.toString() ?? '';
+      return !dateStr.toLowerCase().contains('instruc');
+    }).toList();
+
+    if (filteredRows.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Text(
+          'No activity entries found.',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 13,
+            color: const Color(0xFF64748B),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.calendar_month_rounded,
+              color: Color(0xFFBB0633),
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Daily Activities — ${filteredRows.length} Entries',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          fileName,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            color: const Color(0xFF94A3B8),
+            fontWeight: FontWeight.w700,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 16),
+        ...filteredRows.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final row = Map<String, dynamic>.from(entry.value as Map);
+          return _buildBulkRowCard(idx, row, task);
+        }),
+      ],
+    );
+  }
+
+  Widget _buildBulkRowCard(
+    int idx,
+    Map<String, dynamic> row,
+    Map<String, dynamic> task,
+  ) {
+    final editState = _batchRowEdits[idx] ?? {};
+    final rowStatus = editState['status'] ?? row['_status']?.toString() ?? '';
+    final isRejected = rowStatus == 'Rejected';
+    final isValidated = rowStatus == 'Validated' || rowStatus == 'OK';
+    final startTime = row['start_time']?.toString() ?? '';
+    final reachTime =
+        row['reach_time']?.toString() ?? row['end_time']?.toString() ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isRejected
+            ? const Color(0xFFFFF1F2)
+            : isValidated
+            ? const Color(0xFFF0FDF4)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isRejected
+              ? const Color(0xFFFECACA)
+              : isValidated
+              ? const Color(0xFFBBF7D0)
+              : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today_rounded,
+                      size: 13,
+                      color: Color(0xFF94A3B8),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      row['date']?.toString() ?? '',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                ),
+                if (isRejected)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'REJECTED',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  )
+                else if (isValidated)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'VALIDATED',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'FROM',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9,
+                          color: const Color(0xFF94A3B8),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      Text(
+                        row['origin_route']?.toString() ?? '-',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF0F172A),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Color(0xFFBB0633),
+                    size: 16,
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'TO',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9,
+                          color: const Color(0xFF94A3B8),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      Text(
+                        row['destination_route']?.toString() ?? '-',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF0F172A),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.end,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                _timeChip('START', startTime),
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.arrow_right_alt_rounded,
+                  color: Color(0xFF94A3B8),
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                _timeChip('REACH', reachTime),
+                const Spacer(),
+                if ((row['visit_intent'] ?? '').toString().isNotEmpty)
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        row['visit_intent']?.toString() ?? '',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF475569),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if ((row['_remarks'] ?? '').toString().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFECACA)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.info_outline_rounded,
+                      size: 13,
+                      color: Color(0xFFEF4444),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        row['_remarks'].toString(),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          color: const Color(0xFFDC2626),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          if (!widget.isHistory && row['_status'] != 'Rejected') ...[
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: TextField(
+                onChanged: (v) => setState(
+                  () => _batchRowEdits[idx] = {
+                    ...(_batchRowEdits[idx] ?? {}),
+                    'remark': v,
+                  },
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Rejection reason (optional)...',
+                  hintStyle: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    color: const Color(0xFFCBD5E1),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  isDense: true,
+                ),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        setState(
+                          () => _batchRowEdits[idx] = {
+                            ...(_batchRowEdits[idx] ?? {}),
+                            'status': 'Rejected',
+                          },
+                        );
+                        try {
+                          await _tripService.performApproval(
+                            task['id'],
+                            'UpdateBatchRow',
+                            extraData: {
+                              'row_index': idx,
+                              'row_status': 'Rejected',
+                              'remarks': editState['remark'] ?? '',
+                            },
+                          );
+                        } catch (_) {}
+                      },
+                      icon: const Icon(Icons.close_rounded, size: 14),
+                      label: Text(
+                        'Reject',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: const BorderSide(color: Color(0xFFFECACA)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        setState(
+                          () => _batchRowEdits[idx] = {
+                            ...(_batchRowEdits[idx] ?? {}),
+                            'status': 'Validated',
+                          },
+                        );
+                        try {
+                          await _tripService.performApproval(
+                            task['id'],
+                            'UpdateBatchRow',
+                            extraData: {
+                              'row_index': idx,
+                              'row_status': 'Validated',
+                              'remarks': editState['remark'] ?? '',
+                            },
+                          );
+                        } catch (_) {}
+                      },
+                      icon: const Icon(Icons.check_rounded, size: 14),
+                      label: Text(
+                        'Validate',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 14),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _timeChip(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 8,
+            color: const Color(0xFF94A3B8),
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            value.isEmpty ? '--:--' : value,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildItinerary(Map<String, dynamic> details) {
     return Row(
       children: [
@@ -1509,9 +2040,7 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
   }
 
   Widget _detailBox(String label, dynamic value) {
-    if (value == null) {
-      return const SizedBox.shrink();
-    }
+    if (value == null) return const SizedBox.shrink();
     return Container(
       width: 140,
       padding: const EdgeInsets.all(12),
@@ -1672,15 +2201,19 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                     children: [
                       Expanded(
                         child: () {
-                          String description = exp['description']?.toString() ?? '';
+                          String description =
+                              exp['description']?.toString() ?? '';
                           if (description.startsWith('{')) {
                             try {
-                              final d = jsonDecode(description) as Map<String, dynamic>;
+                              final d =
+                                  jsonDecode(description)
+                                      as Map<String, dynamic>;
                               description =
                                   "${d['origin'] ?? ''}${d['origin'] != null ? ' → ' : ''}${d['destination'] ?? d['location'] ?? d['hotelName'] ?? d['hotel_name'] ?? ''}";
                               if (d['remarks'] != null &&
                                   d['remarks'].toString().isNotEmpty &&
-                                  d['remarks'].toString().toLowerCase() != 'null') {
+                                  d['remarks'].toString().toLowerCase() !=
+                                      'null') {
                                 description += " (${d['remarks']})";
                               }
                             } catch (e) {
@@ -1709,7 +2242,10 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                   ),
                   if (exp['receipt_image'] != null) ...[
                     const SizedBox(height: 8),
-                    _miniImageThumbnail(exp['receipt_image'].toString(), "Receipt"),
+                    _miniImageThumbnail(
+                      exp['receipt_image'].toString(),
+                      "Receipt",
+                    ),
                   ],
                   () {
                     String description = exp['description']?.toString() ?? '';
@@ -1717,7 +2253,8 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                       return const SizedBox.shrink();
                     }
                     try {
-                      final details = jsonDecode(description) as Map<String, dynamic>;
+                      final details =
+                          jsonDecode(description) as Map<String, dynamic>;
                       if (details['odoStart'] == null &&
                           details['odoEnd'] == null &&
                           details['odoStartImg'] == null &&
@@ -1774,14 +2311,12 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                                       "End",
                                     ),
                                   if (details['selfies'] != null)
-                                    ...(details['selfies'] as List)
-                                        .map(
-                                          (s) => _miniImageThumbnail(
-                                            s.toString(),
-                                            "Selfie",
-                                          ),
-                                        )
-                                        .toList(),
+                                    ...(details['selfies'] as List).map(
+                                      (s) => _miniImageThumbnail(
+                                        s.toString(),
+                                        "Selfie",
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -1796,7 +2331,8 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                     final pFin = exp['finance_remarks']?.toString();
                     final pHr = exp['hr_remarks']?.toString();
                     final pRm = exp['rm_remarks']?.toString();
-                    final hasRemarks = (pFin != null && pFin.isNotEmpty) ||
+                    final hasRemarks =
+                        (pFin != null && pFin.isNotEmpty) ||
                         (pHr != null && pHr.isNotEmpty) ||
                         (pRm != null && pRm.isNotEmpty);
 
@@ -1818,7 +2354,9 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                                 children: [
                                   const TextSpan(
                                     text: 'Fin: ',
-                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                   TextSpan(text: pFin),
                                 ],
@@ -1834,7 +2372,9 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                                 children: [
                                   const TextSpan(
                                     text: 'HR: ',
-                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                   TextSpan(text: pHr),
                                 ],
@@ -1850,7 +2390,9 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
                                 children: [
                                   const TextSpan(
                                     text: 'RM: ',
-                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                   TextSpan(text: pRm),
                                 ],
@@ -2022,6 +2564,7 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
       ],
     );
   }
+
   Widget _miniInfoBlock(String label, String value) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2066,14 +2609,18 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
         .replaceFirst(RegExp(r"^\[u'"), '')
         .replaceFirst(RegExp(r"^u'"), '')
         .replaceFirst(RegExp(r"^'"), '');
-    path = path.replaceFirst(RegExp(r"'\]$"), '').replaceFirst(RegExp(r"'$"), '');
+    path = path
+        .replaceFirst(RegExp(r"'\]$"), '')
+        .replaceFirst(RegExp(r"'$"), '');
 
     Widget imageWidget;
     try {
       if (path.startsWith('data:image')) {
         final base64String = path.split(',').last;
-        imageWidget =
-            Image.memory(base64Decode(base64String), fit: BoxFit.cover);
+        imageWidget = Image.memory(
+          base64Decode(base64String),
+          fit: BoxFit.cover,
+        );
       } else if (path.startsWith('/9j/') ||
           (path.length > 300 && !path.contains('/') && !path.contains(':'))) {
         imageWidget = Image.memory(base64Decode(path), fit: BoxFit.cover);
@@ -2090,7 +2637,11 @@ class _TaskDetailsContentState extends State<_TaskDetailsContent> {
         );
       }
     } catch (e) {
-      imageWidget = const Icon(Icons.error_outline, size: 20, color: Colors.red);
+      imageWidget = const Icon(
+        Icons.error_outline,
+        size: 20,
+        color: Colors.red,
+      );
     }
 
     return Container(

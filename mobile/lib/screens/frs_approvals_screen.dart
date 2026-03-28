@@ -82,7 +82,7 @@ class _FrsApprovalsScreenState extends State<FrsApprovalsScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFFA9052E).withOpacity(0.02),
+                    const Color(0xFFA9052E).withValues(alpha: 0.02),
                     Colors.transparent,
                   ],
                 ),
@@ -139,7 +139,7 @@ class _FrsApprovalsScreenState extends State<FrsApprovalsScreen> {
               width: 130,
               height: 130,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
             ),
@@ -161,7 +161,7 @@ class _FrsApprovalsScreenState extends State<FrsApprovalsScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(
@@ -180,7 +180,7 @@ class _FrsApprovalsScreenState extends State<FrsApprovalsScreen> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -199,7 +199,7 @@ class _FrsApprovalsScreenState extends State<FrsApprovalsScreen> {
                   TextButton(
                     onPressed: _clearNotifications,
                     style: TextButton.styleFrom(
-                      backgroundColor: Colors.white.withOpacity(0.15),
+                      backgroundColor: Colors.white.withValues(alpha: 0.15),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -275,7 +275,7 @@ class _FrsApprovalsScreenState extends State<FrsApprovalsScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -288,7 +288,7 @@ class _FrsApprovalsScreenState extends State<FrsApprovalsScreen> {
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: const Color(0xFFBB0633).withOpacity(0.1),
+                backgroundColor: const Color(0xFFBB0633).withValues(alpha: 0.1),
                 child: Text(
                   request['employee_name'][0].toUpperCase(),
                   style: const TextStyle(
@@ -328,7 +328,7 @@ class _FrsApprovalsScreenState extends State<FrsApprovalsScreen> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF3B82F6).withOpacity(0.1),
+                  color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -430,7 +430,7 @@ class _FrsApprovalsScreenState extends State<FrsApprovalsScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9).withOpacity(0.5),
+              color: const Color(0xFFF1F5F9).withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(

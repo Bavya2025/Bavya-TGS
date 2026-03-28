@@ -30,6 +30,7 @@ class _PendingAdvancesScreenState extends State<PendingAdvancesScreen> {
       });
     } catch (e) {
       setState(() => _isLoading = false);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
@@ -48,6 +49,7 @@ class _PendingAdvancesScreenState extends State<PendingAdvancesScreen> {
         default:
           verb = '${action.toLowerCase()}ed';
       }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Request $verb successfully'), backgroundColor: Colors.green));
       _fetchTasks();
     } catch (e) {
@@ -98,7 +100,7 @@ class _PendingAdvancesScreenState extends State<PendingAdvancesScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFF1F5F9)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15)]),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFF1F5F9)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 15)]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

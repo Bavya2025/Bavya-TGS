@@ -111,7 +111,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.notifications_none_rounded, size: 64, color: Colors.grey.withOpacity(0.5)),
+          Icon(Icons.notifications_none_rounded, size: 64, color: Colors.grey.withValues(alpha: 0.5)),
           const SizedBox(height: 16),
           Text(
             'All caught up!',
@@ -146,10 +146,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: isUnread ? Border.all(color: const Color(0xFF7C1D1D).withOpacity(0.3), width: 1) : null,
+          border: isUnread ? Border.all(color: const Color(0xFF7C1D1D).withValues(alpha: 0.3), width: 1) : null,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -162,8 +162,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: isUnread 
-                    ? const Color(0xFF7C1D1D).withOpacity(0.1)
-                    : Colors.grey.withOpacity(0.1),
+                    ? const Color(0xFF7C1D1D).withValues(alpha: 0.1)
+                    : Colors.grey.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(

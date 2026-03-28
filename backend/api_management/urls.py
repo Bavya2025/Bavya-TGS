@@ -5,7 +5,7 @@ from .views import (
     UserListView, AccessKeyViewSet, DashboardStatsView, ApiKeyUpdateView, 
     DynamicEndpointViewSet, DynamicIngestionView, GeoHierarchyView, 
     SyncUsersPageView, SystemErrorLogView, ExternalNotificationLogView, 
-    FrontendErrorLoggingView, RetryNotificationView
+    FrontendErrorLoggingView, RetryNotificationView, TrackingConfigView
 )
 
 router = DefaultRouter()
@@ -23,6 +23,7 @@ urlpatterns = [
     path('apikey/', ApiKeyUpdateView.as_view(), name='update-api-key'),
     path('connect/<str:endpoint_path>/', DynamicIngestionView.as_view(), name='dynamic-ingest'),
     path('geo/hierarchy/', GeoHierarchyView.as_view(), name='geo-hierarchy'),
+    path('tracking-config/', TrackingConfigView.as_view(), name='tracking-config'),
     
     # System Logs & Error Tracking
     path('system-logs/errors/', SystemErrorLogView.as_view(), name='system-error-logs'),

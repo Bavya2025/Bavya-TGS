@@ -67,6 +67,12 @@ def login_view(request):
         
         ip = request.META.get('REMOTE_ADDR')
         user_agent = request.META.get('HTTP_USER_AGENT', '')
+        device_id = data.get('device_id')
+        device_type = data.get('device_type', 'Web')
+        
+        if device_id:
+            user.device_id = device_id
+            user.save(update_fields=['device_id'])
         
         Session.objects.create(
             user=user,
@@ -81,8 +87,8 @@ def login_view(request):
             user=user, 
             ip_address=ip, 
             user_agent=user_agent,
-            device_type='Web',
-            browser_type='Chrome',
+            device_type=device_type,
+            browser_type=data.get('browser_type', 'Chrome'),
             status='Success',
             failure_reason=''
         )

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AccessKey, APILog, DynamicEndpoint, DynamicSubmission
+from .models import AccessKey, APILog, DynamicEndpoint, DynamicSubmission, MobileTrackingConfig
 
 class AccessKeySerializer(serializers.ModelSerializer):
     class Meta:
@@ -30,3 +30,8 @@ class DynamicSubmissionSerializer(serializers.ModelSerializer):
         model = DynamicSubmission
         fields = ['id', 'endpoint', 'data', 'headers', 'received_at']
         read_only_fields = ['received_at']
+
+class MobileTrackingConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MobileTrackingConfig
+        fields = '__all__'

@@ -13,6 +13,7 @@ class User(models.Model):
     
     role = models.ForeignKey(Role, on_delete=models.PROTECT)
     password_hash = models.CharField(max_length=255)
+    device_id = models.CharField(max_length=255, null=True, blank=True, help_text="Unique hardware ID of the mobile device")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     theme = models.CharField(max_length=50, default='classic', choices=[

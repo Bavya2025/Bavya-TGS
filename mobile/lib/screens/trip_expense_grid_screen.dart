@@ -10,7 +10,7 @@ class TripExpenseGridScreen extends StatefulWidget {
   const TripExpenseGridScreen({super.key, required this.tripId});
 
   @override
-  _TripExpenseGridScreenState createState() => _TripExpenseGridScreenState();
+  State<TripExpenseGridScreen> createState() => _TripExpenseGridScreenState();
 }
 
 class _TripExpenseGridScreenState extends State<TripExpenseGridScreen> {
@@ -34,6 +34,7 @@ class _TripExpenseGridScreenState extends State<TripExpenseGridScreen> {
       });
     } catch (e) {
       setState(() => _isLoading = false);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
@@ -87,7 +88,7 @@ class _TripExpenseGridScreenState extends State<TripExpenseGridScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

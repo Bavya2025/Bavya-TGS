@@ -4,8 +4,6 @@ import '../services/api_service.dart';
 import 'login_screen.dart';
 import '../services/frs_service.dart';
 import 'frs_enrollment_screen.dart';
-import 'change_password_screen.dart';
-import 'help_support_screen.dart';
 import 'debug_logs_screen.dart';
 import '../constants/module_constants.dart';
 import '../components/responsive_image.dart';
@@ -42,9 +40,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _initProfile() async {
     // If we already have some data, don't show the blocker loader
     if (_userData != null && mounted) {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
 
     // Perform background refresh without blocking the initial UI render
@@ -54,36 +50,19 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _runBackgroundRefresh() async {
     try {
       final freshUser = await _refreshUserData();
-      if (!mounted) {
-        return;
-      }
       if (freshUser != null) {
         await _fetchDetailedProfile();
-        if (!mounted) {
-          return;
-        }
       }
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     } catch (e) {
       debugPrint("Background refresh failed: $e");
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<Map<String, dynamic>?> _refreshUserData() async {
     try {
       final freshUser = await _apiService.fetchFreshUser();
-      if (!mounted) {
-        return null;
-      }
       if (mounted) {
         setState(() {
           _userData = freshUser;
@@ -115,10 +94,6 @@ class _ProfilePageState extends State<ProfilePage> {
       final response = await _apiService.get(
         '/api/employees/?employee_code=$empId',
       );
-
-      if (!mounted) {
-        return;
-      }
 
       List<dynamic> results = [];
       if (response is Map && response.containsKey('results')) {
@@ -152,11 +127,7 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     } catch (e) {
       debugPrint("Profile fetch error: $e");
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -770,9 +741,7 @@ class _ProfilePageState extends State<ProfilePage> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: ElevatedButton(
-        onPressed: () {
-          _handleFaceUpdateAction(!needsRequest);
-        },
+        onPressed: () => _handleFaceUpdateAction(!needsRequest),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: const Color(0xFF7C1D1D),
@@ -817,16 +786,12 @@ class _ProfilePageState extends State<ProfilePage> {
         context,
         MaterialPageRoute(builder: (context) => const FrsEnrollmentScreen()),
       );
-      if (!mounted) {
-        return;
-      }
       if (result == true) {
         // Update local session data if possible or just refresh
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Face updated successfully')),
-          );
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Face updated successfully')),
+        );
       }
     } else {
       final TextEditingController reasonController = TextEditingController();
@@ -863,18 +828,15 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(context),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () async {
-                if (reasonController.text.trim().isEmpty) {
-                  return;
-                }
+                if (reasonController.text.trim().isEmpty) return;
                 try {
                   await _frsService.requestPhotoUpdate(reasonController.text);
+                  if (!context.mounted) return;
                   if (mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -921,22 +883,19 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                   Navigator.pop(context);
-                 },
+                  onPressed: () => Navigator.pop(context),
                   child: const Text('Cancel'),
                 ),
                 TextButton(
                   onPressed: () async {
                     await _apiService.clearToken();
-                    if (mounted) {
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(
-                          builder: (context) => const LoginScreen(),
-                        ),
-                        (route) => false,
-                      );
-                    }
+                    if (!context.mounted) return;
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(
+                        builder: (context) => const LoginScreen(),
+                      ),
+                      (route) => false,
+                    );
                   },
                   child: const Text(
                     'Logout',
@@ -981,12 +940,10 @@ class _ProfilePageState extends State<ProfilePage> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: ElevatedButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const DebugLogsScreen()),
-          );
-        },
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const DebugLogsScreen()),
+        ),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: const Color(0xFF1E293B),

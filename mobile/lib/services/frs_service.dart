@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:image/image.dart' as img; // Add image package import
 import '../constants/api_constants.dart';

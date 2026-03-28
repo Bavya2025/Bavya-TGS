@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDown, Search, RefreshCw, AlertCircle } from 'lucide-react';
 
-const SearchableSelect = ({ options, value, onChange, placeholder, loading, error, disabled, style, searchByCodeOnly, emptyMessage }) => {
+const SearchableSelect = ({ options, value, onChange, placeholder = "Select option", loading, error, disabled, style, searchByCodeOnly, emptyMessage }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
     const dropdownRef = useRef(null);
@@ -83,7 +83,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, loading, erro
                         <input
                             autoFocus
                             type="text"
-                            placeholder={`Search ${placeholder}...`}
+                            placeholder="Type to filter..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             className="searchable-select-input"
@@ -96,7 +96,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, loading, erro
                             onClick={() => handleSelect('')}
                             className={`searchable-select-item ${!value ? 'all-option' : ''}`}
                         >
-                            {placeholder === 'Continent' ? 'Select Continent' : `All ${placeholder}s`}
+                            {placeholder.toLowerCase().startsWith('search') ? `All ${placeholder.replace('Search ', '')}s` : `All ${placeholder}s`}
                         </button>
 
                         {loading ? (

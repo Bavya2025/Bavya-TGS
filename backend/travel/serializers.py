@@ -4,7 +4,7 @@ from .models import (
     TravelModeMaster, BookingTypeMaster, AirlineMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
     LocalTravelModeMaster, LocalProviderMaster,
     StayTypeMaster, RoomTypeMaster, MealCategoryMaster, MealTypeMaster, IncidentalTypeMaster,
-    CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking,
+    CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking, UserDailyTracking, FieldTracking,
     TravelOperatorMaster, TravelClassMaster, TravelVehicleMaster, LocalSubTypeMaster
 )
 from api_management.utils import encrypt_key, decrypt_key
@@ -14,7 +14,17 @@ from api_management.utils import encrypt_key, decrypt_key
 class TripTrackingSerializer(serializers.ModelSerializer):
     class Meta:
         model = TripTracking
-        fields = ['id', 'trip', 'latitude', 'longitude', 'timestamp', 'accuracy', 'speed']
+        fields = ['id', 'trip', 'latitude', 'longitude', 'timestamp', 'accuracy', 'speed', 'device_id']
+
+class UserDailyTrackingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserDailyTracking
+        fields = ['id', 'user', 'latitude', 'longitude', 'timestamp', 'accuracy', 'speed', 'device_id']
+
+class FieldTrackingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FieldTracking
+        fields = ['id', 'user', 'latitude', 'longitude', 'timestamp', 'accuracy', 'speed', 'device_id', 'activity_type']
 
 class TravelModeMasterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -330,6 +340,8 @@ class TripSerializer(serializers.ModelSerializer):
 
     has_gh_booking = serializers.SerializerMethodField()
     has_vehicle_booking = serializers.SerializerMethodField()
+    creator_name = serializers.ReadOnlyField(source='user.name')
+    creator_employee_id = serializers.ReadOnlyField(source='user.employee_id')
     job_reports = JobReportSerializer(many=True, read_only=True)
     activity_batches = BulkActivityBatchSerializer(many=True, read_only=True)
 
@@ -343,7 +355,8 @@ class TripSerializer(serializers.ModelSerializer):
             'vehicle_type', 'members', 'lifecycle_events', 'created_at', 'updated_at',
             'advances', 'expenses', 'odometer', 'claim', 'reporting_manager_name',
             'current_approver', 'total_approved_advance', 'total_expenses', 'wallet_balance', 'has_gh_booking', 'has_vehicle_booking',
-            'rejection_reason', 'rejected_by', 'fuel_rate_snapshot', 'job_reports', 'activity_batches'
+            'rejection_reason', 'rejected_by', 'fuel_rate_snapshot', 'job_reports', 'activity_batches',
+            'creator_name', 'creator_employee_id'
         ]
     def get_user_name(self, obj):
         # Use snapshot if available, otherwise fallback to dynamic property

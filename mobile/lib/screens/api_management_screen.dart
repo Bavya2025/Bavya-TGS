@@ -302,9 +302,7 @@ class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTi
   }
 
   Future<void> _saveMasterKey() async {
-    if (_masterApiKeyController.text.isEmpty) {
-      return;
-    }
+    if (_masterApiKeyController.text.isEmpty) return;
     
     setState(() => _isSavingMasterKey = true);
     try {
@@ -567,9 +565,7 @@ class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTi
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () async {
-                    if (nameController.text.isEmpty) {
-                      return;
-                    }
+                    if (nameController.text.isEmpty) return;
                     
                     final permissions = {};
                     if (selectedEndpoint != null) {
@@ -578,22 +574,20 @@ class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTi
                       permissions['*'] = ['GET'];
                     }
 
-                      try {
-                        final result = await _tripService.generateAccessKey({
-                          'name': nameController.text,
-                          'rate_limit': int.tryParse(rateLimitController.text) ?? 60,
-                          'permissions': permissions,
-                        });
-                        if (mounted) {
-                          Navigator.pop(context);
-                          _showKeyResultModal(result['key']);
-                          _fetchAllData();
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-                        }
-                      }
+                    try {
+                      final result = await _tripService.generateAccessKey({
+                        'name': nameController.text,
+                        'rate_limit': int.tryParse(rateLimitController.text) ?? 60,
+                        'permissions': permissions,
+                      });
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                      _showKeyResultModal(result['key']);
+                      _fetchAllData();
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                    }
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                   child: Text('GENERATE KEY', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
@@ -656,24 +650,20 @@ class _ApiManagementScreenState extends State<ApiManagementScreen> with SingleTi
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () async {
-                  if (nameController.text.isEmpty || pathController.text.isEmpty) {
-                    return;
+                  if (nameController.text.isEmpty || pathController.text.isEmpty) return;
+                  try {
+                    await _tripService.createDynamicEndpoint({
+                      'name': nameController.text,
+                      'url_path': pathController.text,
+                      'response_type': 'NONE',
+                    });
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
+                    _fetchAllData();
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
                   }
-                    try {
-                      await _tripService.createDynamicEndpoint({
-                        'name': nameController.text,
-                        'url_path': pathController.text,
-                        'response_type': 'NONE',
-                      });
-                      if (mounted) {
-                        Navigator.pop(context);
-                        _fetchAllData();
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-                      }
-                    }
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                 child: Text('CREATE ENDPOINT', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
