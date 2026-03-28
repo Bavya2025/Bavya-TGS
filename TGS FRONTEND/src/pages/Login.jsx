@@ -34,8 +34,7 @@ const Login = () => {
 
     useEffect(() => {
         checkConnection(true); // check on mount
-
-        // Poll connection status every 30 seconds to stay accurate
+        
         const pollInterval = setInterval(() => {
             checkConnection(true);
         }, 30000);
@@ -53,14 +52,40 @@ const Login = () => {
         };
     }, []);
 
+    const validateInputs = () => {
+        // Username: letters, numbers, @, -
+        const userRegex = /^[a-zA-Z0-9@-]*$/;
+        if (!userRegex.test(username)) {
+            setError('Username allows only letters, numbers, @, and - characters.');
+            return false;
+        }
+
+        // Password: 8 to 12 chars
+        if (password.length < 8 || password.length > 12) {
+            setError('Password must be exactly 8 to 12 characters.');
+            return false;
+        }
+
+        // Password: letters, numbers, specific special characters only (no spaces)
+        const passRegex = /^[a-zA-Z0-9@#$%^&*.]*$/;
+        if (!passRegex.test(password)) {
+            setError('Password can only contain letters, numbers, and @#$%^&*.');
+            return false;
+        }
+
+        return true;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
         if (!username || !password) {
-            setError('Please enter both username and password');
+            setError('Please enter both username and password.');
             return;
         }
+
+        if (!validateInputs()) return;
 
         setIsLoading(true);
         try {
@@ -83,14 +108,19 @@ const Login = () => {
                     navigate('/');
             }
         } catch (err) {
-            if (err.message === 'CORRUPT_RESPONSE' || err.code === 'ERR_NOT_JSON') {
-                setError('Server configuration error. Received invalid response from backend.');
-            } else if (!err.response) {
-                setError('Server is unreachable. Please check if the backend is running.');
-            } else if (err.response.status === 500) {
-                setError(err.response.data?.error || 'Internal Server Error. Please contact support.');
+            console.error('Submit Login error:', err);
+            const status = err.response?.status;
+            const message = err.response?.data?.error || 'Authentication failed. Please try again.';
+            
+            if (status === 403) {
+                // Server-side lockout
+                setError(message);
+                showToast(message, 'error');
+            } else if (status === 401) {
+                setError(message);
             } else {
-                setError(err.response.data?.error || 'Invalid username or password. Please try again.');
+                setError(err.response?.data?.error || 'Invalid credentials.');
+                handleLoginFailure(); // Count as failure for any bad credentials error
             }
         } finally {
             setIsLoading(false);
@@ -155,7 +185,12 @@ const Login = () => {
                                     type="text"
                                     placeholder="Enter your username"
                                     value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        const filtered = val.replace(/[^a-zA-Z0-9@-]/g, '');
+                                        setUsername(filtered);
+                                    }}
+                                    maxLength={20}
                                     required
                                 />
                             </div>
@@ -169,7 +204,14 @@ const Login = () => {
                                     type={showPassword ? "text" : "password"}
                                     placeholder="••••••••"
                                     value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        // Allow letters, numbers, and specific special chars (@#$%^&*.)
+                                        const filtered = val.replace(/[^a-zA-Z0-9@#$%^&*.]/g, '');
+                                        setPassword(filtered);
+                                    }}
+                                    onPaste={(e) => e.preventDefault()}
+                                    maxLength={12}
                                     required
                                 />
                                 <button

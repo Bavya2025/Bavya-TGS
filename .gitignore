@@ -11,6 +11,21 @@ backend/venv/
 *.py[cod]
 *$py.class
 backend/.env
+# --- MOBILE / ANDROID / FLUTTER ---
+**/build/
+**/android/app/build/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+.dart_tool/
+.pub-cache/
+.pub/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/*.apk
+**/*.aab
+**/*.so
+**/*.sym
 backend/db.sqlite3
 backend/staticfiles/
 backend/media/

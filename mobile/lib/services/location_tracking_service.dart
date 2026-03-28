@@ -25,11 +25,11 @@ class LocationTrackingService {
     await service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
-        autoStart: true,
+        autoStart: false, // Changed to false to prevent startup crash
         isForegroundMode: true,
-        notificationChannelId: 'system_sync_ch',
-        initialNotificationTitle: 'Smart Hub Sync',
-        initialNotificationContent: 'Running system optimizations',
+        notificationChannelId: 'location_tracking', // Matches MainActivity.kt
+        initialNotificationTitle: 'TGS Tracking Active',
+        initialNotificationContent: 'System is ready for tracking',
         foregroundServiceNotificationId: 888,
       ),
       iosConfiguration: IosConfiguration(
@@ -47,7 +47,8 @@ class LocationTrackingService {
 
     // On Android 10+, background tracking strictly needs 'always'
     // If it's only 'whileInUse', we must request it
-    if (permission == LocationPermission.whileInUse || permission == LocationPermission.denied) {
+    if (permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
 
@@ -60,10 +61,12 @@ class LocationTrackingService {
       // 1. Safety Check: Verify Permissions before starting background service
       // We need 'always' for tracking even when app is closed (Android 10+)
       bool hasAlways = await checkAlwaysPermission();
-      
+
       if (!hasAlways) {
-        debugPrint('SYNC_TRACKING: Always permission not granted. Background tracking may fail when app is closed.');
-        // Optional: Show a toast or snackbar here if you have context, 
+        debugPrint(
+          'SYNC_TRACKING: Always permission not granted. Background tracking may fail when app is closed.',
+        );
+        // Optional: Show a toast or snackbar here if you have context,
         // but this service is often called from background/main.
       }
 
@@ -75,18 +78,23 @@ class LocationTrackingService {
       }
 
       final apiService = ApiService();
-      
+
       // Fetch dynamic config from backend
       Map<String, dynamic>? config;
       try {
-        final resp = await apiService.get(ApiConstants.trackingConfig, includeAuth: true);
+        final resp = await apiService.get(
+          ApiConstants.trackingConfig,
+          includeAuth: true,
+        );
         if (resp is Map<String, dynamic>) {
           config = resp;
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('tracking_config', jsonEncode(config));
         }
       } catch (e) {
-        debugPrint('SYNC_TRACKING: Failed to fetch config, using cached/default: $e');
+        debugPrint(
+          'SYNC_TRACKING: Failed to fetch config, using cached/default: $e',
+        );
         final prefs = await SharedPreferences.getInstance();
         final cached = prefs.getString('tracking_config');
         if (cached != null) config = jsonDecode(cached);
@@ -107,7 +115,11 @@ class LocationTrackingService {
       Trip? activeTrip;
       for (var trip in trips) {
         final status = trip.status.toLowerCase();
-        bool isViableStatus = status.contains('approved') || status.contains('ongoing') || status.contains('started') || status == 'ready';
+        bool isViableStatus =
+            status.contains('approved') ||
+            status.contains('ongoing') ||
+            status.contains('started') ||
+            status == 'ready';
 
         if (isViableStatus) {
           try {
@@ -116,20 +128,32 @@ class LocationTrackingService {
             if (startDateString.isEmpty || endDateString.isEmpty) continue;
 
             DateTime parseDate(String dateStr) {
-              try { return DateTime.parse(dateStr); } catch (_) { return DateFormat('MMM dd, yyyy').parse(dateStr); }
+              try {
+                return DateTime.parse(dateStr);
+              } catch (_) {
+                return DateFormat('MMM dd, yyyy').parse(dateStr);
+              }
             }
 
             final startDate = parseDate(startDateString);
             final endDate = parseDate(endDateString);
-            final tripStart = DateTime(startDate.year, startDate.month, startDate.day);
+            final tripStart = DateTime(
+              startDate.year,
+              startDate.month,
+              startDate.day,
+            );
             final tripEnd = DateTime(endDate.year, endDate.month, endDate.day);
 
-            if ((nowDay.isAfter(tripStart) || nowDay.isAtSameMomentAs(tripStart)) &&
-                (nowDay.isBefore(tripEnd) || nowDay.isAtSameMomentAs(tripEnd))) {
+            if ((nowDay.isAfter(tripStart) ||
+                    nowDay.isAtSameMomentAs(tripStart)) &&
+                (nowDay.isBefore(tripEnd) ||
+                    nowDay.isAtSameMomentAs(tripEnd))) {
               activeTrip = trip;
               break;
             }
-          } catch (e) { debugPrint('SYNC_TRACKING: Date error: $e'); }
+          } catch (e) {
+            debugPrint('SYNC_TRACKING: Date error: $e');
+          }
         }
       }
 
@@ -140,9 +164,14 @@ class LocationTrackingService {
         await startTracking(activeTrip.tripId, config: config);
       } else if (dailyTrackingEnabled) {
         debugPrint('SYNC_TRACKING: No trip, but daily tracking is enabled.');
-        await startTracking(null, config: config); // Start tracking without trip ID
+        await startTracking(
+          null,
+          config: config,
+        ); // Start tracking without trip ID
       } else {
-        debugPrint('SYNC_TRACKING: No active trip and daily tracking disabled.');
+        debugPrint(
+          'SYNC_TRACKING: No active trip and daily tracking disabled.',
+        );
         stopTracking();
       }
     } catch (e) {
@@ -154,7 +183,11 @@ class LocationTrackingService {
     try {
       bool enabled = await Geolocator.isLocationServiceEnabled();
       var perm = await Geolocator.checkPermission();
-      if (!enabled || perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+      if (!enabled ||
+          perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        return;
+      }
 
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.medium,
@@ -184,7 +217,10 @@ class LocationTrackingService {
     }
   }
 
-  static Future<void> startTracking(String? tripId, {Map<String, dynamic>? config}) async {
+  static Future<void> startTracking(
+    String? tripId, {
+    Map<String, dynamic>? config,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     if (tripId != null) {
       await prefs.setString('active_tracking_trip_id', tripId);
@@ -220,7 +256,7 @@ class LocationTrackingService {
     } else {
       await syncCurrentLocation(null);
     }
-    
+
     await prefs.remove('active_tracking_trip_id');
     final service = FlutterBackgroundService();
     if (await service.isRunning()) service.invoke("stopService");
@@ -231,25 +267,29 @@ class LocationTrackingService {
 void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   final deviceService = DeviceService();
   await deviceService.init();
 
   if (service is AndroidServiceInstance) {
-    service.setAsForegroundService();
+    try {
+      service.setAsForegroundService();
+    } catch (e) {
+      debugPrint("Foreground service start failed: $e");
+    }
   }
   // Set initial notification info for Android
   if (service is AndroidServiceInstance) {
     service.setForegroundNotificationInfo(
-      title: "Smart Hub Sync",
-      content: "Running system optimizations",
+      title: "TGS Tracking Active",
+      content: "System is ready for tracking",
     );
   }
 
   await ApiService.loadSession();
   final ApiService apiService = ApiService();
   final prefs = await SharedPreferences.getInstance();
-  
+
   String? currentTripId = prefs.getString('active_tracking_trip_id');
   Map<String, dynamic> config = {};
   final cachedConfig = prefs.getString('tracking_config');
@@ -274,17 +314,19 @@ void onStart(ServiceInstance service) async {
     // 1. Daily Tracking (null trip): Strictly time-based as requested (no radius).
     // 2. Trip/Travel (active trip): Movement-based (10m) + Heartbeat (radius + time).
     bool isDaily = currentTripId == null;
-    
+
     // For Daily: No radius needed -> Set filter very high so only timer triggers
     // For Trip: Use 10m radius + time
-    double distanceFilter = isDaily ? 99999.0 : (config['distance_filter']?.toDouble() ?? 10.0);
-    
+    double distanceFilter = isDaily
+        ? 99999.0
+        : (config['distance_filter']?.toDouble() ?? 10.0);
+
     LocationSettings locationSettings;
     if (defaultTargetPlatform == TargetPlatform.android) {
       locationSettings = AndroidSettings(
         accuracy: LocationAccuracy.best,
         distanceFilter: distanceFilter.toInt(),
-        forceLocationManager: true, 
+        forceLocationManager: true,
       );
     } else {
       locationSettings = AppleSettings(
@@ -295,24 +337,45 @@ void onStart(ServiceInstance service) async {
     }
 
     // PRIMARY STREAM: Movement driven
-    positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen((Position? position) async {
-      if (position != null) {
-        _sendPositionToBackend(position, currentTripId, deviceService, apiService, service);
-      }
-    });
+    positionStream =
+        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+          (Position? position) async {
+            if (position != null) {
+              _sendPositionToBackend(
+                position,
+                currentTripId,
+                deviceService,
+                apiService,
+                service,
+              );
+            }
+          },
+        );
 
     // TIME-BASED HEARTBEAT: Based on provided interval or 5m default
     int intervalMinutes = config['tracking_interval_minutes'] ?? 5;
-    heartbeatTimer = Timer.periodic(Duration(minutes: intervalMinutes), (timer) async {
+    heartbeatTimer = Timer.periodic(Duration(minutes: intervalMinutes), (
+      timer,
+    ) async {
       try {
-        final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-        _sendPositionToBackend(position, currentTripId, deviceService, apiService, service);
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+        _sendPositionToBackend(
+          position,
+          currentTripId,
+          deviceService,
+          apiService,
+          service,
+        );
       } catch (e) {
         debugPrint('TRACKING_HEARTBEAT_ERROR: $e');
       }
     });
-    
-    debugPrint('TRACKING_MODE_STARTED: ${isDaily ? "DAILY (TIME-ONLY)" : "TRIP (RES: ${distanceFilter}m + TIME)"}');
+
+    debugPrint(
+      'TRACKING_MODE_STARTED: ${isDaily ? "DAILY (TIME-ONLY)" : "TRIP (RES: ${distanceFilter}m + TIME)"}',
+    );
   }
 
   service.on('setTripId').listen((event) {
@@ -337,9 +400,15 @@ void onStart(ServiceInstance service) async {
 }
 
 /// Helper to unify backend sending logic
-Future<void> _sendPositionToBackend(Position position, String? currentTripId, DeviceService deviceService, ApiService apiService, ServiceInstance service) async {
+Future<void> _sendPositionToBackend(
+  Position position,
+  String? currentTripId,
+  DeviceService deviceService,
+  ApiService apiService,
+  ServiceInstance service,
+) async {
   try {
-    final endpoint = currentTripId != null 
+    final endpoint = currentTripId != null
         ? '${ApiConstants.trips}$currentTripId/tracking/'
         : ApiConstants.dailyTracking;
 

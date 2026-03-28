@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 
@@ -8,7 +9,7 @@ import '../services/api_service.dart';
 import '../constants/module_constants.dart';
 import 'role_based_dashboard.dart';
 import 'forgot_password_screen.dart';
-import 'signup_screen.dart';
+import 'help_support_screen.dart';
 import '../services/device_service.dart';
 import '../services/permission_service.dart';
 
@@ -44,17 +45,29 @@ class _LoginScreenState extends State<LoginScreen> {
     _videoController.dispose();
     super.dispose();
   }
-
   Future<void> _signIn() async {
     final username = _usernameController.text.trim();
     final password = _passwordController.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter both username and password'),
-        ),
+        const SnackBar(content: Text('Please enter both username and password.')),
       );
+      return;
+    }
+
+    // 0.1 Validation
+    if (!RegExp(r'^[a-zA-Z0-9@\-]*$').hasMatch(username)) {
+      _showError('Username allows only letters, numbers, @, and -');
+      return;
+    }
+    if (password.length < 8 || password.length > 12) {
+      _showError('Password must be 8 to 12 characters.');
+      return;
+    }
+    if (!RegExp(r'^[a-zA-Z0-9@#$%^&*.]*$').hasMatch(password)) {
+      _showError(r'Password allows only letters, numbers, and @#$%^&*.');
       return;
     }
 
@@ -72,11 +85,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final apiService = ApiService();
+      // Base64 encode the password payload for masking (as per user request)
+      final maskedPassword = base64.encode(utf8.encode(password));
+      
       final response = await apiService.post(
         ApiConstants.authLogin,
         body: {
           'employee_id': username,
-          'password': password,
+          'password': maskedPassword,
           'device_id': DeviceService().deviceId,
           'device_type': DeviceService().deviceType,
         },
@@ -118,7 +134,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final userEmail = (userDetails['email'] ?? '').toString();
 
-
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -129,14 +144,14 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       );
+    } on ForbiddenException catch (e) {
+      // Server-side lockout
+      _showError(e.message);
+    } on UnauthorizedException catch (e) {
+      // Standard invalid credentials
+      _showError(e.message);
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Login Failed: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showError('Authentication failed. Please try again.');
     } finally {
       if (mounted) {
         setState(() {
@@ -144,6 +159,13 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     }
+  }
+
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+    );
   }
 
   String _extractRole(
@@ -252,6 +274,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           controller: _usernameController,
                           hintText: 'Enter Username',
                           icon: Icons.person_outline,
+                          maxLength: 20,
+                          formatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[a-zA-Z0-9@\-]'),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 15),
                         Row(
@@ -290,6 +318,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           hintText: 'Enter Password',
                           isPassword: true,
                           obscureText: _obscurePassword,
+                          maxLength: 12,
+                          enableInteractiveSelection: false, // Disables paste
+                          formatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9@#$%^&*.]')),
+                          ],
                           onToggleVisibility: () {
                             setState(() {
                               _obscurePassword = !_obscurePassword;
@@ -333,7 +366,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => const SignUpScreen(),
+                                  builder: (context) => const HelpSupportScreen(),
                                 ),
                               );
                             },
@@ -348,7 +381,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     text: "Don't have an account? ",
                                   ),
                                   TextSpan(
-                                    text: 'Sign Up',
+                                    text: 'Contact HR',
                                     style: TextStyle(
                                       color: const Color(0xFF7C1D1D),
                                       fontWeight: FontWeight.bold,
@@ -390,6 +423,9 @@ class _LoginScreenState extends State<LoginScreen> {
     bool obscureText = false,
     VoidCallback? onToggleVisibility,
     IconData? icon,
+    int? maxLength,
+    List<TextInputFormatter>? formatters,
+    bool enableInteractiveSelection = true,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -399,7 +435,11 @@ class _LoginScreenState extends State<LoginScreen> {
       child: TextFormField(
         controller: controller,
         obscureText: isPassword ? obscureText : false,
+        maxLength: maxLength,
+        inputFormatters: formatters,
+        enableInteractiveSelection: enableInteractiveSelection,
         decoration: InputDecoration(
+          counterText: "", // Hide character counter
           prefixIcon: icon != null
               ? Icon(icon, color: Colors.black45, size: 20)
               : null,

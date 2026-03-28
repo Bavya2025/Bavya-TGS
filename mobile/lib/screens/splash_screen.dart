@@ -65,6 +65,7 @@ class _SplashScreenState extends State<SplashScreen>
     
     // Evaluate if tracking should start (Daily or Trip based)
     try {
+      await LocationTrackingService.initializeService();
       LocationTrackingService.syncTrackingWithTrips();
     } catch (e) {
       debugPrint('SPLASH_TRACKING_SYNC_ERROR: $e');

@@ -30,6 +30,17 @@ def login_view(request):
         employee_id = (data.get('employee_id') or '').strip()
         password = data.get('password')
         
+        # Support Base64 Payload Masking (hides plain-text from browser console)
+        if password:
+            try:
+                # Attempt to decode base64
+                # We check padding and valid chars. If it fails, we fall back to plain text.
+                decoded = base64.b64decode(password, validate=True).decode('utf-8')
+                password = decoded
+            except Exception:
+                # Fallback for legacy clients sending plain text
+                pass
+        
         # Strict case-sensitive lookup
         employee_id = (data.get('employee_id') or '').strip()
         user = User.objects.filter(employee_id=employee_id).first()
@@ -45,16 +56,49 @@ def login_view(request):
              return Response({'error': 'Your account is currently inactive. Please contact support.'}, status=status.HTTP_401_UNAUTHORIZED)
              
         hashed_input = hash_password(password)
+        
+        # --- SERVER-SIDE LOCKOUT LOGIC ---
+        # 1. Skip lockout check for Admins (Admin can never be locked out)
+        is_admin = False
+        if user.role and user.role.name.lower() == 'admin':
+            is_admin = True
+        
+        if not is_admin:
+            # Check for 3 failed attempts in the last 24 hours
+            lockout_time = timezone.now() - datetime.timedelta(hours=24)
+            failed_attempts = LoginHistory.objects.filter(
+                user=user, 
+                status='Failed',
+                login_time__gte=lockout_time
+            ).count()
+            
+            if failed_attempts >= 3:
+                return Response({
+                    'error': 'Account locked for 24 hours due to 3 failed attempts. Please contact IT.'
+                }, status=status.HTTP_403_FORBIDDEN)
+        # --- END LOCKOUT LOGIC ---
+
         if user.password_hash != hashed_input:
+            # Record failed attempt in LoginHistory
+            LoginHistory.objects.create(
+                user=user,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                device_type=data.get('device_type', 'Web'),
+                status='Failed',
+                failure_reason='Invalid password'
+            )
+            
             try:
                 AuditLog.objects.create(
+                    user=user,
                     action='LOGIN_FAILED',
                     model_name='User',
                     object_repr=employee_id,
                     ip_address=request.META.get('REMOTE_ADDR'),
                     details={'reason': 'Invalid password'}
                 )
-            except: pass # Don't let audit logging crash the login failure response
+            except: pass 
             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
             
         expiration = timezone.now() + datetime.timedelta(hours=8)
@@ -125,6 +169,44 @@ def login_view(request):
         print(f"DEBUG: Login Error: {str(e)}")
         print(traceback.format_exc())
         return Response({'error': 'Authentication server error. Please retry later or contact IT.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+@api_view(['POST'])
+@permission_classes([IsCustomAuthenticated, IsAdmin])
+def unlock_user(request):
+    """Manually unlock a user account by marking their failed attempts as 'Resolved'."""
+    try:
+        employee_id = request.data.get('employee_id')
+        if not employee_id:
+            return Response({'error': 'Employee ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        target_user = User.objects.filter(employee_id=employee_id).first()
+        if not target_user:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Mark all failed attempts in the last 24 hours as Resolved
+        lockout_time = timezone.now() - datetime.timedelta(hours=24)
+        count = LoginHistory.objects.filter(
+            user=target_user,
+            status='Failed',
+            login_time__gte=lockout_time
+        ).update(status='Resolved')
+        
+        # Create AuditLog entry
+        AuditLog.objects.create(
+            user=request.custom_user,
+            action='USER_UNLOCKED',
+            model_name='User',
+            object_id=str(target_user.id),
+            object_repr=f"Unlocked {employee_id}",
+            ip_address=request.META.get('REMOTE_ADDR'),
+            details={'attempts_cleared': count}
+        )
+        
+        return Response({
+            'message': f'Successfully unlocked account for {employee_id}. {count} failed attempts cleared.'
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsCustomAuthenticated])

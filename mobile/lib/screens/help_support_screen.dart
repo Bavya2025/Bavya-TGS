@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import '../services/trip_service.dart';
+import '../services/logger_service.dart';
 import 'policy_center_screen.dart';
 import 'location_codes_screen.dart';
 
@@ -19,10 +20,14 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
   final TripService _tripService = TripService();
-  
+
   bool _isChatOpen = false;
   final List<Map<String, String>> _messages = [
-    {'sender': 'bot', 'text': 'Hi there! I am your TGS Virtual Support Assistant. How can I help you today?'}
+    {
+      'sender': 'bot',
+      'text':
+          'Hi there! I am your TGS Virtual Support Assistant. How can I help you today?',
+    },
   ];
 
   final List<Map<String, dynamic>> _faqs = [
@@ -32,8 +37,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       'questions': [
         'How do I create a new trip request?',
         'What is the approval workflow?',
-        'How to set up my profile properly?'
-      ]
+        'How to set up my profile properly?',
+      ],
     },
     {
       'category': 'Expenses & Claims',
@@ -41,8 +46,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       'questions': [
         'How to claim mileage for local travel?',
         'What receipts are mandatory for reimbursement?',
-        'How long does it take for settlement?'
-      ]
+        'How long does it take for settlement?',
+      ],
     },
     {
       'category': 'Guest House Booking',
@@ -50,9 +55,9 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       'questions': [
         'How to book a room in a company guest house?',
         'Can I cancel a booking after approval?',
-        'What are the guest house rules?'
-      ]
-    }
+        'What are the guest house rules?',
+      ],
+    },
   ];
 
   final List<Map<String, dynamic>> _contactMethods = [
@@ -76,7 +81,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       'email': 'finance.claims@tgs.com',
       'phone': '+91 800-456-7892',
       'icon': Icons.account_balance_wallet_rounded,
-    }
+    },
   ];
 
   void _handleSendMessage() {
@@ -93,22 +98,31 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     // Bot Response Logic (Mirroring Web)
     Future.delayed(const Duration(milliseconds: 600), () {
       if (!mounted) return;
-      
+
       final inputLower = userText.toLowerCase();
-      String reply = "I'm a virtual assistant! I couldn't find an exact match for your question. You can submit a ticket to it.support@tgs.com if you need a human touch.";
+      String reply =
+          "I'm a virtual assistant! I couldn't find an exact match for your question. You can submit a ticket to it.support@tgs.com if you need a human touch.";
 
       if (inputLower.contains('policy') || inputLower.contains('policies')) {
-        reply = "All company policies can be found in the Policy Center. Go to the dashboard and navigate to 'Policy'!";
-      } else if (inputLower.contains('expense') || inputLower.contains('claim')) {
-        reply = "To file an expense, click on 'Expenses & Claims' in your dashboard.";
+        reply =
+            "All company policies can be found in the Policy Center. Go to the dashboard and navigate to 'Policy'!";
+      } else if (inputLower.contains('expense') ||
+          inputLower.contains('claim')) {
+        reply =
+            "To file an expense, click on 'Expenses & Claims' in your dashboard.";
       } else if (inputLower.contains('advance')) {
-        reply = "Need cash beforehand? Check out the 'Travel Advance' page to raise a request.";
-      } else if (inputLower.contains('approval') || inputLower.contains('approve')) {
+        reply =
+            "Need cash beforehand? Check out the 'Travel Advance' page to raise a request.";
+      } else if (inputLower.contains('approval') ||
+          inputLower.contains('approve')) {
         reply = "You can view pending approvals in the 'Approval Inbox'.";
-      } else if (inputLower.contains('booking') || inputLower.contains('guest house')) {
-        reply = "You can book accommodations directly from the 'Guest House Booking' module.";
+      } else if (inputLower.contains('booking') ||
+          inputLower.contains('guest house')) {
+        reply =
+            "You can book accommodations directly from the 'Guest House Booking' module.";
       } else if (inputLower.contains('hi') || inputLower.contains('hello')) {
-        reply = "Hello! What can I assist you with regarding the Travel Governance System?";
+        reply =
+            "Hello! What can I assist you with regarding the Travel Governance System?";
       }
 
       setState(() {
@@ -140,7 +154,10 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to download template'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('Failed to download template'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -154,7 +171,11 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
         backgroundColor: const Color(0xFF700B34),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+            size: 20,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -183,6 +204,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                       _buildFAQSection(),
                       const SizedBox(height: 32),
                       _buildContactSection(),
+                      const SizedBox(height: 32),
+                      _buildDebugSection(),
                       const SizedBox(height: 40),
                       _buildFooter(),
                     ],
@@ -237,15 +260,25 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 10))
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
               ],
             ),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search for articles, guides, policies...',
-                hintStyle: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF94A3B8)),
-                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF700B34)),
+                hintStyle: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: const Color(0xFF94A3B8),
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: Color(0xFF700B34),
+                ),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(vertical: 16),
               ),
@@ -261,28 +294,63 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       children: [
         Row(
           children: [
-            _buildActionCard(Icons.article_rounded, 'User Guides', 'Documentation', () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const PolicyCenterScreen()));
-            }),
+            _buildActionCard(
+              Icons.article_rounded,
+              'User Guides',
+              'Documentation',
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PolicyCenterScreen(),
+                  ),
+                );
+              },
+            ),
             const SizedBox(width: 12),
-            _buildActionCard(Icons.forum_rounded, 'Live Chat', 'Start Support', () => setState(() => _isChatOpen = true)),
+            _buildActionCard(
+              Icons.forum_rounded,
+              'Live Chat',
+              'Start Support',
+              () => setState(() => _isChatOpen = true),
+            ),
           ],
         ),
         const SizedBox(height: 12),
         Row(
           children: [
-            _buildActionCard(Icons.map_rounded, 'Location Codes', 'View ISO', () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const LocationCodesScreen()));
-            }),
+            _buildActionCard(
+              Icons.map_rounded,
+              'Location Codes',
+              'View ISO',
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LocationCodesScreen(),
+                  ),
+                );
+              },
+            ),
             const SizedBox(width: 12),
-            _buildActionCard(Icons.table_view_rounded, 'Activity Template', 'Download Excel', _downloadTemplate),
+            _buildActionCard(
+              Icons.table_view_rounded,
+              'Activity Template',
+              'Download Excel',
+              _downloadTemplate,
+            ),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildActionCard(IconData icon, String title, String sub, VoidCallback onTap) {
+  Widget _buildActionCard(
+    IconData icon,
+    String title,
+    String sub,
+    VoidCallback onTap,
+  ) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -292,15 +360,37 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: const Color(0xFFF1F5F9)),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Column(
             children: [
               Icon(icon, color: const Color(0xFF700B34), size: 28),
               const SizedBox(height: 12),
-              Text(title, textAlign: TextAlign.center, style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
               const SizedBox(height: 4),
-              Text(sub, textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 9, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+              Text(
+                sub,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 9,
+                  color: const Color(0xFF94A3B8),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
         ),
@@ -315,8 +405,22 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Frequently Asked Questions', style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
-            Text('View All', style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF700B34))),
+            Text(
+              'Frequently Asked Questions',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF0F172A),
+              ),
+            ),
+            Text(
+              'View All',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF700B34),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -335,8 +439,17 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       ),
       child: ExpansionTile(
         leading: Icon(faq['icon'], color: const Color(0xFF700B34), size: 20),
-        title: Text(faq['category'], style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A))),
-        children: (faq['questions'] as List).map((q) => _buildFAQItem(q)).toList(),
+        title: Text(
+          faq['category'],
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        children: (faq['questions'] as List)
+            .map((q) => _buildFAQItem(q))
+            .toList(),
       ),
     );
   }
@@ -344,8 +457,19 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   Widget _buildFAQItem(String question) {
     return ListTile(
       dense: true,
-      title: Text(question, style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF475569), fontWeight: FontWeight.w500)),
-      trailing: const Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFFCBD5E1)),
+      title: Text(
+        question,
+        style: GoogleFonts.inter(
+          fontSize: 13,
+          color: const Color(0xFF475569),
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      trailing: const Icon(
+        Icons.chevron_right_rounded,
+        size: 16,
+        color: Color(0xFFCBD5E1),
+      ),
       onTap: () {},
     );
   }
@@ -354,7 +478,14 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Contact Support Teams', style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
+        Text(
+          'Contact Support Teams',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
         const SizedBox(height: 16),
         ..._contactMethods.map((method) => _buildContactCard(method)),
       ],
@@ -381,9 +512,23 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(method['title'], style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
+                    Text(
+                      method['title'],
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF0F172A),
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(method['description'], style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                    Text(
+                      method['description'],
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -401,11 +546,19 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0F172A),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 elevation: 0,
               ),
-              child: Text('Send Message', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 13)),
+              child: Text(
+                'Send Message',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
             ),
           ),
         ],
@@ -418,7 +571,14 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       children: [
         Icon(icon, size: 14, color: const Color(0xFF94A3B8)),
         const SizedBox(width: 10),
-        Text(value, style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF475569), fontWeight: FontWeight.w600)),
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: const Color(0xFF475569),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     );
   }
@@ -427,16 +587,35 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     return Center(
       child: Column(
         children: [
-          Text('© 2026 TGS Governance. All rights reserved.', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF94A3B8))),
+          Text(
+            '© 2026 TGS Governance. All rights reserved.',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: const Color(0xFF94A3B8),
+            ),
+          ),
           const SizedBox(height: 8),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('System Status:', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF94A3B8))),
+              Text(
+                'System Status:',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: const Color(0xFF94A3B8),
+                ),
+              ),
               const SizedBox(width: 6),
               const Icon(Icons.circle, size: 8, color: Color(0xFF10B981)),
               const SizedBox(width: 4),
-              Text('Operational', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF10B981), fontWeight: FontWeight.bold)),
+              Text(
+                'Operational',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: const Color(0xFF10B981),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ],
           ),
         ],
@@ -460,20 +639,39 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                 child: Column(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
                       decoration: const BoxDecoration(
                         color: Color(0xFF700B34),
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(24),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.forum_rounded, color: Colors.white, size: 20),
+                          const Icon(
+                            Icons.forum_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                           const SizedBox(width: 12),
-                          Text('TGS Support', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w800)),
+                          Text(
+                            'TGS Support',
+                            style: GoogleFonts.plusJakartaSans(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                           const Spacer(),
                           IconButton(
-                            icon: const Icon(Icons.close_rounded, color: Colors.white),
-                            onPressed: () => setState(() => _isChatOpen = false),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
+                            ),
+                            onPressed: () =>
+                                setState(() => _isChatOpen = false),
                           ),
                         ],
                       ),
@@ -487,13 +685,23 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                           final msg = _messages[index];
                           final isBot = msg['sender'] == 'bot';
                           return Align(
-                            alignment: isBot ? Alignment.centerLeft : Alignment.centerRight,
+                            alignment: isBot
+                                ? Alignment.centerLeft
+                                : Alignment.centerRight,
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                              constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.of(context).size.width * 0.7,
+                              ),
                               decoration: BoxDecoration(
-                                color: isBot ? const Color(0xFFF1F5F9) : const Color(0xFF700B34),
+                                color: isBot
+                                    ? const Color(0xFFF1F5F9)
+                                    : const Color(0xFF700B34),
                                 borderRadius: BorderRadius.only(
                                   topLeft: const Radius.circular(16),
                                   topRight: const Radius.circular(16),
@@ -505,7 +713,9 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                                 msg['text']!,
                                 style: GoogleFonts.inter(
                                   fontSize: 13,
-                                  color: isBot ? const Color(0xFF0F172A) : Colors.white,
+                                  color: isBot
+                                      ? const Color(0xFF0F172A)
+                                      : Colors.white,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -517,7 +727,9 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: const BoxDecoration(
-                        border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+                        border: Border(
+                          top: BorderSide(color: Color(0xFFF1F5F9)),
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -528,13 +740,18 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                               decoration: InputDecoration(
                                 hintText: 'Type your message...',
                                 border: InputBorder.none,
-                                hintStyle: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
+                                hintStyle: GoogleFonts.inter(
+                                  color: const Color(0xFF94A3B8),
+                                ),
                               ),
                               onSubmitted: (_) => _handleSendMessage(),
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.send_rounded, color: Color(0xFF700B34)),
+                            icon: const Icon(
+                              Icons.send_rounded,
+                              color: Color(0xFF700B34),
+                            ),
                             onPressed: _handleSendMessage,
                           ),
                         ],
@@ -546,6 +763,131 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDebugSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.bug_report_rounded,
+                color: Color(0xFF64748B),
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'SYSTEM DIAGNOSTICS',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF64748B),
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'If you are experiencing issues, you can view the internal system logs for troubleshooting.',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _showLogsDialog,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF64748B),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              elevation: 0,
+            ),
+            icon: const Icon(Icons.list_alt_rounded, size: 18),
+            label: Text(
+              'View System Logs',
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLogsDialog() async {
+    final logs = await LoggerService.getLogs();
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.terminal_rounded, color: Color(0xFF0F172A)),
+            const SizedBox(width: 12),
+            Text(
+              'Internal System Logs',
+              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: logs.isEmpty
+              ? const Center(child: Text('No logs captured yet.'))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: logs.length,
+                  itemBuilder: (context, index) {
+                    final log = logs[logs.length - 1 - index]; // newest first
+                    final isError = log.contains('[ERROR]');
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        log,
+                        style: GoogleFonts.robotoMono(
+                          fontSize: 11,
+                          color: isError ? Colors.red : Colors.black87,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await LoggerService.clearLogs();
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Clear All', style: TextStyle(color: Colors.red)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }

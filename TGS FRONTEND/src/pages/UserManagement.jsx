@@ -7,6 +7,8 @@ import {
     MoreVertical,
     UserCheck,
     AlertCircle,
+    AlertTriangle,
+    Unlock,
     Briefcase,
     ClipboardList
 } from 'lucide-react';
@@ -25,6 +27,9 @@ const UserManagement = () => {
     const [isSyncingAll, setIsSyncingAll] = useState(false);
     const [showSyncModal, setShowSyncModal] = useState(false);
     const [syncProgress, setSyncProgress] = useState(null);
+    const [showUnlockModal, setShowUnlockModal] = useState(false);
+    const [unlockId, setUnlockId] = useState('');
+    const [isUnlocking, setIsUnlocking] = useState(false);
     
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
@@ -82,11 +87,11 @@ const UserManagement = () => {
 
             const processedEmployees = employeeList.map(emp => {
                 const code = String(emp.employee_code || emp.employee?.employee_code || '').toLowerCase();
-                const isAlreadyUser = userList.some(u => {
+                const userMatch = userList.find(u => {
                     const uCode = String(u.employee_id || u.username || '').toLowerCase();
                     return uCode && uCode === code;
                 });
-                return { ...emp, isUser: isAlreadyUser };
+                return { ...emp, isUser: !!userMatch, is_locked: userMatch?.is_locked || false };
             });
 
             const sortedEmployees = processedEmployees.sort((a, b) => {
@@ -197,7 +202,29 @@ const UserManagement = () => {
             setSyncProgress(null);
         }
     };
-
+    const handleUnlockUser = async (targetId) => {
+        setIsUnlocking(true);
+        setProcessingId(targetId);
+        try {
+            const response = await api.post('/api/auth/unlock-user', { employee_id: targetId });
+            showToast(response.data.message, 'success');
+            
+            // UPDATE LOCAL STATE TO HIDE THE BUTTON
+            setEmployees(prev => prev.map(emp => {
+                const code = String(emp.employee_code || emp.employee?.employee_code || '').toLowerCase();
+                if (code === targetId.toLowerCase()) {
+                    return { ...emp, is_locked: false };
+                }
+                return emp;
+            }));
+        } catch (err) {
+            const errMsg = err.response?.data?.error || 'Failed to unlock user account.';
+            showToast(`Error: ${errMsg}`, 'error');
+        } finally {
+            setIsUnlocking(false);
+            setProcessingId(null);
+        }
+    };
     const filteredEmployees = employees.filter(emp => {
         const searchLower = searchTerm.toLowerCase();
 
@@ -304,25 +331,45 @@ const UserManagement = () => {
                                                     <strong>{displayName}</strong>
                                                 </td>
                                                 <td className="actions-cell">
-                                                    <button
-                                                        className={`btn ${emp.isUser ? 'btn-secondary' : 'btn-primary'} um-btn-sm`}
-                                                        onClick={() => !emp.isUser && handleMakeUser(emp)}
-                                                        disabled={processingId === displayCode || emp.isUser}
-                                                    >
-                                                        {processingId === displayCode ? (
-                                                            'Processing...'
-                                                        ) : emp.isUser ? (
-                                                            <>
-                                                                <UserCheck size={16} />
-                                                                <span>Already User</span>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <UserPlus size={16} />
-                                                                <span>Make it as User</span>
-                                                            </>
+                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                        <button
+                                                            className={`btn ${emp.isUser ? 'btn-secondary' : 'btn-primary'} um-btn-sm`}
+                                                            onClick={() => !emp.isUser && handleMakeUser(emp)}
+                                                            disabled={processingId === displayCode || emp.isUser}
+                                                        >
+                                                            {processingId === displayCode && !isUnlocking ? (
+                                                                'Processing...'
+                                                            ) : emp.isUser ? (
+                                                                <>
+                                                                    <UserCheck size={16} />
+                                                                    <span>Active User</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <UserPlus size={16} />
+                                                                    <span>Make User</span>
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                        
+                                                        {emp.isUser && emp.is_locked && (
+                                                            <button
+                                                                className="btn um-btn-sm"
+                                                                onClick={() => handleUnlockUser(displayCode)}
+                                                                disabled={processingId === displayCode}
+                                                                style={{ background: '#fff', border: '1px solid #16a34a', color: '#16a34a', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                                            >
+                                                                {processingId === displayCode && isUnlocking ? (
+                                                                    'Unlocking...'
+                                                                ) : (
+                                                                    <>
+                                                                        <Unlock size={14} />
+                                                                        <span>Unlock</span>
+                                                                    </>
+                                                                )}
+                                                            </button>
                                                         )}
-                                                    </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         )

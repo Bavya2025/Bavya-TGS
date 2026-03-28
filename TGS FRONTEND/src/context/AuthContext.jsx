@@ -17,9 +17,13 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
+      // Base64 encode the password to mask it in the Network Payload tab
+      // as requested by the user. Backend will decode it.
+      const maskedPassword = btoa(password);
+      
       const response = await api.post('/api/auth/login', {
         employee_id: username,
-        password
+        password: maskedPassword
       });
 
       const { token, user: userDetails } = response.data;

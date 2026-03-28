@@ -330,7 +330,8 @@ class UserListView(APIView):
                     'id': u.id,
                     'employee_id': u.employee_id,
                     'username': u.employee_id,
-                    'name': u.name # This calls the dynamic property
+                    'name': u.name,
+                    'is_locked': u.is_locked
                 })
             return Response(results)
 
@@ -345,7 +346,8 @@ class UserListView(APIView):
                 'username': user.employee_id,
                 'name': user.name,
                 'employee_id': user.employee_id,
-                'role': user.role.name if user.role else 'Pending'
+                'role': user.role.name if user.role else 'Pending',
+                'is_locked': user.is_locked
             })
         
         return Response({

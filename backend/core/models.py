@@ -52,6 +52,23 @@ class User(models.Model):
     def __str__(self):
         return f"{self.name} ({self.employee_id})"
 
+    @property
+    def is_locked(self):
+        """Checks if the user has 3+ failed login attempts in the last 24 hours."""
+        if self.role and self.role.name.lower() == 'admin':
+            return False # Admin is never locked
+            
+        from django.utils import timezone
+        import datetime
+        from .models import LoginHistory
+        lockout_time = timezone.now() - datetime.timedelta(hours=24)
+        count = LoginHistory.objects.filter(
+            user=self,
+            status='Failed',
+            login_time__gte=lockout_time
+        ).count()
+        return count >= 3
+
     def _get_api_data(self):
         # 0. Check if we should skip external API for performance (Pure DB Mode)
         from .middleware import should_skip_external_api

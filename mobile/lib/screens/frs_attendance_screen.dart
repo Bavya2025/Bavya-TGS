@@ -20,6 +20,8 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
   bool _isInitialized = false;
   bool _isCapturing = false;
   final FrsService _frsService = FrsService();
+  Color _statusColor = const Color(0xFFBB0633); // Initial State
+  String _statusText = "Align face in circle";
 
   @override
   void initState() {
@@ -124,19 +126,15 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
 
     setState(() {
       _isCapturing = true;
+      _statusColor = Colors.blue;
+      _statusText = "Detecting face...";
     });
 
     try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw 'Location permissions are denied';
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        throw 'Location permissions are permanently denied, we cannot request permissions.';
+      // Mandatory permission check before taking position
+      final locStatus = await Geolocator.checkPermission();
+      if (locStatus == LocationPermission.denied || locStatus == LocationPermission.deniedForever) {
+        throw 'Location permission is denied. Please enable it in Settings.';
       }
 
       Position position = await Geolocator.getCurrentPosition(
@@ -170,6 +168,10 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
 
       if (mounted) {
         if (response['match'] == true) {
+          setState(() {
+            _statusColor = Colors.green;
+            _statusText = "Verification Success!";
+          });
           showDialog(
             context: context,
             barrierDismissible: false,
@@ -210,6 +212,10 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
       }
     } catch (e) {
       if (mounted) {
+        setState(() {
+          _statusColor = Colors.red;
+          _statusText = "Verification Failed";
+        });
         String errorMsg = e.toString();
         if (errorMsg.contains('mismatch') || errorMsg.contains('detected')) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -369,12 +375,12 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: const Color(0xFFBB0633),
+                              color: _statusColor,
                               width: 3,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFBB0633).withValues(alpha: 0.2),
+                                color: _statusColor.withValues(alpha: 0.2),
                                 blurRadius: 25,
                                 spreadRadius: -5,
                               ),
@@ -385,7 +391,8 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                             fit: StackFit.expand,
                             children: [
                               CameraPreview(_controller!),
-                              if (!_isCapturing) _buildScanningOverlay(),
+                              _buildPulsingRing(),
+                              _buildLiveIndicator(),
                             ],
                           ),
                         ),
@@ -432,6 +439,11 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
                                         letterSpacing: 0.5,
                                       ),
                                     ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                        _statusText,
+                                        style: const TextStyle(fontSize: 8, color: Colors.white70)
+                                    )
                                   ],
                                 ),
                         ),
@@ -477,7 +489,7 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
               padding: const EdgeInsets.fromLTRB(10, 15, 25, 30),
               child: Row(
                 children: [
-                  IconButton(
+                   IconButton(
                     icon: const Icon(
                       Icons.arrow_back_ios_new_rounded,
                       color: Colors.white,
@@ -533,38 +545,95 @@ class _FrsAttendanceScreenState extends State<FrsAttendanceScreen> {
     );
   }
 
-  Widget _buildScanningOverlay() {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(seconds: 2),
-      builder: (context, value, child) {
-        return Stack(
-          children: [
-            Positioned(
-              top: value * 300,
-              left: 0,
-              right: 0,
-              child: Container(
-                height: 2,
-                decoration: BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFBB0633).withValues(alpha: 0.5),
-                      blurRadius: 10,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.transparent,
-                      const Color(0xFFBB0633).withValues(alpha: 0.8),
-                      Colors.transparent,
-                    ],
-                  ),
+  Widget _buildPulsingRing() {
+    return _PulsingRing(color: _statusColor);
+  }
+
+  Widget _buildLiveIndicator() {
+    return Positioned(
+      top: 20,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
                 ),
               ),
+              const SizedBox(width: 8),
+              Text(
+                'LIVE DETECTION ACTIVE',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PulsingRing extends StatefulWidget {
+  final Color color;
+  const _PulsingRing({required this.color});
+
+  @override
+  State<_PulsingRing> createState() => _PulsingRingState();
+}
+
+class _PulsingRingState extends State<_PulsingRing>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _scaleAnimation,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: widget.color.withValues(alpha: 0.5),
+              width: 10 * _scaleAnimation.value,
             ),
-          ],
+          ),
         );
       },
     );

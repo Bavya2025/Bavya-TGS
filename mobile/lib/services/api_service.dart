@@ -419,15 +419,16 @@ class ApiService {
         case 401:
           clearToken(); // clear persisted session on auth failure
           final Map<String, dynamic> errorMap = (data is Map) ? Map<String, dynamic>.from(data) : <String, dynamic>{'detail': data.toString()};
-          throw UnauthorizedException(_extractMessage(errorMap, 'Unauthorized. Please login again.'));
+          throw UnauthorizedException(_extractMessage(errorMap, 'Session expired. Please login again.'));
         case 403:
-          throw ForbiddenException(_extractMessage(data, 'Access forbidden'));
-        case 404:
-          throw NotFoundException(_extractMessage(data, 'Resource not found'));
+          throw ForbiddenException(_extractMessage(data, 'Access forbidden. You don\'t have permission for this.'));
         case 500:
-          throw ServerException(_extractMessage(data, 'Server error. Please try again later.'));
+        case 502:
+        case 503:
+        case 504:
+          throw ServerException('Backend connection failed. Please try again later.');
         default:
-          throw Exception('Unknown error. Status: ${response.statusCode}');
+          throw ServerException('Backend connection failed (Status: ${response.statusCode})');
       }
     } on FormatException {
       // Response was not valid JSON

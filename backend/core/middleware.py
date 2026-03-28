@@ -32,7 +32,11 @@ class CustomAuthMiddleware:
                 
                 if session and session.is_valid():
                     has_timed_out = False
-                    if session.last_activity:
+                    # Respect user request: Mobile users should stay logged in until manual logout.
+                    # Standard web users/admin might still want the 15-min idle safety.
+                    is_mobile = request.headers.get('app-platform') == 'mobile'
+                    
+                    if session.last_activity and not is_mobile:
                         idle_duration = timezone.now() - session.last_activity
                         if idle_duration.total_seconds() > 900:
                             session.is_active = False

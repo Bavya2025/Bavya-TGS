@@ -13,8 +13,6 @@ import 'notifications_screen.dart';
 import 'frs_enrollment_screen.dart';
 import 'profile_page.dart';
 import 'help_support_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:geolocator/geolocator.dart';
 
 /// Comprehensive role-based dashboard that displays modules as cards
 class RoleBasedDashboard extends StatefulWidget {
@@ -106,90 +104,12 @@ class _RoleBasedDashboardState extends State<RoleBasedDashboard> {
     }
 
     try {
-       _verifyAlwaysTrackingPermission();
+       // _verifyAlwaysTrackingPermission removed; unified into SplashScreen/PermissionService
     } catch (e) {
        debugPrint('INIT_SAFE_PERM_VERIFY: $e');
     }
   }
 
-  /// Verification for background location permissions to comply with Android 10+ strict monitoring
-  Future<void> _verifyAlwaysTrackingPermission() async {
-    const String lastRemindKey = 'last_location_remind_v2';
-    final prefs = await SharedPreferences.getInstance();
-    final lastRemindedStr = prefs.getString(lastRemindKey);
-    final now = DateTime.now();
-    
-    // Only remind once every 24 hours to avoid annoyance
-    if (lastRemindedStr != null) {
-      final lastReminded = DateTime.parse(lastRemindedStr);
-      if (now.difference(lastReminded).inHours < 24) return;
-    }
-
-    // Check if Always permission is granted
-    bool hasAlways = await LocationTrackingService.checkAlwaysPermission();
-    if (!hasAlways && mounted) {
-      _showTrackingRationaleDialog();
-      await prefs.setString(lastRemindKey, now.toIso8601String());
-    }
-  }
-
-  void _showTrackingRationaleDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.location_on, color: Color(0xFFBB0633)),
-            SizedBox(width: 10),
-            Text('Background Tracking', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          ],
-        ),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'For the "Smart Hub Sync" system to record your activity accurately even when the app is closed, please enable:',
-              style: TextStyle(fontSize: 14),
-            ),
-            SizedBox(height: 15),
-            Row(
-              children: [
-                Icon(Icons.check_circle, size: 16, color: Colors.green),
-                SizedBox(width: 8),
-                Expanded(child: Text('Location: "Allow all the time"', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
-              ],
-            ),
-            SizedBox(height: 10),
-            Text(
-              'This is required by Android 10+ for company tracking protocols.',
-              style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Later', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFBB0633),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () async {
-              Navigator.pop(context);
-              await Geolocator.openAppSettings();
-            },
-            child: const Text('Open Settings'),
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _fetchDashboardData() async {
     setState(() => _isLoadingStats = true);
